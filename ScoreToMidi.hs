@@ -24,7 +24,6 @@ module ScoreToMidi(
 ,  midiVoicesScore
 ,  midiPercussionScore
 ,  scoreToMidiFile
-,  percussionToEvents
 ,  midiInstrument
 ,  midiPercussionInstrument
 ) where
@@ -53,7 +52,7 @@ instance Bounded Duration where
 --   e.g. 1;1 for whole note * 64 * 8 => 512 ticks.  NB: conversion to Midi doesn't accept ratios that don't divide evenly into 512.
 rhythmToDuration :: Rhythm -> Duration
 rhythmToDuration rhythm
-  | (1 /= toInteger (denominator (512%1 * r))) = error $ "rhythm " ++ (show rhythm) ++ " does not evenly multiply by 512%1, result " ++ (show ((512%1) * r))
+  | 1 /= toInteger (denominator (512%1 * r)) = error $ "rhythm " ++ show rhythm ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * r)
   | otherwise = fromIntegral $ fromEnum $ 512%1 * r
   where
     r = getRhythm rhythm
@@ -92,18 +91,18 @@ dynamicToVolume Fortissimo = 120
 
 -- | VoiceMsg.normalVelocity => Velocity {fromVelocity = 64}
 accentToVelocity :: Num a => Accent -> a
-accentToVelocity Softest  = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)) - 60
-accentToVelocity VerySoft = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)) - 40
-accentToVelocity Soft     = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)) - 20
-accentToVelocity Normal   = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity))
-accentToVelocity Hard     = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)) + 20
-accentToVelocity VeryHard = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)) + 40
-accentToVelocity Hardest  = (fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)) + 60
+accentToVelocity Softest  = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity) - 60
+accentToVelocity VerySoft = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity) - 40
+accentToVelocity Soft     = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity) - 20
+accentToVelocity Normal   = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity)
+accentToVelocity Hard     = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity) + 20
+accentToVelocity VeryHard = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity) + 40
+accentToVelocity Hardest  = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalVelocity) + 60
 
 pitchToMidi :: Pitch -> Int
 pitchToMidi (Pitch pitchClass oct) =
   let
-    pitchOffset = (pitchClassToOffset pitchClass)
+    pitchOffset = pitchClassToOffset pitchClass
     octaveOffset = fromInteger . getOctave $ oct * 12
     midiOffset = 60
   in
@@ -118,35 +117,39 @@ genMidiNoteOn channel pitch accent =
 
 genMidiNoteOff :: ChannelMsg.Channel -> Pitch  -> Event.T
 genMidiNoteOff channel pitch =
-    genEvent channel (VoiceMsg.NoteOff (VoiceMsg.toPitch (pitchToMidi pitch)) (VoiceMsg.normalVelocity))
+    genEvent channel (VoiceMsg.NoteOff (VoiceMsg.toPitch (pitchToMidi pitch)) VoiceMsg.normalVelocity)
 
 genMidiNoteEvents :: Duration -> ChannelMsg.Channel -> Pitch -> Duration -> Accent -> [(Duration, Event.T)]
 genMidiNoteEvents delay channel pitch duration accent =
-    [(delay, (genMidiNoteOn channel pitch accent)), (duration, (genMidiNoteOff channel pitch))]
+    [(delay, genMidiNoteOn channel pitch accent), (duration, genMidiNoteOff channel pitch)]
 
-noteToEvents :: ChannelMsg.Channel -> NoteEvent -> State (Duration, [(Duration, Event.T)]) Duration
-noteToEvents ch (AccentedNote pitch rhythm accent) =
-    do (rest, events) <- get
-       put ((Dur 0), (events ++ (genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) accent)))
-       return (Dur 0)
-noteToEvents ch (Note pitch rhythm) =
-    do (rest, events) <- get
-       put ((Dur 0), (events ++ (genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) Normal)))
-       return (Dur 0)
-noteToEvents _ (Rest rhythm) =
+rhythmToEvents :: Rhythm -> State (Duration, [(Duration, Event.T)]) Duration
+rhythmToEvents rhythm =
     do (rest, events) <- get
        put (dur + rest, events)
        return $ dur + rest
        where
          dur = rhythmToDuration rhythm
+         
+noteToEvents :: ChannelMsg.Channel -> NoteEvent -> State (Duration, [(Duration, Event.T)]) Duration
+noteToEvents ch (AccentedNote pitch rhythm accent) =
+    do (rest, events) <- get
+       put (Dur 0, events ++ genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) accent)
+       return (Dur 0)
+noteToEvents ch (Note pitch rhythm) =
+    do (rest, events) <- get
+       put (Dur 0, events ++ genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) Normal)
+       return (Dur 0)
+noteToEvents _ (Rest rhythm) = rhythmToEvents rhythm
+         
 genMidiDynamicCtrlEvent :: ChannelMsg.Channel -> Dynamic -> Event.T
 genMidiDynamicCtrlEvent chan dynamic =
     genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume $ dynamicToVolume dynamic)
-
+    
 genMidiPanCtrlEvent :: ChannelMsg.Channel -> PanDegrees -> Event.T
 genMidiPanCtrlEvent chan (PanDegrees degrees) =
-    genEvent chan (VoiceMsg.Control VoiceMsg.panorama (floor ((127 / 360) * (fromInteger degrees))))
-
+    genEvent chan (VoiceMsg.Control VoiceMsg.panorama (floor ((127 / 360) * fromInteger degrees)))
+    
 controlToEvent :: ChannelMsg.Channel -> ControlEvent -> (Duration, Event.T)
 controlToEvent channel (DynamicControl dynamic rhythm) =
     (rhythmToDuration rhythm, genMidiDynamicCtrlEvent channel dynamic)
@@ -159,67 +162,62 @@ genPercussionMidiNoteOn channel pitch accent =
 
 genPercussionMidiNoteOff :: ChannelMsg.Channel -> VoiceMsg.Pitch -> Accent -> Event.T
 genPercussionMidiNoteOff channel pitch _ =
-    genEvent channel (VoiceMsg.NoteOff pitch (VoiceMsg.normalVelocity))
+    genEvent channel (VoiceMsg.NoteOff pitch VoiceMsg.normalVelocity)
 
 genPercussionMidiNoteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Accent -> [(Duration, Event.T)]
 genPercussionMidiNoteEvents delay channel pitch duration accent =
-    [(delay, (genPercussionMidiNoteOn channel pitch accent)), (duration, (genPercussionMidiNoteOff channel pitch accent))]
+    [(delay, genPercussionMidiNoteOn channel pitch accent), (duration, genPercussionMidiNoteOff channel pitch accent)]
 
 percussionToEvents :: ChannelMsg.Channel -> VoiceMsg.Pitch -> PercussionEvent -> State (Duration, [(Duration, Event.T)]) Duration
 -- or, cribbed:
 -- percussionToEvents :: MonadState (Duration, [(Duration, Event.T)]) m => ChannelMsg.Channel -> VoiceMsg.Pitch -> PercussionEvent -> m Duration
 percussionToEvents chan pitch (AccentedPercussionNote rhythm accent) =
     do (rest,events) <- get
-       put ((Dur 0), (events ++ (genPercussionMidiNoteEvents rest chan pitch (rhythmToDuration rhythm) accent)))
+       put (Dur 0, events ++ genPercussionMidiNoteEvents rest chan pitch (rhythmToDuration rhythm) accent)
        return (Dur 0)
 percussionToEvents chan pitch (PercussionNote rhythm) =
     do (rest,events) <- get
-       put ((Dur 0), (events ++ (genPercussionMidiNoteEvents rest chan pitch (rhythmToDuration rhythm) Normal)))
+       put (Dur 0, events ++ genPercussionMidiNoteEvents rest chan pitch (rhythmToDuration rhythm) Normal)
        return (Dur 0)
-percussionToEvents _ _ (PercussionRest rhythm) =
-    do (rest,events) <- get
-       put (dur + rest, events)
-       return $ dur + rest
-       where
-         dur = rhythmToDuration rhythm
+percussionToEvents _ _ (PercussionRest rhythm) = rhythmToEvents rhythm
 
-stringToDrum :: [Char] -> GeneralMidi.Drum
-stringToDrum instr = (GeneralMidi.drums) !! (Data.Maybe.fromJust $ Data.List.elemIndex instr (map show (GeneralMidi.drums)))
+stringToDrum :: String -> GeneralMidi.Drum
+stringToDrum instr = GeneralMidi.drums !! Data.Maybe.fromJust (Data.List.elemIndex instr (map show GeneralMidi.drums))
 
 percussionInstrumentEventsToEvents :: ChannelMsg.Channel -> PercussionInstrumentEvents -> [(Duration, Event.T)]
 percussionInstrumentEventsToEvents channel (PercussionInstrumentEvents (PercussionInstrument name) percussionEvents) =
   let pitch = GeneralMidi.drumToKey $ stringToDrum name
   in
-      snd $ execState (traverse (percussionToEvents channel pitch) percussionEvents) ((Dur 0), [])
+      snd $ execState (traverse (percussionToEvents channel pitch) percussionEvents) (Dur 0, [])
 
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
-durEventToNumEvent ((Dur dur), event) = (fromInteger dur, event)
+durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
 --durEventToNumEvent (dur, event) = (fmap (,) durationFromInteger) dur event
 
 sectionToEventList :: ChannelMsg.Channel -> Section -> EventList.T Event.ElapsedTime Event.T
 sectionToEventList channel (Section (Instrument name) notess controlss)
   | null noteEventLists = EventList.empty
-  | null ctrlEventLists = (EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) $ (foldl1 EventList.merge noteEventLists))
-  | otherwise = (EventList.merge
-                    (EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) $ (foldl1 EventList.merge noteEventLists))
-                    (foldl1 EventList.merge ctrlEventLists))
+  | null ctrlEventLists = EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) (foldl1 EventList.merge noteEventLists)
+  | otherwise = EventList.merge
+                    (EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) (foldl1 EventList.merge noteEventLists))
+                    (foldl1 EventList.merge ctrlEventLists)
   where
     instr = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram name
-    noteEventss = map (\notes -> snd $ execState (traverse (noteToEvents channel) notes) ((Dur 0), [])) notess
-    noteEventLists = map (EventList.fromPairList . (map durEventToNumEvent)) noteEventss
+    noteEventss = map (\notes -> snd $ execState (traverse (noteToEvents channel) notes) (Dur 0, [])) notess
+    noteEventLists = map (EventList.fromPairList . map durEventToNumEvent) noteEventss
     ctrlEventss = map (map (controlToEvent channel)) controlss
-    ctrlEventLists = map (EventList.fromPairList . (map durEventToNumEvent)) ctrlEventss
+    ctrlEventLists = map (EventList.fromPairList . map durEventToNumEvent) ctrlEventss
 
 percussionSectionToEventList :: ChannelMsg.Channel -> PercussionSection -> EventList.T Event.ElapsedTime Event.T
 percussionSectionToEventList channel (PercussionSection percussionInstrumentEventss controlss)
   | null percEventLists = EventList.empty
   | null ctrlEventLists = foldl1 EventList.merge percEventLists
-  | otherwise = (EventList.merge (foldl1 EventList.merge percEventLists) (foldl1 EventList.merge ctrlEventLists))
+  | otherwise = EventList.merge (foldl1 EventList.merge percEventLists) (foldl1 EventList.merge ctrlEventLists)
   where
     percEventss = map (percussionInstrumentEventsToEvents channel) percussionInstrumentEventss
-    percEventLists = map (EventList.fromPairList . (map durEventToNumEvent)) percEventss
+    percEventLists = map (EventList.fromPairList . map durEventToNumEvent) percEventss
     ctrlEventss = map (map (controlToEvent channel)) controlss
-    ctrlEventLists = map (EventList.fromPairList . (map durEventToNumEvent)) ctrlEventss
+    ctrlEventLists = map (EventList.fromPairList . map durEventToNumEvent) ctrlEventss
 
 -- | Score, some versions of which can be rendered to Midi.
 --   Midi constraints are by channel, e.g. 1 percussion and
@@ -247,27 +245,24 @@ percussionSectionToEventList channel (PercussionSection percussionInstrumentEven
 --
 data Score = {-- Score Title [Section] | --} MidiScore Title [Section] PercussionSection | MidiVoicesScore Title [Section] | MidiPercussionScore Title PercussionSection deriving (Show)
 
--- | Create a Score instance for Midi with no percussion track.
---
 -- | Create a Score instance for Midi with a percussion track.  That allows 15 non-percussion
 --   instruments and a percussion track with as many percussion instruments as you want.
 midiScore :: Title -> [Section] -> PercussionSection -> Score
 midiScore t vs pv
-    | (length vs) <= 15 = MidiScore t vs pv
-    | otherwise = error $ "midiScore constructor called with count of voices " ++ (show (length vs)) ++ " > max value 15"
+    | length vs <= 15 = MidiScore t vs pv
+    | otherwise = error $ "midiScore constructor called with count of voices " ++ show (length vs) ++ " > max value 15"
 
---   TBD:  does this work?  Can you even override track 15 with non-percussion instruments.
---   If you can, then you can have 16 unique voices, each with multiple simultaneous notes
---   and common controls, e.g. dynamic and pan setting.
+-- | Create a Score instance for Midi with no percussion track.  That allows 16 non-percussion
+--   instruments
 midiVoicesScore :: Title -> [Section] -> Score
 midiVoicesScore t vs
-    | (length vs) <= 16 = MidiVoicesScore t vs
-    | otherwise = error $ "midiVoicesScore constructor called with count of voices " ++ (show (length vs)) ++ " > max value 16"
+    | length vs <= 16 = MidiVoicesScore t vs
+    | otherwise = error $ "midiVoicesScore constructor called with count of voices " ++ show (length vs) ++ " > max value 16"
 
 -- | Create a Score instance for Midi with just a percussion track.  This allows as many
 --   percussion instruments as you want.
 midiPercussionScore :: Title -> PercussionSection -> Score
-midiPercussionScore t pv = MidiPercussionScore t pv
+midiPercussionScore = MidiPercussionScore
 
 -- | Private
 instrumentIsMidi :: String -> Bool
@@ -277,11 +272,11 @@ instrumentIsMidi = isJust . GeneralMidi.instrumentNameToProgram
 midiInstrument :: String -> Instrument
 midiInstrument name
   | instrumentIsMidi name = Instrument name
-  | otherwise = error $ "name " ++ name ++ " is not one of Midi instruments: " ++ (show (GeneralMidi.instrumentNames))
+  | otherwise = error $ "name " ++ name ++ " is not one of Midi instruments: " ++ show GeneralMidi.instrumentNames
 
 -- | private
 percussionIsMidi :: String -> Bool
-percussionIsMidi = (flip elem) (map show GeneralMidi.drums)
+percussionIsMidi = flip elem (map show GeneralMidi.drums)
 
 -- | Constructor limited to Midi percussion strings.
 --
@@ -293,7 +288,7 @@ percussionIsMidi = (flip elem) (map show GeneralMidi.drums)
 midiPercussionInstrument :: String -> PercussionInstrument
 midiPercussionInstrument name
   | percussionIsMidi name = PercussionInstrument name
-  | otherwise = error $ "name " ++ name ++ " is not one of Midi drums: " ++  show (map show (GeneralMidi.drums))
+  | otherwise = error $ "name " ++ name ++ " is not one of Midi drums: " ++  show (map show GeneralMidi.drums)
 
 -- | Public API:
 --   Convert title and list of voices to a Midi file or title, list of voices, and percussion voice to a Midi file.  TBD: meta event for Title.
@@ -315,22 +310,22 @@ standardTicks = MidiFile.Ticks $ fromIntegral $ getDur (rhythmToDuration (Rhythm
 
 scoreToMidiFile (MidiScore _ voices percussion) =
     let
-        chans = map ChannelMsg.toChannel [0 .. ((length voices) - 1)]
+        chans = map ChannelMsg.toChannel [0 .. (length voices - 1)]
         voiceEventLists = zipWith sectionToEventList chans voices
-        percussionEventList = percussionSectionToEventList (GeneralMidi.drumChannel) percussion
+        percussionEventList = percussionSectionToEventList GeneralMidi.drumChannel percussion
     in
         MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge (voiceEventLists ++ [percussionEventList])]
 
 scoreToMidiFile (MidiVoicesScore _ voices) =
     let
-        chans = map ChannelMsg.toChannel [0 .. ((length voices) - 1)]
+        chans = map ChannelMsg.toChannel [0 .. (length voices - 1)]
         voiceEventLists = zipWith sectionToEventList chans voices
     in
         MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge voiceEventLists]
 
 scoreToMidiFile (MidiPercussionScore _ percussion) =
     let
-        percussionEventList = percussionSectionToEventList (GeneralMidi.drumChannel) percussion
+        percussionEventList = percussionSectionToEventList GeneralMidi.drumChannel percussion
     in
         MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge [percussionEventList]]
 

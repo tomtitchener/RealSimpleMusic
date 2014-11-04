@@ -79,7 +79,7 @@ denormPitchClass x = what x
     what 9  = A
     what 10 = Bf
     what 11 = B
-    what _ = error $ "denormalize value " ++ (show x) ++ " is out of range 0 <= " ++ (show x) ++ " <= 11"
+    what _ = error $ "denormalize value " ++ show x ++ " is out of range 0 <= " ++ show x ++ " <= 11"
 
 -- | Motto is just a list
 newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applicative, Monad)
@@ -99,8 +99,8 @@ newtype Octave = Octave { getOctave :: Integer } deriving (Eq, Show, Num)
 
 -- | Octave bounds roughly by piano range
 instance Bounded Octave where
-    minBound = Octave (-3) -- | Piano minimum range, less B..A
-    maxBound = Octave 3    -- | Piano maximum range
+    minBound = Octave (-3) --  Piano minimum range, less B..A
+    maxBound = Octave 3    --  Piano maximum range
 
 -- | Pitch requires PitchClass and Octave.
 data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
@@ -113,13 +113,13 @@ denormPitch x  = Pitch (denormPitchClass (x `mod` 12)) (Octave (x `div` 12))
 
 -- | Num instance for Pitch allows trivial derivation of Product and Sum monoids
 instance Num Pitch where
-    x + y  = denormPitch $ (normPitch x) + (normPitch y)
-    x - y  = denormPitch $ (normPitch x) - (normPitch y)
-    x * y  = denormPitch $ (normPitch x) * (normPitch y)
+    x + y  = denormPitch $ normPitch x + normPitch y
+    x - y  = denormPitch $ normPitch x - normPitch y
+    x * y  = denormPitch $ normPitch x * normPitch y
     abs p  = denormPitch $ abs (normPitch p)
     signum p
-      | (normPitch p) < 0 = -1
-      | (normPitch p) > 0 = 1
+      | normPitch p < 0 = -1
+      | normPitch p > 0 = 1
       | otherwise = 0
     fromInteger = denormPitch
 
@@ -139,8 +139,8 @@ newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Eq, Show)
 newtype PanDegrees = PanDegrees { getPanDegrees :: Integer } deriving (Show, Ord, Eq, Num)
 
 instance Bounded PanDegrees where
-    minBound = PanDegrees 0    -- | Mimic circle, maybe replace with -90?
-    maxBound = PanDegrees 359  -- | Mimic circle, maybe replace with +90?
+    minBound = PanDegrees 0    --  Mimic circle, maybe replace with -90?
+    maxBound = PanDegrees 359  --  Mimic circle, maybe replace with +90?
 
 -- | Control events map to Midi controllers, currently limited to Dynamic and Pan.
 data ControlEvent = DynamicControl Dynamic Rhythm | PanControl PanDegrees Rhythm deriving (Show)
