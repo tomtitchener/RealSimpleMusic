@@ -11,14 +11,16 @@ import qualified Sound.MIDI.File.Save as SaveFile
 uY :: Title -> String -> IO [[NoteEvent]] -> [[ControlEvent]] -> IO ()
 uY title instr notess controlss =
   do
-    let score = MidiVoicesScore title [Section (Instrument instr) notes controlss]
+    nss <- notess
+    let score = MidiVoicesScore title [Section (Instrument instr) nss controlss]
     LazyByteString.writeFile (title ++ ".mid") (SaveFile.toByteString (scoreToMidiFile score))
 
 -- | Low-level convert for single voice and control event lists to Midi file.
 uX :: Title -> String -> IO [NoteEvent] -> [ControlEvent] -> IO ()
 uX title instr notes controls =
   do
-    let score = MidiVoicesScore title [Section (Instrument instr) [notes] [controls]]
+    ns <- notes
+    let score = MidiVoicesScore title [Section (Instrument instr) [ns] [controls]]
     LazyByteString.writeFile (title ++ ".mid") (SaveFile.toByteString (scoreToMidiFile score))
 
 -- | Assemble defaults into score with single Section, call
