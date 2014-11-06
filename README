@@ -1,1 +1,8 @@
-Simple Haskell data types for music and a function to convert them to a Midi file.
+Simple Haskell data types for music and a functions to convert them to a Midi file.
+
+Import Score.hs for data types Pitch, Dynamic, Rhythm, Accent, Note, etc.
+
+Import ScoreToMidi for data type Score--with instances MidiScore, MidiVoicesScore, MidiPercussionScore--and functions scoreToMidiFile, midiInstrument and midiPercussionInstrument.
+
+Example:  see util.hs
+

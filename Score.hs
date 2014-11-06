@@ -105,24 +105,6 @@ instance Bounded Octave where
 -- | Pitch requires PitchClass and Octave.
 data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 
-normPitch :: Pitch -> Integer
-normPitch (Pitch pc (Octave o)) = normPitchClass pc + (o * 12)
-
-denormPitch :: Integer -> Pitch
-denormPitch x  = Pitch (denormPitchClass (x `mod` 12)) (Octave (x `div` 12))
-
--- | Num instance for Pitch allows trivial derivation of Product and Sum monoids
-instance Num Pitch where
-    x + y  = denormPitch $ normPitch x + normPitch y
-    x - y  = denormPitch $ normPitch x - normPitch y
-    x * y  = denormPitch $ normPitch x * normPitch y
-    abs p  = denormPitch $ abs (normPitch p)
-    signum p
-      | normPitch p < 0 = -1
-      | normPitch p > 0 = 1
-      | otherwise = 0
-    fromInteger = denormPitch
-
 -- | A PitchMotto is a list of pitches
 type PitchMotto = Motto Pitch
 
@@ -192,45 +174,4 @@ data PercussionSection = PercussionSection [PercussionInstrumentEvents] [[Contro
 
 -- | Synonym for String
 type Title = String
-
-{--
-Sum and product for normalized Pitch.  Note that denormalization
-may map to enharmonic equivalent outside a controlling Scale, to
-be fixed with a remapping of PitchClass.
-
-Ordinary arithmetic, and especially product, over normalized Pitch
-can carry result out of range, assuming the resulting Pitch is ever
-rendered.
-
-*ScoreInstances> (Product (Pitch C (Octave 0))) `mappend` (Product (Pitch C (Octave 1)))
-Product {getProduct = Pitch C (Octave {getOctave = 0})}
-*ScoreInstances> (Product (Pitch C (Octave 1))) `mappend` (Product (Pitch C (Octave 1)))
-Product {getProduct = Pitch C (Octave {getOctave = 12})}
-*ScoreInstances> (Product (Pitch C (Octave 0))) `mappend` (Product (Pitch C (Octave 1)))
-Product {getProduct = Pitch C (Octave {getOctave = 0})}
-*ScoreInstances> (Product (Pitch Cs (Octave 0))) `mappend` (Product (Pitch C (Octave 1)))
-Product {getProduct = Pitch C (Octave {getOctave = 1})}
-*ScoreInstances> (Product (Pitch Cs (Octave 0))) `mappend` mempty
-Product {getProduct = Pitch Cs (Octave {getOctave = 0})}
-*ScoreInstances> (Product (Pitch Cs (Octave 1))) `mappend` mempty
-Product {getProduct = Pitch Cs (Octave {getOctave = 1})}
-*ScoreInstances> (Sum (Pitch Cs (Octave 1))) `mappend` mempty
-Sum {getSum = Pitch Cs (Octave {getOctave = 1})}
-*ScoreInstances> (Sum (Pitch Cs (Octave (-1)))) `mappend` mempty
-Sum {getSum = Pitch Cs (Octave {getOctave = -1})}
-*ScoreInstances> (Product (Pitch Cs (Octave (-1)))) `mappend` mempty
-Product {getProduct = Pitch Cs (Octave {getOctave = -1})}
-
-and, FWIW:
-
-import qualified Data.Foldable as F
-
-*ScoreInstances> getSum $ F.foldMap Sum [(Pitch D (Octave 0)), (Pitch E (Octave 0))]
-Pitch Fs (Octave {getOctave = 0})
-*ScoreInstances> getProduct $ F.foldMap Product [(Pitch D (Octave 0)), (Pitch E (Octave 0))]
-Pitch Af (Octave {getOctave = 0})
-
-Reducing a list of any of the list (Motto) based types to a
-single value seems sort of pointless.
---}
 
