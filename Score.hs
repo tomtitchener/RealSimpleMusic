@@ -33,61 +33,13 @@ where
 
 import           Control.Applicative
 import           Data.Maybe()
-import           Data.Monoid
 import           Data.Ratio()
 
 -- | Pitch classes with one accidental only, enharmonic equivalents
 data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G | Gs | Af | A | As | Bf | B | Cf deriving (Bounded, Enum, Show, Ord, Eq)
 
-normPitchClass :: PitchClass -> Integer
-normPitchClass pc =
-  case pc of
-    Bs -> 0
-    C  -> 0
-    Cs -> 1
-    Df -> 1
-    D  -> 2
-    Ds -> 3
-    Ef -> 3
-    E  -> 4
-    Es -> 5
-    Ff -> 4
-    F  -> 5
-    Fs -> 6
-    Gf -> 6
-    G  -> 7
-    Gs -> 8
-    Af -> 8
-    A  -> 9
-    As -> 10
-    Bf -> 10
-    B  -> 11
-    Cf -> 11
-
-denormPitchClass :: Integer -> PitchClass
-denormPitchClass x = what x
-  where
-    what 0  = C
-    what 1  = Cs
-    what 2  = D
-    what 3  = Ef
-    what 4  = E
-    what 5  = F
-    what 6  = Fs
-    what 7  = G
-    what 8  = Af
-    what 9  = A
-    what 10 = Bf
-    what 11 = B
-    what _ = error $ "denormalize value " ++ show x ++ " is out of range 0 <= " ++ show x ++ " <= 11"
-
 -- | Motto is just a list
 newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applicative, Monad)
-
--- | Lift Motto into Monoid using embedded list:  is this useful?
-instance Monoid (Motto a) where
-  mempty = Motto []
-  mappend (Motto xs) (Motto ys) = Motto (xs ++ ys)
 
 -- | Scale is a list of pitch classes.
 type Scale = [PitchClass]
