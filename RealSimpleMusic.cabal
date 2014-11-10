@@ -13,12 +13,12 @@ maintainer:          tomtitchener@verizon.net
 -- copyright:           
 category:            Sound
 build-type:          Simple
--- extra-source-files:  
+extra-source-files:  Util.hs, Canon.hs
 cabal-version:       >=1.10
 
 library
   exposed-modules:     Score, ScoreToMidi
-  other-modules:       Util
+  other-modules:       Util, Canon
   other-extensions:    GeneralizedNewtypeDeriving
   build-depends:     base >=4.5 && <4.8
                      , bytestring >= 0.10.4.0
