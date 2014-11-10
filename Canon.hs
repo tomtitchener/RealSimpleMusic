@@ -9,7 +9,9 @@ import           ScoreToMidi
 import qualified Sound.MIDI.File.Save as SaveFile
 
 -- | First, simplest of all Canons.
---   Imitation at unision.
+--   Imitation at unison, count of
+--   voices derived from imitative
+--   distance.
 data SimpleCanon = SimpleCanon
                    {title       :: Title
                    ,notes       :: NoteMotto
@@ -30,7 +32,7 @@ simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument rep
     dur = sum $ map (getRhythm . noteEventToRhythm) notes
     voices = fromInteger $ numerator (dur / dist)
     tune = concat $ replicate repetitions notes
-    rests = map (Rest . Rhythm) $ take voices [(0%1)*dist, (1%1)*dist..]
+    rests = take voices $ map (Rest . Rhythm) [(0%1)*dist, (1%1)*dist..]
     sections = [Section instrument [rest : tune] [] | rest <- rests]
 
 -- Frere Jacques
