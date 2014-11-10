@@ -1,5 +1,7 @@
 -- | Canons to explore RealSimpleMusic
 
+module Canon where
+
 import           Score
 import           ScoreToMidi
 import           Data.Ratio
@@ -55,6 +57,7 @@ simpleCanonToScore (SimpleCanon title notes (Rhythm dist) instrument voices repe
     rests = map (Rest . Rhythm) $ take voices [(0%1)*dist, (1%1)*dist..]
     sections = [Section instrument [rest : tune] [] | rest <- rests]
 
+writeFJCanon :: IO ()
 writeFJCanon =
   LazyByteString.writeFile (canonTitle ++ ".mid") (SaveFile.toByteString (scoreToMidiFile fjScore))
   where
