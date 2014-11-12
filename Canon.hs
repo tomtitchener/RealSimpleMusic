@@ -17,6 +17,7 @@ data SimpleCanon = SimpleCanon
                    ,notes       :: NoteMotto
                    ,distance    :: Rhythm
                    ,instrument  :: Instrument
+                   ,voices      :: Int
                    ,repetitions :: Int }
                  deriving (Show)
 
@@ -26,11 +27,9 @@ noteEventToRhythm (AccentedNote _ rhythm _) = rhythm
 noteEventToRhythm (Rest rhythm)             = rhythm
 
 simpleCanonToScore :: SimpleCanon -> Score
-simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument repetitions) =
+simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument voices repetitions) =
   midiVoicesScore title sections
   where
-    dur = sum $ map (getRhythm . noteEventToRhythm) notes
-    voices = fromInteger $ numerator (dur / dist)
     tune = concat $ replicate repetitions notes
     rests = take voices $ map (Rest . Rhythm) [(0%1)*dist, (1%1)*dist..]
     sections = [Section instrument [rest : tune] [] | rest <- rests]
@@ -56,13 +55,14 @@ rh2 = [qtr, qtr, hlf]
 rh3 = [eig, eig, eig, eig, qtr, qtr]
 rhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2
 
-writeFJCanon :: IO ()
-writeFJCanon =
+writeFJCanon :: Int -> Rational -> IO ()
+writeFJCanon voices dur =
   LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ simpleCanonToScore simpleCanon)
   where
     title = "Frere Jacques"
     noteMotto = Motto $ zipWith Note pitches rhythms
-    distance = Rhythm $ sum (map getRhythm $ rh1 ++ rh1)
-    instrument = Instrument "Frere Jacques"
+    -- distance = Rhythm $ sum (map getRhythm $ rh1 ++ rh1)
+    distance = Rhythm dur
+    instrument = Instrument "Acoustic Grand Piano"
     repetitions = 5
-    simpleCanon = SimpleCanon title noteMotto distance instrument repetitions
+    simpleCanon = SimpleCanon title noteMotto distance instrument voices repetitions
