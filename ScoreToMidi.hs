@@ -103,7 +103,7 @@ pitchToMidi :: Pitch -> Int
 pitchToMidi (Pitch pitchClass oct) =
   let
     pitchOffset = pitchClassToOffset pitchClass
-    octaveOffset = fromInteger . getOctave $ oct * 12
+    octaveOffset = getOctave $ oct * 12
     midiOffset = 60
   in
     pitchOffset + octaveOffset + midiOffset

@@ -16,6 +16,7 @@ module Score
 ,  PanDegrees(..)
 ,  ControlEvent(..)
 ,  NoteEvent(..)
+,  noteEventToRhythm
 ,  NoteMotto
 ,  PercussionEvent(..)
 ,  PercussionMotto
@@ -47,7 +48,7 @@ type Scale = [PitchClass]
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
 --   exceeds all instrument ranges, unless guarded by minBound and maxBound.
-newtype Octave = Octave { getOctave :: Integer } deriving (Eq, Show, Num)
+newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num)
 
 -- | Octave bounds roughly by piano range
 instance Bounded Octave where
@@ -81,6 +82,12 @@ data ControlEvent = DynamicControl Dynamic Rhythm | PanControl PanDegrees Rhythm
 
 -- | A note is either a note with the default velocity, a note with a particular velocity, or a rest.
 data NoteEvent = Note Pitch Rhythm | AccentedNote Pitch Rhythm Accent | Rest Rhythm deriving (Eq, Show)
+
+-- | Fetch rhythm common to all NoteEvent
+noteEventToRhythm :: NoteEvent -> Rhythm
+noteEventToRhythm (Note _ rhythm)           = rhythm
+noteEventToRhythm (AccentedNote _ rhythm _) = rhythm
+noteEventToRhythm (Rest rhythm)             = rhythm
 
 -- | A NoteMotto is a list of NoteEvents
 type NoteMotto = Motto NoteEvent

@@ -3,6 +3,7 @@ module Util where
 
 import qualified Data.ByteString.Lazy as LazyByteString
 import           Data.Ratio
+import           Canon
 import           Score
 import           ScoreToMidi
 import qualified Sound.MIDI.File.Save as SaveFile
@@ -60,7 +61,37 @@ u4 = u3 (Pitch C 0)
 u5 :: IO ()
 u5 = u4 (Rhythm (1%1))
 
-main :: IO ()
-main = u5
+-- main :: IO ()
+-- main = u5
 
+-- Frere Jacques
+mC = Pitch C 0
+mD = Pitch D 0
+mE = Pitch E 0
+mF = Pitch F 0
+mG = Pitch G 0
+mA = Pitch A 0
+lG = Pitch G (-1)
+pt1 = [mC, mD, mE, mC]
+pt2 = [mE, mF, mG]
+pt3 = [mG, mA, mG, mF, mE, mC]
+pt4 = [mC, lG, mC]
+pitches = pt1 ++ pt1 ++ pt2 ++ pt2 ++ pt3 ++ pt3 ++ pt4 ++ pt4
+eig = Rhythm (1%8)
+qtr = Rhythm (1%4)
+hlf = Rhythm (1%2)
+rh1 = [qtr, qtr, qtr, qtr]
+rh2 = [qtr, qtr, hlf]
+rh3 = [eig, eig, eig, eig, qtr, qtr]
+rhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2
 
+writeFJCanon :: Int -> Rational -> IO ()
+writeFJCanon voices dur =
+  LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ simpleCanonToScore simpleCanon)
+  where
+    title = "Frere Jacques"
+    noteMotto = Motto $ zipWith Note pitches rhythms
+    distance = Rhythm dur
+    instrument = Instrument "Acoustic Grand Piano"
+    repetitions = 5
+    simpleCanon = SimpleCanon title noteMotto distance instrument voices repetitions
