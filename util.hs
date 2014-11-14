@@ -76,22 +76,40 @@ pt1 = [mC, mD, mE, mC]
 pt2 = [mE, mF, mG]
 pt3 = [mG, mA, mG, mF, mE, mC]
 pt4 = [mC, lG, mC]
-pitches = pt1 ++ pt1 ++ pt2 ++ pt2 ++ pt3 ++ pt3 ++ pt4 ++ pt4
+fjPitches = pt1 ++ pt1 ++ pt2 ++ pt2 ++ pt3 ++ pt3 ++ pt4 ++ pt4
 eig = Rhythm (1%8)
 qtr = Rhythm (1%4)
 hlf = Rhythm (1%2)
 rh1 = [qtr, qtr, qtr, qtr]
 rh2 = [qtr, qtr, hlf]
 rh3 = [eig, eig, eig, eig, qtr, qtr]
-rhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2
+fjRhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2
 
-writeFJCanon :: Int -> Rational -> IO ()
-writeFJCanon voices dur =
+piano = Instrument "Acoustic Grand Piano"
+                 
+writeFJSimpleCanon :: Int -> Rational -> IO ()
+writeFJSimpleCanon voices dur =
   LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ simpleCanonToScore simpleCanon)
   where
     title = "Frere Jacques"
-    noteMotto = Motto $ zipWith Note pitches rhythms
+    noteMotto = Motto $ zipWith Note fjPitches fjRhythms
     distance = Rhythm dur
-    instrument = Instrument "Acoustic Grand Piano"
     repetitions = 5
-    simpleCanon = SimpleCanon title noteMotto distance instrument voices repetitions
+    simpleCanon = SimpleCanon title noteMotto distance piano voices repetitions
+
+cMaj = [C, D, E, F, G, A, B]
+
+-- writeFJTransposingCanon [5, -3, 7, -6] [piano, piano, piano, piano] (1%1)
+
+writeFJTransposingCanon :: [Interval] -> [Instrument] -> Rational -> IO ()
+writeFJTransposingCanon intervals instruments dur =
+  LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ transposingCanonToScore transposingCanon)
+  where
+    title = "Frere Jacques"
+    noteMotto = Motto $ zipWith Note fjPitches fjRhythms
+    distance = Rhythm dur
+    repetitions = 5
+    transposingCanon = TransposingCanon title noteMotto distance cMaj intervals instruments repetitions
+
+
+    

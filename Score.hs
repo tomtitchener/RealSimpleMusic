@@ -9,6 +9,7 @@ module Score
 ,  Scale
 ,  Octave(..)
 ,  Pitch(..)
+,  transposePitch
 ,  PitchMotto
 ,  Dynamic(..)
 ,  Accent(..)
@@ -16,8 +17,10 @@ module Score
 ,  PanDegrees(..)
 ,  ControlEvent(..)
 ,  NoteEvent(..)
+,  transposeNoteEvent
 ,  noteEventToRhythm
 ,  NoteMotto
+,  transposeNoteMotto
 ,  PercussionEvent(..)
 ,  PercussionMotto
 ,  Interval
@@ -33,8 +36,9 @@ module Score
 where
 
 import           Control.Applicative
-import           Data.Maybe()
-import           Data.Ratio()
+import           Data.Ratio
+import           Data.List
+import           Data.Maybe
 
 -- | Pitch classes with one accidental only, enharmonic equivalents
 data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G | Gs | Af | A | As | Bf | B | Cf deriving (Bounded, Enum, Show, Ord, Eq)
@@ -57,6 +61,17 @@ instance Bounded Octave where
 
 -- | Pitch requires PitchClass and Octave.
 data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
+
+-- | Given a scale, an interval, and a pitch,
+--   answer the new Pitch "interval" steps away
+--   from "pitch" using "scale".
+transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
+transposePitch scale interval (Pitch oldPitchClass oldOctave) =
+  Pitch (scale !! (target `mod` count)) (Octave (target `div` count))
+  where
+    count = length scale
+    index = fromJust $ elemIndex oldPitchClass scale
+    target = index + interval
 
 -- | A PitchMotto is a list of pitches
 type PitchMotto = Motto Pitch
@@ -89,9 +104,24 @@ noteEventToRhythm (Note _ rhythm)           = rhythm
 noteEventToRhythm (AccentedNote _ rhythm _) = rhythm
 noteEventToRhythm (Rest rhythm)             = rhythm
 
+-- | Given a scale, an interval, and a NoteEvent,
+--   answer the new NoteEvent with with transposed Pitch
+transposeNoteEvent :: Scale -> Interval -> NoteEvent -> NoteEvent
+transposeNoteEvent scale interval (Note pitch rhythm) =
+  Note (transposePitch scale interval pitch) rhythm
+transposeNoteEvent scale interval (AccentedNote pitch rhythm accent) =
+  AccentedNote (transposePitch scale interval pitch) rhythm accent
+transposeNoteEvent scale interval (Rest rhythm) =
+  Rest rhythm
+    
 -- | A NoteMotto is a list of NoteEvents
 type NoteMotto = Motto NoteEvent
 
+-- | Given a scale, an interval, and a NoteMotto, answer
+--   a new NoteMotto with all the Pitches transposed 
+transposeNoteMotto :: Scale -> Interval -> NoteMotto -> NoteMotto
+transposeNoteMotto scale interval noteMotto =
+  Motto $ map (transposeNoteEvent scale interval) (getMotto noteMotto)
 -- | A percussion event either a note, an accented note, or a rest.
 data PercussionEvent = PercussionNote Rhythm | AccentedPercussionNote Rhythm Accent | PercussionRest Rhythm deriving (Eq, Show)
 
