@@ -2,6 +2,8 @@
 module Util where
 
 import qualified Data.ByteString.Lazy as LazyByteString
+import           Data.List
+import           Data.Maybe
 import           Data.Ratio
 import           Canon
 import           Score
@@ -84,9 +86,20 @@ rh1 = [qtr, qtr, qtr, qtr]
 rh2 = [qtr, qtr, hlf]
 rh3 = [eig, eig, eig, eig, qtr, qtr]
 fjRhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2
-
+int1 = [0, 1, 2, 0]
+int2 = [2, 3, 4]
+int3 = [4, 5, 4, 3, 2, 0]
+int4 = [0, -3, 0]
+fjIntervals = int1 ++ int1 ++ int2 ++ int2 ++ int3 ++ int3 ++ int4 ++ int4
 piano = Instrument "Acoustic Grand Piano"
-                 
+cMaj  = majorScale C
+afMaj = majorScale Af
+eMaj  = majorScale E
+fMaj  = majorScale F
+gMaj  = majorScale G
+dMaj  = majorScale D
+aMaj  = majorScale A
+
 writeFJSimpleCanon :: Int -> Rational -> IO ()
 writeFJSimpleCanon voices dur =
   LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ simpleCanonToScore simpleCanon)
@@ -97,19 +110,31 @@ writeFJSimpleCanon voices dur =
     repetitions = 5
     simpleCanon = SimpleCanon title noteMotto distance piano voices repetitions
 
-cMaj = [C, D, E, F, G, A, B]
-
--- writeFJTransposingCanon [5, -3, 7, -6] [piano, piano, piano, piano] (1%1)
-
-writeFJTransposingCanon :: [Interval] -> [Instrument] -> Rational -> IO ()
-writeFJTransposingCanon intervals instruments dur =
+-- writeFJTransposingCanon [piano, piano, piano, piano] [5, -3, 7, -6] (1%1)
+    
+writeFJTransposingCanon ::[Instrument] -> [Interval] -> Rational -> IO ()
+writeFJTransposingCanon instruments intervals dist =
   LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ transposingCanonToScore transposingCanon)
   where
     title = "Frere Jacques"
     noteMotto = Motto $ zipWith Note fjPitches fjRhythms
-    distance = Rhythm dur
+    distance = Rhythm dist
     repetitions = 5
     transposingCanon = TransposingCanon title noteMotto distance cMaj intervals instruments repetitions
 
+-- C grouping major third down, minor third above, with root fifth below.
+-- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, afMaj, eMaj, fMaj] [Octave 0, Octave (-1), Octave 0, Octave (-2)] (7%8)
 
-    
+-- Tower of fifths
+-- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-2), Octave (-1), Octave 0, Octave 1] (7%8)
+
+writeFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> IO ()
+writeFJScalesCanon instruments scales octaves dist =
+  LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ scalesCanonToScore scalesCanon)
+  where
+    title = "Frere Jacques"
+    distance = Rhythm dist
+    repetitions = 5
+    scalesCanon = ScalesCanon title fjIntervals fjRhythms distance scales octaves instruments repetitions
+
+

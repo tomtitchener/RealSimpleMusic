@@ -7,9 +7,12 @@ module Score
    PitchClass(..)
 ,  Motto(..)
 ,  Scale
+,  majorScale
+,  naturalMinorScale
 ,  Octave(..)
 ,  Pitch(..)
 ,  transposePitch
+,  getPitch
 ,  PitchMotto
 ,  Dynamic(..)
 ,  Accent(..)
@@ -49,6 +52,43 @@ newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applica
 -- | Scale is a list of pitch classes.
 type Scale = [PitchClass]
 
+cycleOfFifths = [Ff, Cf, Gf, Df, Af, Ef, Bf, F, C, G, D, A, E, B, Fs, Cs, Gs, Ds, As, Es, Bs]
+
+subrange :: Int -> Int -> [a] -> [a]
+subrange min max xs =
+  map (xs !!) [min..max]
+
+swap :: (a -> Bool) -> [a] -> [a]
+swap pred xs =
+  end ++ begin
+  where
+    (begin, end) = partition pred xs
+
+-- | Given a pitch class answer the major scale
+majorScale :: PitchClass -> Scale
+majorScale tonic =
+  if idx < 1 || idx > 15
+  then
+    error $ "majorScale tonic " ++ show tonic  ++ " is out of range"
+  else
+    swap (< tonic) $ sort $ subrange min max cycleOfFifths
+  where
+    idx = fromJust $ elemIndex tonic cycleOfFifths
+    min = idx - 1
+    max = idx + 5
+
+-- | Given a pitch class answer the natural minor scale
+naturalMinorScale :: PitchClass -> Scale
+naturalMinorScale tonic =
+  if idx < 4 || idx > 18
+  then
+    error $ "naturalMinorScale tonic " ++ show tonic  ++ " is out of range"
+  else
+    drop 5 major ++ take 5 major
+  where
+    idx = fromJust $ elemIndex tonic cycleOfFifths
+    major = majorScale $ cycleOfFifths !! (idx - 3)
+
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
 --   exceeds all instrument ranges, unless guarded by minBound and maxBound.
@@ -65,14 +105,31 @@ data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 -- | Given a scale, an interval, and a pitch,
 --   answer the new Pitch "interval" steps away
 --   from "pitch" using "scale".
+scaleOffset :: Scale -> [PitchClass] -> Scale -> Int
+scaleOffset baseScale pitchClasses relativeScale =
+  length relativeScale - offset
+  where
+    matchRoot pitchClass = pitchClass `elem` pitchClasses
+    offset = fromJust $ findIndex matchRoot relativeScale
+
+-- | Given a scale, an interval, and a pitch, answer
+--   a new pitch interval steps away from the old pitch
 transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
-transposePitch scale interval (Pitch oldPitchClass oldOctave) =
-  Pitch (scale !! (target `mod` count)) (Octave (target `div` count))
+transposePitch scale interval (Pitch oldPitchClass (Octave oldOctave)) =
+  Pitch (scale !! (target `mod` count)) (Octave (oldOctave + ((target + offset) `div` count)))
   where
     count = length scale
     index = fromJust $ elemIndex oldPitchClass scale
     target = index + interval
+    offset = scaleOffset (majorScale C) [C, Cs, Df] scale
 
+-- | Given a scale, an interval, and an octave answer 
+--   the Pitch "interval" steps frome the first note of
+--   "scale" and "octave".
+getPitch :: Scale -> Octave -> Interval -> Pitch
+getPitch scale octave step =
+  transposePitch scale step $ Pitch (head scale) octave
+  
 -- | A PitchMotto is a list of pitches
 type PitchMotto = Motto Pitch
 
