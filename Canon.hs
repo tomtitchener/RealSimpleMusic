@@ -2,11 +2,9 @@
 
 module Canon where
 
-import qualified Data.ByteString.Lazy as LazyByteString
 import           Data.Ratio
 import           Score
 import           ScoreToMidi
-import qualified Sound.MIDI.File.Save as SaveFile
 
 -- | First, simplest of all Canons.
 --   Imitation at unison, all voices

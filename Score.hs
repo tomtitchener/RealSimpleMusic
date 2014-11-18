@@ -39,7 +39,6 @@ module Score
 where
 
 import           Control.Applicative
-import           Data.Ratio
 import           Data.List
 import           Data.Maybe
 
@@ -52,17 +51,18 @@ newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applica
 -- | Scale is a list of pitch classes.
 type Scale = [PitchClass]
 
+cycleOfFifths :: [PitchClass]
 cycleOfFifths = [Ff, Cf, Gf, Df, Af, Ef, Bf, F, C, G, D, A, E, B, Fs, Cs, Gs, Ds, As, Es, Bs]
 
 subrange :: Int -> Int -> [a] -> [a]
-subrange min max xs =
-  map (xs !!) [min..max]
+subrange lo hi xs =
+  map (xs !!) [lo..hi]
 
 swap :: (a -> Bool) -> [a] -> [a]
-swap pred xs =
+swap predicate xs =
   end ++ begin
   where
-    (begin, end) = partition pred xs
+    (begin, end) = partition predicate xs
 
 -- | Given a pitch class answer the major scale
 majorScale :: PitchClass -> Scale
@@ -71,11 +71,11 @@ majorScale tonic =
   then
     error $ "majorScale tonic " ++ show tonic  ++ " is out of range"
   else
-    swap (< tonic) $ sort $ subrange min max cycleOfFifths
+    swap (< tonic) $ sort $ subrange lo hi cycleOfFifths
   where
     idx = fromJust $ elemIndex tonic cycleOfFifths
-    min = idx - 1
-    max = idx + 5
+    lo = idx - 1
+    hi = idx + 5
 
 -- | Given a pitch class answer the natural minor scale
 naturalMinorScale :: PitchClass -> Scale
@@ -106,7 +106,7 @@ data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 --   answer the new Pitch "interval" steps away
 --   from "pitch" using "scale".
 scaleOffset :: Scale -> [PitchClass] -> Scale -> Int
-scaleOffset baseScale pitchClasses relativeScale =
+scaleOffset _ pitchClasses relativeScale =
   length relativeScale - offset
   where
     matchRoot pitchClass = pitchClass `elem` pitchClasses
@@ -168,7 +168,7 @@ transposeNoteEvent scale interval (Note pitch rhythm) =
   Note (transposePitch scale interval pitch) rhythm
 transposeNoteEvent scale interval (AccentedNote pitch rhythm accent) =
   AccentedNote (transposePitch scale interval pitch) rhythm accent
-transposeNoteEvent scale interval (Rest rhythm) =
+transposeNoteEvent _ _ (Rest rhythm) =
   Rest rhythm
     
 -- | A NoteMotto is a list of NoteEvents

@@ -2,8 +2,6 @@
 module Util where
 
 import qualified Data.ByteString.Lazy as LazyByteString
-import           Data.List
-import           Data.Maybe
 import           Data.Ratio
 import           Canon
 import           Score
