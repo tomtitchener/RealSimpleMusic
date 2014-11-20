@@ -124,7 +124,7 @@ writeFJTransposingCanon instruments intervals dist =
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, afMaj, eMaj, fMaj] [Octave 0, Octave (-1), Octave 0, Octave (-2)] (7%8)
 
 -- Tower of fifths
--- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-2), Octave (-1), Octave 0, Octave 1] (7%8)
+-- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-1), Octave (-1), Octave 0, Octave 1] (7%8)
 
 writeFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> IO ()
 writeFJScalesCanon instruments scales octaves dist =
