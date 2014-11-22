@@ -97,3 +97,4 @@ scalesCanonToScore (ScalesCanon title intervals rhythms dist scales octaves inst
         genTune scale octave = zipWith Note (genPitches scale octave) rhythms
         tuness = zipWith genTune scales octaves
         sections = assembleSections dist repetitions tuness instruments
+

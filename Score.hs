@@ -220,4 +220,3 @@ data PercussionSection = PercussionSection [PercussionInstrumentEvents] [[Contro
 
 -- | Synonym for String
 type Title = String
-
