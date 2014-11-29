@@ -4,39 +4,23 @@ module Util where
 import qualified Data.ByteString.Lazy as LazyByteString
 import           Data.Ratio
 import           Canon
-import           Score
-import           ScoreToMidi
+import           Music
+import           MusicToMidi
 import qualified Sound.MIDI.File.Save as SaveFile
-
--- | Low-level convert for choir of voices and control events to Midi file.
-uY :: Title -> String -> IO [[NoteEvent]] -> [[ControlEvent]] -> IO ()
-uY title instr notess controlss =
-  do
-    nss <- notess
-    let score = MidiVoicesScore title [Section (Instrument instr) nss controlss]
-    LazyByteString.writeFile (title ++ ".mid") (SaveFile.toByteString (scoreToMidiFile score))
-
--- | Low-level convert for single voice and control event lists to Midi file.
-uX :: Title -> String -> IO [NoteEvent] -> [ControlEvent] -> IO ()
-uX title instr notes controls =
-  do
-    ns <- notes
-    let score = MidiVoicesScore title [Section (Instrument instr) [ns] [controls]]
-    LazyByteString.writeFile (title ++ ".mid") (SaveFile.toByteString (scoreToMidiFile score))
 
 -- | Assemble defaults into score with single Section, call
 --   scoreToMidiFile to create Sound.MIDI.File.T, then 
 --   then Sound.MIDI.File.Save.toByteString to convert
 --   to byte string, then Data.ByteString.Lazy.writeFile
 --   to save.
-u0 :: String -> String -> [NoteEvent] -> [ControlEvent] -> IO ()
+u0 :: String -> String -> [Note] -> [Control] -> IO ()
 u0 title instr notes controls =
-  do
-    let score = MidiVoicesScore title [Section (Instrument instr) [notes] [controls]]
-    LazyByteString.writeFile (title ++ ".mid") (SaveFile.toByteString (scoreToMidiFile score))
-
--- | Assemble default pitch and rhythm into single-array of single NoteEvent,
---   empty array of ControlEvent.
+  scoreToMidiFiles score
+  where
+    score = Score title [Voice (Instrument instr) notes [controls]]
+        
+-- | Assemble default pitch and rhythm into single-array of single Note,
+--   empty array of Control.
 u1 :: String -> String -> Pitch -> Rhythm -> IO ()
 u1 title instr pitch rhythm =
    u0 title instr [Note pitch rhythm] []
@@ -98,41 +82,43 @@ gMaj  = majorScale G
 dMaj  = majorScale D
 aMaj  = majorScale A
 
+-- writeFJSimpleCanon 4 (2%1)
 writeFJSimpleCanon :: Int -> Rational -> IO ()
 writeFJSimpleCanon voices dur =
-  LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ simpleCanonToScore simpleCanon)
+  scoreToMidiFiles score
   where
     title = "Frere Jacques"
     noteMotto = Motto $ zipWith Note fjPitches fjRhythms
     distance = Rhythm dur
     repetitions = 5
     simpleCanon = SimpleCanon title noteMotto distance piano voices repetitions
+    score = simpleCanonToScore simpleCanon
 
 -- writeFJTransposingCanon [piano, piano, piano, piano] [5, -3, 7, -6] (1%1)
-    
 writeFJTransposingCanon ::[Instrument] -> [Interval] -> Rational -> IO ()
 writeFJTransposingCanon instruments intervals dist =
-  LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ transposingCanonToScore transposingCanon)
+  scoreToMidiFiles score
   where
     title = "Frere Jacques"
     noteMotto = Motto $ zipWith Note fjPitches fjRhythms
     distance = Rhythm dist
     repetitions = 5
     transposingCanon = TransposingCanon title noteMotto distance cMaj intervals instruments repetitions
+    score = transposingCanonToScore transposingCanon
 
 -- C grouping major third down, minor third above, with root fifth below.
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, afMaj, eMaj, fMaj] [Octave 0, Octave (-1), Octave 0, Octave (-2)] (7%8)
 
 -- Tower of fifths
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-1), Octave (-1), Octave 0, Octave 1] (7%8)
-
 writeFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> IO ()
 writeFJScalesCanon instruments scales octaves dist =
-  LazyByteString.writeFile (title ++ ".mid") $ SaveFile.toByteString (scoreToMidiFile $ scalesCanonToScore scalesCanon)
+  scoreToMidiFiles score
   where
     title = "Frere Jacques"
     distance = Rhythm dist
     repetitions = 5
     scalesCanon = ScalesCanon title fjIntervals fjRhythms distance scales octaves instruments repetitions
+    score = scalesCanonToScore scalesCanon
 
 

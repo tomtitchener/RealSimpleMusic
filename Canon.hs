@@ -3,8 +3,8 @@
 module Canon where
 
 import           Data.Ratio
-import           Score
-import           ScoreToMidi
+import           Music
+import           MusicToMidi
 
 -- | Simplest of all Canons.  Imitation at unison, all voices
 --   playing the same instrument.  Parameterized by title,
@@ -24,12 +24,12 @@ data SimpleCanon = SimpleCanon
 --  Midi max (16).  Skip standard statement of
 --  theme in unison voices before imitation.
 simpleCanonToScore :: SimpleCanon -> Score
-simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument voices repetitions) =
-  midiVoicesScore title sections
+simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument countVoices repetitions) =
+  Score title voices
   where
     tune = (concat . replicate repetitions) notes
-    rests = take voices $ map (Rest . Rhythm) [(0%1)*dist, (1%1)*dist..]
-    sections = [Section instrument [rest : tune] [] | rest <- rests]
+    rests = take countVoices $ map (Rest . Rhythm) [(0%1)*dist, (1%1)*dist..]
+    voices = [Voice instrument (rest : tune) [] | rest <- rests]
 
 -- | Parameterize by imitative interval, list of instruments
 data TransposingCanon = TransposingCanon
@@ -43,14 +43,15 @@ data TransposingCanon = TransposingCanon
                       deriving (Show)
 
 -- | Refactor for common behavior between transposingCanonToScore and scaleCanonToScore.
-assembleSections :: Rhythm -> Int -> [[NoteEvent]] -> [Instrument] -> [Section]
-assembleSections (Rhythm dist) repetitions tuness instruments =
-  zipWith makeSection instruments restTuness
+assembleVoices :: Rhythm -> Int -> [[Note]] -> [Instrument] -> [Voice]
+assembleVoices (Rhythm dist) repetitions tuness instruments =
+  zipWith3 makeVoice instruments restTuness balances
   where
-    makeSection instrument tune = Section instrument [tune] []
+    makeVoice instrument tunes balance = Voice instrument tunes [[balance]]
     rests = map (Rest . Rhythm) [(0%1)*dist, (1%1)*dist..]
     repTuness =  map (concat . replicate repetitions) tuness
     restTuness = zipWith (:) rests repTuness
+    balances = map (\b -> BalanceControl b (Rhythm (0%4))) $ cycle [LeftBalance, MidLeftBalance, CenterBalance, MidRightBalance, RightBalance]
 
 -- | Render a transposing canon as a Midi voices score (no percussion).
 transposingCanonToScore :: TransposingCanon -> Score
@@ -58,11 +59,11 @@ transposingCanonToScore (TransposingCanon title noteMotto dist scale intervals i
   | length intervals /= length instruments =
       error $ "transposingCanonToScore mismatched intervals " ++ show intervals ++ " vs. instruments " ++ show instruments
   | otherwise =
-      midiVoicesScore title sections
+      Score title voices
       where
         xposeTune interval = getMotto (transposeNoteMotto scale interval noteMotto)
         tuness = map xposeTune intervals
-        sections = assembleSections dist repetitions tuness instruments
+        voices = assembleVoices dist repetitions tuness instruments
 
 -- | Abstract over scale, tune becomes lists of rhythms and of intervals
 --   for mapping over scale.  Parameterize by lists of scale, octave 
@@ -88,7 +89,7 @@ scalesCanonToScore (ScalesCanon title intervals rhythms dist scales octaves inst
   | not (all (== lenHeadScale) lensTailScales) = 
       error $ "scalesCanonToScore scales not all equal length" ++ show scales
   | otherwise =
-      midiVoicesScore title sections
+      Score title voices
       where
         lenScales = length scales
         lenHeadScale = length (head scales)
@@ -96,5 +97,5 @@ scalesCanonToScore (ScalesCanon title intervals rhythms dist scales octaves inst
         genPitches scale octave = map (getPitch scale octave) intervals
         genTune scale octave = zipWith Note (genPitches scale octave) rhythms
         tuness = zipWith genTune scales octaves
-        sections = assembleSections dist repetitions tuness instruments
-
+        voices = assembleVoices dist repetitions tuness instruments
+        

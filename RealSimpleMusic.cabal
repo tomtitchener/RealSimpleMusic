@@ -17,7 +17,7 @@ extra-source-files:  Util.hs, Canon.hs
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Score, ScoreToMidi
+  exposed-modules:     Music, MusicToMidi
   other-modules:       Util, Canon
   other-extensions:    GeneralizedNewtypeDeriving
   build-depends:     base >=4.5 && <4.8
