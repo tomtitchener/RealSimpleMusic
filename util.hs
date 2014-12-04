@@ -15,7 +15,7 @@ import qualified Sound.MIDI.File.Save as SaveFile
 --   to save.
 u0 :: String -> String -> [Note] -> [Control] -> IO ()
 u0 title instr notes controls =
-  scoreToMidiFiles score
+  scoreToMidiFile score
   where
     score = Score title [Voice (Instrument instr) notes [controls]]
         
@@ -97,7 +97,7 @@ writeFJSimpleCanon voices dur =
 -- writeFJTransposingCanon [piano, piano, piano, piano] [5, -3, 7, -6] (1%1)
 writeFJTransposingCanon ::[Instrument] -> [Interval] -> Rational -> IO ()
 writeFJTransposingCanon instruments intervals dist =
-  scoreToMidiFiles score
+  scoreToMidiFile score
   where
     title = "Frere Jacques"
     noteMotto = Motto $ zipWith Note fjPitches fjRhythms
@@ -113,7 +113,7 @@ writeFJTransposingCanon instruments intervals dist =
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-1), Octave (-1), Octave 0, Octave 1] (7%8)
 writeFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> IO ()
 writeFJScalesCanon instruments scales octaves dist =
-  scoreToMidiFiles score
+  scoreToMidiFile score
   where
     title = "Frere Jacques"
     distance = Rhythm dist

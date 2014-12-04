@@ -2,6 +2,7 @@
 
 module MusicToMidi(
   scoreToMidiFiles
+  , scoreToMidiFile
 ) where
 
 import           Data.List
@@ -21,13 +22,6 @@ import qualified Sound.MIDI.Message.Channel       as ChannelMsg
 import qualified Sound.MIDI.Message.Channel.Voice as VoiceMsg
 import qualified Sound.MIDI.File.Save             as SaveFile
 import qualified Data.ByteString.Lazy             as LazyByteString
-
--- | PanDegrees is integer from 0 to 359
-newtype PanDegrees = PanDegrees { getPanDegrees :: Integer } deriving (Show, Ord, Eq, Num)
-
-instance Bounded PanDegrees where
-    minBound = PanDegrees 0    --  Mimic circle, maybe replace with -90?
-    maxBound = PanDegrees 359  --  Mimic circle, maybe replace with +90?
 
 newtype Duration = Dur { getDur :: Integer } deriving (Read, Show, Ord, Eq, Num)
 
@@ -219,7 +213,7 @@ midiVoiceToEventList (MidiVoice (Instrument instrName) channel notes controlss)
   | otherwise           = EventList.merge progAndNoteEvents ctrlEvents
   where
     instr = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
-    noteEventss = map (\notes -> snd $ execState (traverse (midiNoteToEvents channel) notes) (Dur 0, [])) [notes]
+    noteEventss = map (\ns -> snd $ execState (traverse (midiNoteToEvents channel) ns) (Dur 0, [])) [notes]
     noteEventLists = map (EventList.fromPairList . map durEventToNumEvent) noteEventss
     ctrlEventss = map (map (controlToEvent channel)) controlss
     ctrlEventLists = map (EventList.fromPairList . map durEventToNumEvent) ctrlEventss
@@ -229,15 +223,6 @@ midiVoiceToEventList (MidiVoice (Instrument instrName) channel notes controlss)
 -- | rhythmToDuration(Rhythm(1%4)) == 512%1 * 1%4 == 512%4 == 128 ticks per quarter note
 standardTicks :: MidiFile.Division
 standardTicks = MidiFile.Ticks $ fromIntegral $ getDur (rhythmToDuration (Rhythm (1%4))) -- 1:1 for Duration:Tick
-
--- | Given a MidiVoice, convert instrument, channel, notes, and
---   controls to midi, then assemble MidiFile.T in preparation
---   for Sound.MIDI.File.Save.toByteString.
-midiVoiceToMidiFile :: MidiVoice -> MidiFile.T
-midiVoiceToMidiFile midiVoice =
-  MidiFile.Cons MidiFile.Mixed standardTicks [voiceEventList]
-  where
-    voiceEventList = midiVoiceToEventList midiVoice
 
 -- | Collapse PercussionNote and AccentedPercussionNote
 --   from Note to MidiNote and AccentedMidiNote for
@@ -250,6 +235,8 @@ noteToMidiNote _ (Note pitch rhythm) =
   MidiNote (VoiceMsg.toPitch (pitchToMidi pitch)) rhythm
 noteToMidiNote _ (AccentedNote pitch rhythm accent) =
   AccentedMidiNote (VoiceMsg.toPitch (pitchToMidi pitch)) rhythm accent
+noteToMidiNote (Instrument instr) (AccentedPercussionNote rhythm accent) =
+  AccentedMidiNote (GeneralMidi.drumToKey (stringToDrum instr)) rhythm accent
 noteToMidiNote _ (Rest rhythm) =
   MidiRest rhythm
 noteToMidiNote (Instrument instr) (PercussionNote rhythm) =
@@ -261,45 +248,144 @@ isMidiPercussion = flip elem (map show GeneralMidi.drums)
 isMidiInstrument :: String -> Bool
 isMidiInstrument = isJust . GeneralMidi.instrumentNameToProgram
   
--- | Select drums channel for non-pitched instruments,
---   channel zero for all others.  Note:  for use by
---   geneator that emits unique file per voice.  To
---   collect voices per file, need way to allocate
---   midi channels for piteched voices.
-voiceToMidiVoice :: Voice -> MidiVoice
-voiceToMidiVoice (Voice instr notes controlss)
-  | isMidiPercussion instrName = MidiVoice instr GeneralMidi.drumChannel midiNotes controlss
-  | isMidiInstrument instrName = MidiVoice instr (ChannelMsg.toChannel 0) midiNotes controlss
-  | otherwise = error $ "voiceToMidiVoice: instr " ++ instrName ++ " is not a Midi instrument"
+voiceAndChannelToMidiVoice :: Voice -> ChannelMsg.Channel -> MidiVoice
+voiceAndChannelToMidiVoice (Voice instr notes controlss) channel =
+  MidiVoice instr channel midiNotes controlss
   where
-    instrName = getInstrument instr
     midiNotes = map (noteToMidiNote instr) notes
-
+    
+-- | Given a MidiVoice, convert instrument, channel, notes, and
+--   controls to midi, then assemble MidiFile.T in preparation
+--   for Sound.MIDI.File.Save.toByteString.
+midiVoiceToMidiFile :: MidiVoice -> MidiFile.T
+midiVoiceToMidiFile midiVoice =
+  MidiFile.Cons MidiFile.Mixed standardTicks [voiceEventList]
+  where
+    voiceEventList = midiVoiceToEventList midiVoice
+    
 -- | Given title, voice, and part number, generate
---   title, convert voice to midi voice, and create
---   midi file for each.
-voiceToMidiFile :: Title -> Voice -> Int -> IO ()
-voiceToMidiFile title voice@(Voice (Instrument instr) _ _) part =
+--   title, convert voice to create midi file byte
+--   string and write file.
+titleAndMidiVoiceToMidiFile :: Title -> MidiVoice -> Int -> IO ()
+titleAndMidiVoiceToMidiFile title voice@(MidiVoice (Instrument instr) _ _ _) part =
   LazyByteString.writeFile fileName $ SaveFile.toByteString midiFile
   where
     fileName = title ++ "-" ++ instr ++ "-" ++ show part ++ ".mid"
-    midiFile = midiVoiceToMidiFile $ voiceToMidiVoice voice
+    midiFile = midiVoiceToMidiFile voice
 
 -- | Given title and list of voices, create midi file per voice.
-voicesToMidiFile :: Title -> [Voice] -> IO ()
-voicesToMidiFile title voices =
-  zipWithM_ (voiceToMidiFile title) voices [1..]
+titleVoicesAndChannelsToMidiFiles :: Title -> [Voice] -> [ChannelMsg.Channel] -> IO ()
+titleVoicesAndChannelsToMidiFiles title voices channels =
+  zipWithM_ (titleAndMidiVoiceToMidiFile title) midiVoices [1..]
+  where
+    midiVoices = zipWith voiceAndChannelToMidiVoice voices channels
+      
+-- | All percussion voices are the same instrument
+--   for the purpose of track allocation in a multi-track
+--   file.
+equalVoiceByInstrument :: Voice -> Voice -> Bool
+equalVoiceByInstrument (Voice (Instrument instr1) _ _) (Voice (Instrument instr2) _ _) =
+  isMidiPercussion instr1 && isMidiPercussion instr2 || instr1 == instr2
+  
+-- | All percussion voices are equal instruments 
+--   for the purpose of track allocation in a multi-track
+--   file.
+orderVoiceByInstrument :: Voice -> Voice -> Ordering
+orderVoiceByInstrument (Voice (Instrument instr1) _ _) (Voice (Instrument instr2) _ _)
+  | isMidiPercussion instr1 && isMidiPercussion instr2 = EQ
+  | otherwise = instr1 `compare` instr2
 
+-- | Organize a list of voices into a list of list of
+--   voices grouped by instrument where all percussion
+--   instruments are one instrument.
+collectVoicesByInstrument :: [Voice] -> [[Voice]]
+collectVoicesByInstrument =
+  groupVoicesByInstrument . sortVoicesByInstrument
+  where
+    groupVoicesByInstrument = groupBy equalVoiceByInstrument
+    sortVoicesByInstrument = sortBy orderVoiceByInstrument
+
+-- | Map list of list of voice to list of list of midi channel
+--   using drum channel for percussion voices, otherwise channel
+--   zero.  Use when emitting Midi file per voice to be assembled
+--   later on, e.g. with Logic or GarageBand.
+assignAnyMidiChannelsByVoices :: [[Voice]] -> [[ChannelMsg.Channel]]
+assignAnyMidiChannelsByVoices =
+  map toMidiChannelss
+  where
+    toMidiChannelss voices = map toAnyMidiChannel voices
+    toAnyMidiChannel (Voice (Instrument instr) _ _)
+      | isMidiPercussion instr = GeneralMidi.drumChannel
+      | otherwise = ChannelMsg.toChannel 0
+    
 -- | Collect list of voices into list of list
---   of identical voices, then convert all
---   by list to midi file per voice with title
---   e.g. "<title>-<instrument>-1.mid"
+--   of voices with same instrument, then
+--   create a parallel list of list of Midi
+--   channels for each voices and use the
+--   title, list of list of voices, and list
+--   of list of channels to create individual
+--   Midi files, one per voice, with name e.g.
+--   "<title>-<instrument>-1.mid".
 scoreToMidiFiles :: Score -> IO ()
 scoreToMidiFiles (Score title voices) =
-  Control.Monad.mapM_ (voicesToMidiFile title) voicess 
+  zipWithM_ (titleVoicesAndChannelsToMidiFiles title) voicess channelss
   where
-    equalVoiceByInstrument (Voice (Instrument instr1) _ _) (Voice (Instrument instr2) _ _) = instr1 == instr2
-    groupVoicesByInstrument = groupBy equalVoiceByInstrument
-    orderVoiceByInstrument (Voice (Instrument instr1) _ _) (Voice (Instrument instr2) _ _) = instr1 `compare` instr2
-    sortVoicesByInstrument = sortBy orderVoiceByInstrument
-    voicess = (groupVoicesByInstrument . sortVoicesByInstrument) voices
+    voicess = collectVoicesByInstrument voices
+    channelss = assignAnyMidiChannelsByVoices voicess
+
+-- | Collect list of voices into list of list
+--   of voices with same instrument, then
+--   create a parallel list of list of the
+--   same Midi channel for each voices and use 
+--   the title, list of list of voices, and list
+--   of list of channels to create as a Midi
+--   file for each voice.  Unlimited by Midi
+--   track count constraints.  But files must
+--   be assembled one-by-one into editor like
+--   Logic or GarageBand.    
+titleVoicessAndChannelssToOneMidiFile :: Title -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
+titleVoicessAndChannelssToOneMidiFile title voicess channelss =
+  LazyByteString.writeFile fileName $ SaveFile.toByteString midiFile
+  where
+    fileName = title ++ ".mid"
+    midiVoices = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
+    voiceEventLists = map midiVoiceToEventList midiVoices
+    midiFile = MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge voiceEventLists]
+
+-- | Map list of list of voice to list of list of midi channel
+--   using drum channel for percussion voices, otherwise channels
+--   0 to 15, with 9 reserved for percussion instruments (if any).
+assignMidiChannelsByVoices :: [[Voice]] -> [[ChannelMsg.Channel]]
+assignMidiChannelsByVoices voicess =
+  reverse $ snd $ foldl foldVoices (0, [[]]) voicess
+  where
+    foldVoices (chan, chanss) voices
+      | isMidiPercussion instr = (chan, (replicate countVoices GeneralMidi.drumChannel) : chanss)
+      | otherwise = (nextchan, (replicate countVoices (ChannelMsg.toChannel chan)) : chanss)
+      where
+        (Voice (Instrument instr) _ _) = head voices
+        countVoices = length voices
+        isPerc = (any . any) isPercVoice voicess
+        isPercVoice (Voice (Instrument instr) _ _) = isMidiPercussion instr
+        nextchan
+          | isPerc = chan + 1
+          | otherwise = if chan + 1 == ChannelMsg.fromChannel GeneralMidi.drumChannel then chan + 2 else chan + 1
+
+-- | Collect list of voices into list of list
+--   of voices with same instrument, then
+--   create a parallel list of list of Midi
+--   channels for each voices and use the
+--   title, list of list of voices, and list
+--   of list of channels to create one Midi
+--   file with all the voices together, name
+--   e.g. "<title>.mid". Limited by Midi constraint
+--   of 1 percussion track and 15 non-percussion
+--   tracks.
+scoreToMidiFile :: Score -> IO ()
+scoreToMidiFile (Score title voices)
+  | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
+  | otherwise = titleVoicessAndChannelssToOneMidiFile title voicess channelss
+  where
+    voicess = collectVoicesByInstrument voices
+    countInstruments = length voicess
+    channelss = assignMidiChannelsByVoices voicess
