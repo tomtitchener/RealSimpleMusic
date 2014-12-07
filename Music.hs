@@ -16,6 +16,7 @@ module Music
 ,  PitchMotto
 ,  Dynamic(..)
 ,  Balance(..)
+,  Pan(..)
 ,  Tempo(..)
 ,  KeySignature(..)
 ,  Articulation(..)
@@ -161,6 +162,13 @@ data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo
 -- | Balance
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Eq, Show);
 
+-- | Pan
+newtype Pan = Pan { getPan :: Int } deriving (Read, Show, Ord, Eq, Num)
+
+instance Bounded Pan where
+    minBound = 0
+    maxBound = 127
+    
 -- | Tempo, beats per minute
 newtype Tempo = Tempo { getTempo :: Int } deriving (Eq, Show)
 
@@ -173,6 +181,7 @@ data Articulation = Legato | Marcato | Staccato deriving (Bounded, Enum, Show, O
 -- | Controls with their durations as a rhythm.
 data Control = DynamicControl Dynamic Rhythm
              | BalanceControl Balance Rhythm
+             | PanControl Pan Rhythm
              | TempoControl Tempo Rhythm
              | KeySignatureControl KeySignature Rhythm
              | ArticulationControl Articulation Rhythm deriving (Eq, Show)

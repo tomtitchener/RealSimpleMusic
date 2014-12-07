@@ -74,6 +74,8 @@ int3 = [4, 5, 4, 3, 2, 0]
 int4 = [0, -3, 0]
 fjIntervals = int1 ++ int1 ++ int2 ++ int2 ++ int3 ++ int3 ++ int4 ++ int4
 piano = Instrument "Acoustic Grand Piano"
+marimba = Instrument "Marimba"
+vibes = Instrument "Vibraphone"
 cMaj  = majorScale C
 afMaj = majorScale Af
 eMaj  = majorScale E
@@ -82,19 +84,23 @@ gMaj  = majorScale G
 dMaj  = majorScale D
 aMaj  = majorScale A
 
--- writeFJSimpleCanon 4 (2%1)
-writeFJSimpleCanon :: Int -> Rational -> IO ()
-writeFJSimpleCanon voices dur =
-  scoreToMidiFiles score
+-- writeFJSimpleCanon "Acoustic Grand Piano" 4 (2%1) -- traditional.
+-- writeFJSimpleCanon "marimba" 16 (1%16) -- "haze" effect.
+writeFJSimpleCanon :: String -> Int -> Rational -> IO ()
+writeFJSimpleCanon instrName voices dur =
+  scoreToMidiFile score
   where
     title = "Frere Jacques"
     noteMotto = Motto $ zipWith Note fjPitches fjRhythms
     distance = Rhythm dur
     repetitions = 5
-    simpleCanon = SimpleCanon title noteMotto distance piano voices repetitions
+    instr = Instrument instrName
+    simpleCanon = SimpleCanon title noteMotto distance instr voices repetitions
     score = simpleCanonToScore simpleCanon
 
 -- writeFJTransposingCanon [piano, piano, piano, piano] [5, -3, 7, -6] (1%1)
+-- TBD: more examples here.  Drive to e minor?  What about -1 and +2, +3 for
+-- imitative distances that emphasize half-tone axes?
 writeFJTransposingCanon ::[Instrument] -> [Interval] -> Rational -> IO ()
 writeFJTransposingCanon instruments intervals dist =
   scoreToMidiFile score
@@ -108,8 +114,7 @@ writeFJTransposingCanon instruments intervals dist =
 
 -- C grouping major third down, minor third above, with root fifth below.
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, afMaj, eMaj, fMaj] [Octave 0, Octave (-1), Octave 0, Octave (-2)] (7%8)
-
--- Tower of fifths
+-- Tower of fifths:
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-1), Octave (-1), Octave 0, Octave 1] (7%8)
 writeFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> IO ()
 writeFJScalesCanon instruments scales octaves dist =
@@ -120,5 +125,4 @@ writeFJScalesCanon instruments scales octaves dist =
     repetitions = 5
     scalesCanon = ScalesCanon title fjIntervals fjRhythms distance scales octaves instruments repetitions
     score = scalesCanonToScore scalesCanon
-
-
+    

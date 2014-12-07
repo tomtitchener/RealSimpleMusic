@@ -4,7 +4,7 @@ module Canon where
 
 import           Data.Ratio
 import           Music
-import           MusicToMidi
+import           MusicToMidi()
 
 -- | Simplest of all Canons.  Imitation at unison, all voices
 --   playing the same instrument.  Parameterized by title,
@@ -29,9 +29,10 @@ simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument cou
   where
     tune = (concat . replicate repetitions) notes
     rests = take countVoices $ map (Rest . Rhythm) [(0%1)*dist, (1%1)*dist..]
-    voices = [Voice instrument (rest : tune) [] | rest <- rests]
+    voices = zipWith (\rest balance -> Voice instrument (rest : tune) [[balance]]) rests balances
+    balances = map (\b -> BalanceControl b (Rhythm (0%4))) $ cycle [LeftBalance, MidLeftBalance, CenterBalance, MidRightBalance, RightBalance]
 
--- | Parameterize by imitative interval, list of instruments
+-- | Additionally parameterize by imitative interval, list of instruments
 data TransposingCanon = TransposingCanon
                         {xpTitle       :: Title
                         ,xpNotes       :: NoteMotto
@@ -65,9 +66,10 @@ transposingCanonToScore (TransposingCanon title noteMotto dist scale intervals i
         tuness = map xposeTune intervals
         voices = assembleVoices dist repetitions tuness instruments
 
--- | Abstract over scale, tune becomes lists of rhythms and of intervals
---   for mapping over scale.  Parameterize by lists of scale, octave 
---   tranposition for scale root, and instruments per voice.
+-- | Additionally parameterize by scale.  Tune becomes lists of rhythms 
+--   and of intervals for mapping over scale.  Parameterize by lists 
+--   of scale, octave  tranposition for scale root, and instruments
+--   per voice.
 data ScalesCanon = ScalesCanon
                    {scTitle       :: Title
                    ,scIntervals   :: [Interval]
@@ -98,4 +100,3 @@ scalesCanonToScore (ScalesCanon title intervals rhythms dist scales octaves inst
         genTune scale octave = zipWith Note (genPitches scale octave) rhythms
         tuness = zipWith genTune scales octaves
         voices = assembleVoices dist repetitions tuness instruments
-        
