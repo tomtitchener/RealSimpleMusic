@@ -142,10 +142,10 @@ genMidiNoteOff channel pitch accent =
 --   and second contains duration and note off (e.g. for length of note).
 genMidiNoteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Accent -> [(Duration, Event.T)]
 genMidiNoteEvents delay channel pitch duration accent
-  | minBound < delay = error $ "genMidiNoteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
-  | maxBound > delay = error $ "genMidiNoteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
-  | minBound < duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is less than minimum value " ++ show (minBound::Duration)
-  | maxBound > duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is greater than minimum value " ++ show (maxBound::Duration)
+  | minBound > delay = error $ "genMidiNoteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
+  | maxBound < delay = error $ "genMidiNoteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
+  | minBound > duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is less than minimum value " ++ show (minBound::Duration)
+  | maxBound < duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is greater than minimum value " ++ show (maxBound::Duration)
   | otherwise = [(delay, genMidiNoteOn channel pitch accent), (duration, genMidiNoteOff channel pitch accent)]
 
 -- | Translate the note-on/note-off pair of events for a MidiNote into

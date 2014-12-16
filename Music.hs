@@ -22,6 +22,7 @@ module Music
 ,  Articulation(..)
 ,  Accent(..)
 ,  Rhythm(..)
+,  Instrument(..)
 ,  Control(..)
 ,  Note(..)
 ,  transposeNote
@@ -31,7 +32,6 @@ module Music
 ,  Interval
 ,  Intervals
 ,  Chord(..)
-,  Instrument(..)
 ,  Voice(..)
 ,  Title
 ,  Score(..)
@@ -157,10 +157,10 @@ getPitch scale octave step =
 type PitchMotto = Motto Pitch
 
 -- | Dynamic
-data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo deriving (Bounded, Enum, Show, Ord, Eq)
+data Dynamic = NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Balance
-data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Eq, Show);
+data Balance = NoBalance | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Pan
 newtype Pan = Pan { getPan :: Int } deriving (Read, Show, Ord, Eq, Num)
@@ -170,13 +170,16 @@ instance Bounded Pan where
     maxBound = 127
     
 -- | Tempo, beats per minute
-newtype Tempo = Tempo { getTempo :: Int } deriving (Eq, Show)
+newtype Tempo = Tempo { getTempo :: Int } deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Key Signature, negative for count flats, positive for count sharps
-newtype KeySignature = KeySignature { accidentals :: Int } deriving (Eq, Show)
+newtype KeySignature = KeySignature { accidentals :: Int } deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Articulation
-data Articulation = Legato | Marcato | Staccato deriving (Bounded, Enum, Show, Ord, Eq)
+data Articulation = NoArticulation | Legato | Marcato | Staccato deriving (Bounded, Enum, Show, Ord, Eq)
+
+-- | Instruments.
+newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord, Eq)
 
 -- | Controls with their durations as a rhythm.
 data Control = DynamicControl Dynamic Rhythm
@@ -184,13 +187,14 @@ data Control = DynamicControl Dynamic Rhythm
              | PanControl Pan Rhythm
              | TempoControl Tempo Rhythm
              | KeySignatureControl KeySignature Rhythm
-             | ArticulationControl Articulation Rhythm deriving (Eq, Show)
+             | ArticulationControl Articulation Rhythm
+             | InstrumentControl Instrument Rhythm deriving (Ord, Eq, Show)
 
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
-newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Eq, Show)
+newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq)
 
 -- | A note is either an ordinary note with pitch and rhythm,
 --   an accented note with pitch, rhythm, and accent,
@@ -237,17 +241,19 @@ type Intervals = [Interval]
 -- | Data to render a Chord in many different ways.
 data Chord = Chord Scale Intervals deriving (Show)
 
--- | Instruments.
-newtype Instrument = Instrument { getInstrument :: String } deriving (Show)
-
 -- | Voice has instrument, list of notes, and
 --   list of list of controls organized by control,
 --   e.g. one list for sequence of dynamics, tempos, etc.
-data Voice = Voice Instrument [Note] [[Control]] deriving (Show)
+data Voice = Voice { voiceInstrument :: Instrument
+                   , voiceNotes :: [Note]
+                   , voiceControls :: [[Control]]
+                   } deriving (Show)
 
 -- | Synonym for String
 type Title = String
 
 -- | Title and List of voices make up a score (composer and date, too?).
-data Score = Score Title [Voice]
+data Score = Score { scoreTitle :: Title
+                   , scoreVoices :: [Voice]
+                   } deriving (Show)
 
