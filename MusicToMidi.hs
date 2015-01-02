@@ -197,6 +197,15 @@ genMidiSustenutoControlEvent :: ChannelMsg.Channel -> Articulation -> Event.T
 genMidiSustenutoControlEvent chan articulation =
   genEvent chan (VoiceMsg.Control VoiceMsg.sustenuto $ articulationToSustenuto articulation)
 
+genMidiInstrumentControlEvent :: ChannelMsg.Channel -> Instrument -> Event.T    
+genMidiInstrumentControlEvent chan (Instrument instrName) =
+  genEvent chan (VoiceMsg.ProgramChange instr)
+  where
+    instr = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
+
+genMidiTextMetaEvent :: String -> Event.T
+genMidiTextMetaEvent  = (Event.MetaEvent . Meta.TextEvent)
+
 controlToEvent :: ChannelMsg.Channel -> Control -> (Duration, Event.T)
 controlToEvent channel (DynamicControl dynamic rhythm) =
   (rhythmToDuration rhythm, genMidiDynamicControlEvent channel dynamic)
@@ -210,6 +219,10 @@ controlToEvent _ (KeySignatureControl keySignature rhythm) =
   (rhythmToDuration rhythm, genMidiKeySignatureMetaEvent keySignature)
 controlToEvent channel (ArticulationControl articulation rhythm) =
   (rhythmToDuration rhythm, genMidiSustenutoControlEvent channel articulation)
+controlToEvent channel (InstrumentControl instrument rhythm) =
+  (rhythmToDuration rhythm, genMidiInstrumentControlEvent channel instrument)
+controlToEvent channel (TextControl text rhythm) =
+  (rhythmToDuration rhythm, genMidiTextMetaEvent text)
     
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
 durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)

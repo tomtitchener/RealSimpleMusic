@@ -188,18 +188,19 @@ data Control = DynamicControl Dynamic Rhythm
              | TempoControl Tempo Rhythm
              | KeySignatureControl KeySignature Rhythm
              | ArticulationControl Articulation Rhythm
+             | TextControl String Rhythm
              | InstrumentControl Instrument Rhythm deriving (Ord, Eq, Show)
 
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
-newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq)
+newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num)
 
 -- | A note is either an ordinary note with pitch and rhythm,
 --   an accented note with pitch, rhythm, and accent,
 --   a rest with only a rhythm, a percussion note with
---   a rhtyhm, or an accented percussion note with rhythm
+--   a rhythm, or an accented percussion note with rhythm
 --   and accent.
 data Note = Note Pitch Rhythm
           | AccentedNote Pitch Rhythm Accent
@@ -209,9 +210,11 @@ data Note = Note Pitch Rhythm
 
 -- | Parse rhythm common to all Notes.
 noteToRhythm :: Note -> Rhythm
-noteToRhythm (Note _ rhythm)           = rhythm
-noteToRhythm (AccentedNote _ rhythm _) = rhythm
-noteToRhythm (Rest rhythm)             = rhythm
+noteToRhythm (Note _ rhythm)                   = rhythm
+noteToRhythm (AccentedNote _ rhythm _)         = rhythm
+noteToRhythm (Rest rhythm)                     = rhythm
+noteToRhythm (PercussionNote rhythm)           = rhythm
+noteToRhythm (AccentedPercussionNote rhythm _) = rhythm
 
 -- | Given a scale, an interval, and a Note,
 --   answer the new Note with with transposed Pitch
@@ -222,6 +225,10 @@ transposeNote scale interval (AccentedNote pitch rhythm accent) =
   AccentedNote (transposePitch scale interval pitch) rhythm accent
 transposeNote _ _ (Rest rhythm) =
   Rest rhythm
+transposeNote _ _ (PercussionNote rhythm) =
+  PercussionNote rhythm
+transposeNote _ _ (AccentedPercussionNote rhythm accent) =
+  AccentedPercussionNote rhythm accent
     
 -- | A NoteMotto is a list of Notes
 type NoteMotto = Motto Note

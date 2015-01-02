@@ -71,6 +71,7 @@ int2 = [2, 3, 4]
 int3 = [4, 5, 4, 3, 2, 0]
 int4 = [0, -3, 0]
 fjIntervals = int1 ++ int1 ++ int2 ++ int2 ++ int3 ++ int3 ++ int4 ++ int4
+fjNotes= zipWith Note fjPitches fjRhythms
 piano = Instrument "Acoustic Grand Piano"
 marimba = Instrument "Marimba"
 vibes = Instrument "Vibraphone"
@@ -85,28 +86,30 @@ cMin  = naturalMinorScale C
 afMin = naturalMinorScale Af
 
 -- writeFJSimpleCanon "Acoustic Grand Piano" 4 (2%1) -- traditional.
--- writeFJSimpleCanon "marimba" 16 (1%16) -- "haze" effect.
+-- writeFJSimpleCanon "Marimba" 16 (1%16) -- "haze" effect.
 writeFJSimpleCanon :: String -> Int -> Rational -> IO ()
 writeFJSimpleCanon instrName voices dur =
   scoreToMidiFile score
   where
     title = "Frere Jacques"
-    noteMotto = Motto $ zipWith Note fjPitches fjRhythms
+    noteMotto = Motto fjNotes
     distance = Rhythm dur
     repetitions = 5
     instr = Instrument instrName
     simpleCanon = SimpleCanon title noteMotto distance instr voices repetitions
     score = simpleCanonToScore simpleCanon
 
--- writeFJTransposingCanon [piano, piano, piano, piano] [5, -3, 7, -6] (1%1)
+-- writeFJTransposingCanon [piano, piano, piano, piano] [5, -3, 7, -6] (1%1) -- A1, G-1, C1, D-1
+-- writeFJTransposingCanon [piano, piano, piano, piano] [-7, -3, 1, 5] (1%1) -- C-1, G-1, D, A
 -- TBD: more examples here.  Drive to e minor?  What about -1 and +2, +3 for
+-- writeFJTransposingCanon [vibes, vibes, piano, piano] [0, -1, 2, 3] (1%1)
 -- imitative distances that emphasize half-tone axes?
 writeFJTransposingCanon ::[Instrument] -> [Interval] -> Rational -> IO ()
 writeFJTransposingCanon instruments intervals dist =
   scoreToMidiFile score
   where
     title = "Frere Jacques"
-    noteMotto = Motto $ zipWith Note fjPitches fjRhythms
+    noteMotto = Motto fjNotes
     distance = Rhythm dist
     repetitions = 5
     transposingCanon = TransposingCanon title noteMotto distance cMaj intervals instruments repetitions
@@ -115,7 +118,7 @@ writeFJTransposingCanon instruments intervals dist =
 -- C grouping major third down, minor third above, with root fifth below.
 -- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, afMaj, eMaj, fMaj] [Octave 0, Octave (-1), Octave 0, Octave (-2)] (7%8)
 -- Tower of fifths:
--- pwriteFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-1), Octave (-1), Octave 0, Octave 1] (7%8)
+-- writeFJScalesCanon [piano, piano, piano, piano] [cMaj, gMaj, dMaj, eMaj] [Octave (-1), Octave (-1), Octave 0, Octave 1] (7%8)
 writeFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> IO ()
 writeFJScalesCanon instruments scales octaves dist =
   scoreToMidiFile score
@@ -127,20 +130,28 @@ writeFJScalesCanon instruments scales octaves dist =
     score = scalesCanonToScore scalesCanon
     
 -- Uneven imitative distances with two groups at eighth note distances separated by two quaters and an eighth.
--- writeFJRhythmCanon [piano, piano, piano, piano, piano] [cMaj, cMaj, cMaj, cMaj, cMaj] [Octave 0, Octave 0, Octave 0, Octave 0, Octave 0] [(3%8),(1%8),(9%8),(1%8),(1%8)]
+-- writeFJCanon [piano, piano, piano, piano, piano] [cMaj, cMaj, cMaj, cMaj, cMaj] [Octave 0, Octave 0, Octave 0, Octave 0, Octave 0] [(3%8),(1%8),(9%8),(1%8),(1%8)]
 -- ditto but didle with major / minor
--- writeFJRhythmCanon [piano, piano, piano, piano, piano] [cMaj, cMin, cMaj, cMin, cMaj] [Octave 0, Octave 0, Octave 0, Octave 0, Octave 0] [(3%8),(1%8),(9%8),(1%8),(1%8)]
+-- writeFJCanon [piano, piano, piano, piano, piano] [cMaj, cMin, cMaj, cMin, cMaj] [Octave 0, Octave 0, Octave 0, Octave 0, Octave 0] [(3%8),(1%8),(9%8),(1%8),(1%8)]
 -- mixed choir, mixed key, mixed mode
--- writeFJRhythmCanon [vibes, marimba, vibes, marimba, vibes] [cMaj, cMin, cMaj, afMaj, afMin] [Octave 0, Octave 0, Octave 0, Octave (-1), Octave (-1)] [(3%8),(1%8),(9%8),(1%8),(1%8)]    
-writeFJRhythmCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> IO ()
-writeFJRhythmCanon instruments scales octaves dists =
+-- writeFJCanon [vibes, marimba, vibes, marimba, vibes] [cMaj, cMin, cMaj, afMaj, afMin] [Octave 0, Octave 0, Octave 0, Octave (-1), Octave (-1)] [(3%8),(1%8),(9%8),(1%8),(1%8)]    
+writeFJCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> IO ()
+writeFJCanon instruments scales octaves dists =
   scoreToMidiFile score
   where
     title = "Frere Jacques"
     distances = map Rhythm dists
     repetitions = 5
-    rhythmCanon = RhythmCanon title fjIntervals fjRhythms distances scales octaves instruments repetitions
-    score = rhythmCanonToScore rhythmCanon
+    canon = Canon title fjIntervals fjRhythms distances scales octaves instruments repetitions
+    score = canonToScore cannon
 
--- next: range over gradations over time.
-    
+-- writeFJCompoundCanon [piano, piano, piano, piano, piano] [cMaj, cMaj, cMaj, cMaj, cMaj] [Octave 0, Octave 0, Octave 0, Octave 0, Octave 0] [(4%4),(4%4),(4%4),(4%4),(4%4)] [(1%4),(1%4),(1%4),(1%4),(1%4)]
+writeFJCompoundCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> [Rational] -> IO ()
+writeFJCompoundCanon instruments scales octaves dists1 dists2 =
+  scoreToMidiFile score
+  where
+    title = "Frere Jacques"
+    distances1 = map Rhythm dists1
+    distances2 = map Rhythm dists2
+    compoundCanon = CompoundCanon title [fjIntervals,fjIntervals] [fjRhythms,fjRhythms] [distances1,distances2] [scales,scales] [octaves,octaves] [instruments,instruments]
+    score = compoundCanonToScore compoundCanon
