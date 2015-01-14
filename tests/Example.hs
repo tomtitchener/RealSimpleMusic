@@ -1,50 +1,9 @@
 
-module Util where
+module Example where
 
 import           Data.Ratio
+import           RealSimpleMusic
 import           Canon
-import           Music
-import           MusicToMidi
-
--- | Assemble defaults into score with single Section, call
---   scoreToMidiFile to create Sound.MIDI.File.T, then 
---   then Sound.MIDI.File.Save.toByteString to convert
---   to byte string, then Data.ByteString.Lazy.writeFile
---   to save.
-u0 :: String -> String -> [Note] -> [Control] -> IO ()
-u0 title instr notes controls =
-  scoreToMidiFile score
-  where
-    score = Score title [Voice (Instrument instr) notes [controls]]
-        
--- | Assemble default pitch and rhythm into single-array of single Note,
---   empty array of Control.
-u1 :: String -> String -> Pitch -> Rhythm -> IO ()
-u1 title instr pitch rhythm =
-   u0 title instr [Note pitch rhythm] []
-
--- | Using default rhythm, pitch, and instrument specify default title.
-u2 :: String -> Pitch -> Rhythm -> IO ()
-u2 = u1 "test"
-
--- | Using default rhythm and pitch specify default instrument.
-u3 :: Pitch -> Rhythm -> IO ()
-u3 = u2 "Acoustic Grand Piano"
-
--- | Using default rhythm specify default pitch.
-u4 :: Rhythm -> IO ()
-u4 = u3 (Pitch C 0)
-
--- | Build single pitch single voice example with defaults:
---   Rhythm: whole note (1%1)
---   Pitch:  middle C (Pitch C 0)
---   Instrument:  piano (Acoustic Grand Piano)
---   Title:  test.mid
-u5 :: IO ()
-u5 = u4 (Rhythm (1%1))
-
--- main :: IO ()
--- main = u5
 
 -- Frere Jacques
 mC = Pitch C 0
@@ -142,8 +101,8 @@ writeFJCanon instruments scales octaves dists =
     title = "Frere Jacques"
     distances = map Rhythm dists
     repetitions = 5
-    canon = Canon title fjIntervals fjRhythms distances scales octaves instruments repetitions
-    score = canonToScore cannon
+    canon = Canon title repetitions fjIntervals fjRhythms distances scales octaves instruments 
+    score = canonToScore canon
 
 -- writeFJCompoundCanon [piano, piano, piano, piano, piano] [cMaj, cMaj, cMaj, cMaj, cMaj] [Octave 0, Octave 0, Octave 0, Octave 0, Octave 0] [(4%4),(4%4),(4%4),(4%4),(4%4)] [(1%4),(1%4),(1%4),(1%4),(1%4)]
 writeFJCompoundCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> [Rational] -> IO ()
@@ -155,3 +114,44 @@ writeFJCompoundCanon instruments scales octaves dists1 dists2 =
     distances2 = map Rhythm dists2
     compoundCanon = CompoundCanon title [fjIntervals,fjIntervals] [fjRhythms,fjRhythms] [distances1,distances2] [scales,scales] [octaves,octaves] [instruments,instruments]
     score = compoundCanonToScore compoundCanon
+
+-- | Assemble defaults into score with single Section, call
+--   scoreToMidiFile to create Sound.MIDI.File.T, then 
+--   then Sound.MIDI.File.Save.toByteString to convert
+--   to byte string, then Data.ByteString.Lazy.writeFile
+--   to save.
+u0 :: String -> String -> [Note] -> [Control] -> IO ()
+u0 title instr notes controls =
+  scoreToMidiFile score
+  where
+    score = Score title [Voice (Instrument instr) notes [controls]]
+        
+-- | Assemble default pitch and rhythm into single-array of single Note,
+--   empty array of Control.
+u1 :: String -> String -> Pitch -> Rhythm -> IO ()
+u1 title instr pitch rhythm =
+   u0 title instr [Note pitch rhythm] []
+
+-- | Using default rhythm, pitch, and instrument specify default title.
+u2 :: String -> Pitch -> Rhythm -> IO ()
+u2 = u1 "test"
+
+-- | Using default rhythm and pitch specify default instrument.
+u3 :: Pitch -> Rhythm -> IO ()
+u3 = u2 "Acoustic Grand Piano"
+
+-- | Using default rhythm specify default pitch.
+u4 :: Rhythm -> IO ()
+u4 = u3 (Pitch C 0)
+
+-- | Build single pitch single voice example with defaults:
+--   Rhythm: whole note (1%1)
+--   Pitch:  middle C (Pitch C 0)
+--   Instrument:  piano (Acoustic Grand Piano)
+--   Title:  test.mid
+u5 :: IO ()
+u5 = u4 (Rhythm (1%1))
+
+main :: IO ()
+main = u5
+

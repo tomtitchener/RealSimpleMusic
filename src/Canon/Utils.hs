@@ -1,12 +1,11 @@
 -- | Canons to explore RealSimpleMusic
 
-module Canon where
+module Canon.Utils where
 
 import           Control.Applicative
 import           Data.Ratio
 import           Data.List
-import           Music
-import           MusicToMidi()
+import           RealSimpleMusic
 
 -- | Simplest of all Canons.  Imitation at unison, all voices
 --   playing the same instrument.  Parameterized by title,
@@ -133,12 +132,16 @@ data Canon = Canon
              } deriving (Show)
 
 canonToScore :: Canon -> Score
-canonToScore (Canon title intervals rhythms dists scales octaves instruments repetitions) =
+canonToScore (Canon title repetitions intervals rhythms dists scales octaves instruments) =
   commonCanonToScore title intervals rhythms dists scales octaves instruments repetitions
 
 -- Titles of first canon is title of score.
 -- Titles of inner canons can be meta-data text events.
 newtype SequentialCompoundCanon = SequentialCompoundCanon { getCanons :: [Canon] } deriving (Show)
+
+sequentialCompoundCanonToScore :: SequentialCompoundCanon -> Score
+sequentialCompoundCanonToScore canon =
+  undefined
   
 -- | Instead of repeating same parameters for each repetition,
 --   map each repetition by new parameters.  Simplify name, as
@@ -606,7 +609,8 @@ compoundCanonToScore (CompoundCanon title intervalss rhythmss distss scaless oct
     -- of dist pairs, voice-by-voice, for each canon.  So to start by pairing list of
     -- dists is correct.  But then resulting list of pairs where each element is itself
     -- a list of dists has to be further processed
-    distPairss = map (\(xs, ys) -> zip xs ys) $ zip distss (tail distss)
+    -- distPairss = map (\(xs, ys) -> zip xs ys) $ zip distss (tail distss)
+    distPairss = zipWith zip distss (tail distss)
     glues = getZipList $
              canonToGlueScore title
              <$> ZipList intervalss

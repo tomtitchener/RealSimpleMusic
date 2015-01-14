@@ -1,14 +1,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module MusicToMidi(
-  scoreToMidiFiles
-  , scoreToMidiFile
-) where
+module MusicToMidi.Utils where
 
 import           Data.List
 import           Data.Maybe
 import           Data.Ratio
-import           Music
+import           Music.Data
+import           Music.Utils
 import           Control.Monad
 import           Control.Monad.State
 import qualified Data.EventList.Relative.TimeBody as EventList
@@ -204,7 +202,7 @@ genMidiInstrumentControlEvent chan (Instrument instrName) =
     instr = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
 
 genMidiTextMetaEvent :: String -> Event.T
-genMidiTextMetaEvent  = (Event.MetaEvent . Meta.TextEvent)
+genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
 controlToEvent :: ChannelMsg.Channel -> Control -> (Duration, Event.T)
 controlToEvent channel (DynamicControl dynamic rhythm) =
