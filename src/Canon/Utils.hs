@@ -140,7 +140,7 @@ canonToScore (Canon title repetitions intervals rhythms dists scales octaves ins
 newtype SequentialCompoundCanon = SequentialCompoundCanon { getCanons :: [Canon] } deriving (Show)
 
 sequentialCompoundCanonToScore :: SequentialCompoundCanon -> Score
-sequentialCompoundCanonToScore canon =
+sequentialCompoundCanonToScore  =
   undefined
   
 -- | Instead of repeating same parameters for each repetition,

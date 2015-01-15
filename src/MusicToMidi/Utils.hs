@@ -6,7 +6,7 @@ import           Data.List
 import           Data.Maybe
 import           Data.Ratio
 import           Music.Data
-import           Music.Utils
+import           Music.Utils()
 import           Control.Monad
 import           Control.Monad.State
 import qualified Data.EventList.Relative.TimeBody as EventList
@@ -62,6 +62,7 @@ pitchClassToOffset Cf = 11
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => Dynamic -> a
+dynamicToVolume NoDynamic  = 50
 dynamicToVolume Pianissimo = 10
 dynamicToVolume Piano      = 30
 dynamicToVolume MezzoPiano = 50
@@ -81,6 +82,7 @@ accentToVelocity Hardest  = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalV
 
 -- | Balance enum -> Balance value
 balanceToBalance :: Num a => Balance -> a
+balanceToBalance NoBalance       = 64
 balanceToBalance LeftBalance     = 1
 balanceToBalance MidLeftBalance  = 32
 balanceToBalance CenterBalance   = 64
@@ -89,9 +91,10 @@ balanceToBalance RightBalance    = 127
 
 -- | Articulation -> sustenuto value
 articulationToSustenuto :: Num a => Articulation -> a
-articulationToSustenuto Legato   = 127
-articulationToSustenuto Marcato  = 64
-articulationToSustenuto Staccato = 0
+articulationToSustenuto NoArticulation = 64
+articulationToSustenuto Legato         = 127
+articulationToSustenuto Marcato        = 64
+articulationToSustenuto Staccato       = 0
 
 pitchToMidi :: Pitch -> Int
 pitchToMidi (Pitch pitchClass oct) =
@@ -219,7 +222,7 @@ controlToEvent channel (ArticulationControl articulation rhythm) =
   (rhythmToDuration rhythm, genMidiSustenutoControlEvent channel articulation)
 controlToEvent channel (InstrumentControl instrument rhythm) =
   (rhythmToDuration rhythm, genMidiInstrumentControlEvent channel instrument)
-controlToEvent channel (TextControl text rhythm) =
+controlToEvent _ (TextControl text rhythm) =
   (rhythmToDuration rhythm, genMidiTextMetaEvent text)
     
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)

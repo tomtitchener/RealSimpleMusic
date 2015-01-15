@@ -1,6 +1,6 @@
 module Music.UtilsTest where
 
-import Data.List  (findIndex, sort, elemIndex)
+import Data.List  (findIndex, elemIndex)
 import Data.Maybe (fromJust)
 
 import Test.HUnit
@@ -11,15 +11,15 @@ import Music.Utils
 
 testSliceInMiddle :: Assertion
 testSliceInMiddle =
-  [4,5] @=? slice 4 5 [0..10]
+  [4::Integer,5] @=? slice 4 5 [0..10]
   
 testSliceLow :: Assertion
 testSliceLow =
-  [] @=? slice (-100) (-300) [0..10]
+  [] @=? slice (-100) (-300) [0::Integer,1..10]
   
 testSliceHigh :: Assertion
 testSliceHigh =
-  [] @=? slice 100 300 [0..10]
+  [] @=? slice 100 300 [0::Integer,1..10]
 
 propSliceAllIsOriginalList :: [Int] -> Property
 propSliceAllIsOriginalList xs =
@@ -33,7 +33,7 @@ propSliceFirstIsHead xs =
 
 testRotateTo :: Assertion
 testRotateTo =
-  [5..10] ++ [1..4] @=?  rotateTo 5 [1..10]
+  [5::Integer,6..10] ++ [1..4] @=?  rotateTo 5 [1..10]
 
 propRotateToFirstIsSame :: [Int] -> Property
 propRotateToFirstIsSame xs =
@@ -50,12 +50,8 @@ testGetChromaticScaleIndex :: Assertion
 testGetChromaticScaleIndex =
   [0, 0, 1, 11] @=? [getChromaticScaleIndex C, getChromaticScaleIndex Bs, getChromaticScaleIndex Df, getChromaticScaleIndex B]
 
--- given pair of pitch classes where pc1 < pc2, answer Interval
--- that is the distance between the two in half-steps
--- pair may wrap octave, e.g. (Bf, C), in which case Interval
--- octave length (12) less distance (10), e.g. 2.
-pitchClassPairsToInterval :: (PitchClass, PitchClass) -> Interval
-pitchClassPairsToInterval (pc1, pc2) 
+pitchClassPairsToChromaticInterval :: (PitchClass, PitchClass) -> Interval
+pitchClassPairsToChromaticInterval (pc1, pc2) 
   | pc1Idx < pc2Idx = pc2Idx - pc1Idx
   | otherwise       = octIdx - (pc1Idx - pc2Idx)
   where
@@ -63,12 +59,9 @@ pitchClassPairsToInterval (pc1, pc2)
     pc2Idx = getChromaticScaleIndex pc2
     octIdx = 12
 
--- verify all major scales have sequence of half-steps that goes [2,2,1,2,2,2]
--- order notes in list of pairs, e.g. [(Ef,F),(F,G),(G,Af),(Af,Bf),(Bf,C),(C,D)]
--- map note pairs into list of intervals, e.g. [2,2,1,2,2,2]
 testMajorScaleIntervals :: [PitchClass] -> Bool
 testMajorScaleIntervals scale =
-  map pitchClassPairsToInterval pitchClassPairs == majorScaleIntervals
+  map pitchClassPairsToChromaticInterval pitchClassPairs == majorScaleIntervals
   where
     pitchClassPairs = zip scale $ tail scale
     majorScaleIntervals = [2,2,1,2,2,2]
@@ -90,3 +83,34 @@ propMajorScaleIntervals :: PitchClass -> Property
 propMajorScaleIntervals tonic = 
   pitchClassInSingleAccidentalRange tonic ==>
     testMajorScaleIntervals (majorScale tonic)
+
+getIntervalForScale :: Scale -> Pitch -> Pitch -> Interval
+getIntervalForScale scale (Pitch pc1 _) (Pitch pc2 _) =
+  if p2Idx > p1Idx
+  then
+    p2Idx - p1Idx
+  else
+    scaleLen + p1Idx - p2Idx
+  where
+    p1Idx    = fromJust $ elemIndex pc1 scale
+    p2Idx    = fromJust $ elemIndex pc2 scale
+    scaleLen = length scale
+
+testTransposePitch :: Assertion    
+testTransposePitch =
+  transposeInterval @=? getIntervalForScale scale startPitch transposedPitch
+  where
+    pitchClass        = C 
+    transposeInterval = 5
+    scale             = majorScale pitchClass
+    startPitch        = Pitch pitchClass (Octave 5)
+    transposedPitch   = transposePitch scale transposeInterval startPitch
+               
+-- Next, property that says when you transpose
+-- an interval away and back you get the same
+-- pitch.
+-- Need Arbitrary instance for Pitch, which means
+-- composition of Arbitrary instances for PitchClass
+-- and Octave.
+-- Need Arbitrary instance for Octave, which should
+-- obey bounds.

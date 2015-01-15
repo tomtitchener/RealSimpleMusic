@@ -41,7 +41,12 @@ pitchClass2MaybeOneAccidentalScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeOneAccidentalScaleIndex tonic =
   case elemIndex tonic cycleOfFifths of
     Nothing -> Nothing
-    Just idx -> if idx - lowSingleAccidentalScaleIndex < 0 || idx + highSingleAccidentalScaleIndex >= length cycleOfFifths then Nothing else Just idx
+    Just idx -> if idx - lowSingleAccidentalScaleIndex < 0
+                   || idx + highSingleAccidentalScaleIndex >= length cycleOfFifths
+                then
+                  Nothing
+                else
+                  Just idx
 
 -- | Given a pitch class answer the major scale.
 --   Limited to scales with notes with one accidental,

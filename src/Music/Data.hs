@@ -7,7 +7,7 @@ module Music.Data where
 import Control.Applicative
 
 -- | Pitch classes with one accidental only, enharmonic equivalents
-data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G | Gs | Af | A | As | Bf | B | Cf deriving (Bounded, Enum, Show, Ord, Eq) -- no auto deriv for Arbitrary enum!?
+data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G | Gs | Af | A | As | Bf | B | Cf deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Motto is just a list
 newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applicative, Monad)
