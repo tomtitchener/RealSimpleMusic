@@ -1,6 +1,6 @@
 module Music.UtilsTest where
 
-import Data.List  (findIndex, elemIndex)
+import Data.List  (findIndex, elemIndex, sort, group)
 import Data.Maybe (fromJust)
 
 import Test.HUnit
@@ -8,6 +8,8 @@ import Test.QuickCheck
 
 import Music.Data
 import Music.Utils
+
+import Control.Monad
 
 testSliceInMiddle :: Assertion
 testSliceInMiddle =
@@ -59,11 +61,12 @@ pitchClassPairsToChromaticInterval (pc1, pc2)
     pc2Idx = getChromaticScaleIndex pc2
     octIdx = 12
 
-testMajorScaleIntervals :: [PitchClass] -> Bool
+testMajorScaleIntervals :: Scale -> Bool
 testMajorScaleIntervals scale =
   map pitchClassPairsToChromaticInterval pitchClassPairs == majorScaleIntervals
   where
-    pitchClassPairs = zip scale $ tail scale
+    scale' = getScale scale
+    pitchClassPairs = zip scale' $ tail scale'
     majorScaleIntervals = [2,2,1,2,2,2]
     
 testMajorScaleInterval :: Assertion
@@ -92,9 +95,10 @@ getIntervalForScale scale (Pitch pc1 _) (Pitch pc2 _) =
   else
     scaleLen + p1Idx - p2Idx
   where
-    p1Idx    = fromJust $ elemIndex pc1 scale
-    p2Idx    = fromJust $ elemIndex pc2 scale
-    scaleLen = length scale
+    scale'   = getScale scale
+    p1Idx    = fromJust $ elemIndex pc1 scale'
+    p2Idx    = fromJust $ elemIndex pc2 scale'
+    scaleLen = length scale'
 
 testTransposePitch :: Assertion    
 testTransposePitch =
@@ -105,12 +109,24 @@ testTransposePitch =
     scale             = majorScale pitchClass
     startPitch        = Pitch pitchClass (Octave 5)
     transposedPitch   = transposePitch scale transposeInterval startPitch
-               
--- Next, property that says when you transpose
--- an interval away and back you get the same
--- pitch.
--- Need Arbitrary instance for Pitch, which means
--- composition of Arbitrary instances for PitchClass
--- and Octave.
--- Need Arbitrary instance for Octave, which should
--- obey bounds.
+
+instance Arbitrary Octave where
+  arbitrary = elements [(minBound::Octave)..(maxBound::Octave)]
+
+instance Arbitrary Pitch where
+  arbitrary = liftM2 Pitch arbitrary arbitrary
+
+instance Arbitrary Scale where
+  arbitrary = do pitchClasses <- listOf1 arbitrary
+                 return $ Scale (rmdups pitchClasses)
+    where
+      rmdups = map head . group . sort  
+
+propTransposePitchId :: Scale -> Pitch -> Interval -> Property
+propTransposePitchId scale pitch@(Pitch pc _) interval =
+  not (length (getScale scale) < 2) && interval > 0 && any (==pc) (getScale scale) ==>
+    pitch == pitch''
+  where
+    pitch'  = transposePitch scale interval pitch
+    pitch'' = transposePitch scale (-interval) pitch'
+    

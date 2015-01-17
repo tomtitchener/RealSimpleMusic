@@ -55,7 +55,7 @@ majorScale :: PitchClass -> Scale
 majorScale tonic =
   case pitchClass2MaybeOneAccidentalScaleIndex tonic of
    Nothing -> error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show loFifth ++ " to " ++ show hiFifth
-   Just idx -> rotateTo tonic . sort $ slice (idx - lowSingleAccidentalScaleIndex) (idx + highSingleAccidentalScaleIndex) cycleOfFifths
+   Just idx -> Scale $ rotateTo tonic . sort $ slice (idx - lowSingleAccidentalScaleIndex) (idx + highSingleAccidentalScaleIndex) cycleOfFifths
   where
     lenFifths = length cycleOfFifths
     loFifth = cycleOfFifths !! lowSingleAccidentalScaleIndex
@@ -69,7 +69,7 @@ naturalMinorScale tonic =
     naturalMinorScale' Nothing = error $ "naturalMinorScale tonic " ++ show tonic ++ " not found in cycle of fiths " ++ show cycleOfFifths
     naturalMinorScale' (Just idx)
       | idx - lo < 0 || idx + hi >= lenFifths = error $ "naturalMinorScale tonic " ++ show tonic  ++ " is out of range " ++ show loFifth ++ " to " ++ show hiFifth
-      | otherwise = drop 5 major ++ take 5 major
+      | otherwise = Scale $ drop 5 (getScale major) ++ take 5 (getScale major)
       where
         major = majorScale $ cycleOfFifths !! (idx - 3)
         lenFifths = length cycleOfFifths
@@ -78,33 +78,20 @@ naturalMinorScale tonic =
         loFifth = cycleOfFifths !! lo
         hiFifth = cycleOfFifths !! (lenFifths - hi - 1)
         
--- | Given a list of pitch classes and a scale,
---   answer the offset to wrap the scale to
---   compute octave offsets given octaves are
---   measured absolutely with respect to the
---   scale that starts and ends on C.  So the
---   D major scale has C as its 6th value
---   starting from 0), so you want to compute
---   the octave offset using an index of 1.
-scaleOffset :: [PitchClass] -> Scale -> Int
-scaleOffset pitchClasses scale =
-  (scaleLen - offset) `mod` scaleLen
-  where
-    scaleLen = length scale
-    matchRoot pitchClass = pitchClass `elem` pitchClasses
-    offset = fromJust $ findIndex matchRoot scale
-
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch
 transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
-transposePitch scale interval (Pitch oldPitchClass (Octave oldOctave)) =
-  Pitch (scale !! (target `mod` count)) (Octave (oldOctave + ((target + offset) `div` count)))
-  where
-    count = length scale
-    index = fromJust $ elemIndex oldPitchClass scale
-    target = index + interval
-    offset = scaleOffset [C, Cs, Df] scale
-
+transposePitch scale interval (Pitch pc (Octave oct)) =
+  let scale' = getScale scale in
+    case elemIndex pc scale' of
+      Nothing -> error $ "transposePitch scale " ++ show scale ++ " does not contain pitch class " ++ show pc
+      Just idx -> Pitch pc' (Octave oct')
+        where
+          len  = length scale'
+          pc'  = scale' !! ((idx + interval) `mod` len)
+          idx' = fromJust $ elemIndex pc (sort scale')
+          oct' = oct + ((idx' + interval) `div` len)
+      
 -- | Given a scale, an interval, and an octave answer 
 --   the Pitch "interval" steps frome the first note of
 --   "scale" at "octave".  Used to map a list of intervals
@@ -112,7 +99,7 @@ transposePitch scale interval (Pitch oldPitchClass (Octave oldOctave)) =
 --   octave.    
 getPitch :: Scale -> Octave -> Interval -> Pitch
 getPitch scale octave step =
-  transposePitch scale step $ Pitch (head scale) octave
+  transposePitch scale step $ Pitch (head (getScale scale)) octave
   
 -- | Parse rhythm common to all Notes.
 noteToRhythm :: Note -> Rhythm

@@ -13,12 +13,12 @@ data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G
 newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applicative, Monad)
 
 -- | Scale is a list of pitch classes.
-type Scale = [PitchClass]
+newtype Scale = Scale { getScale :: [PitchClass] } deriving (Eq, Show)
 
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
 --   exceeds all instrument ranges, unless guarded by minBound and maxBound.
-newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num)
+newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num, Enum)
 
 -- | Octave bounds roughly by piano range
 instance Bounded Octave where

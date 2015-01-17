@@ -85,8 +85,8 @@ commonCanonToScore title intervals rhythms distances scales octaves instruments 
       Score title voices
       where
         lenScales = length scales
-        lenHeadScale = length (head scales)
-        lensTailScales = map length (tail scales)
+        lenHeadScale = (length . getScale) (head scales)
+        lensTailScales = map (length . getScale) (tail scales)
         genPitches scale octave = map (getPitch scale octave) intervals
         genTune scale octave = zipWith Note (genPitches scale octave) rhythms
         tuness = zipWith genTune scales octaves

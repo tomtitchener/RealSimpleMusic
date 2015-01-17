@@ -2,7 +2,7 @@
 module RealSimpleMusic (
    PitchClass(..)
    ,  Motto(..)
-   ,  Scale
+   ,  Scale(..)
    ,  majorScale
    ,  naturalMinorScale
    ,  Octave(..)
