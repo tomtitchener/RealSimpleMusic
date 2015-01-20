@@ -7,13 +7,17 @@ module Music.Data where
 import Control.Applicative
 
 -- | Pitch classes with one accidental only, enharmonic equivalents
+--   TBD: extend to double accidentals.
 data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G | Gs | Af | A | As | Bf | B | Cf deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Motto is just a list
+--   TBD: is there any value in this?
 newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applicative, Monad)
 
--- | Scale is a list of pitch classes.
-newtype Scale = Scale { getScale :: [PitchClass] } deriving (Eq, Show)
+-- | Scale is two lists of pitch classes
+data Scale = Scale { ascendingScale  :: [PitchClass]
+                   , descendingScale :: [PitchClass]
+                   } deriving (Eq, Show)
 
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly

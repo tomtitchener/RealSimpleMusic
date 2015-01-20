@@ -65,7 +65,7 @@ testMajorScaleIntervals :: Scale -> Bool
 testMajorScaleIntervals scale =
   map pitchClassPairsToChromaticInterval pitchClassPairs == majorScaleIntervals
   where
-    scale' = getScale scale
+    scale' = ascendingScale scale
     pitchClassPairs = zip scale' $ tail scale'
     majorScaleIntervals = [2,2,1,2,2,2]
     
@@ -95,7 +95,7 @@ getIntervalForScale scale (Pitch pc1 _) (Pitch pc2 _) =
   else
     scaleLen + p1Idx - p2Idx
   where
-    scale'   = getScale scale
+    scale'   = ascendingScale scale
     p1Idx    = fromJust $ elemIndex pc1 scale'
     p2Idx    = fromJust $ elemIndex pc2 scale'
     scaleLen = length scale'
@@ -118,13 +118,18 @@ instance Arbitrary Pitch where
 
 instance Arbitrary Scale where
   arbitrary = do pitchClasses <- listOf1 arbitrary
-                 return $ Scale (rmdups pitchClasses)
+                 rotN <- arbitrary
+                 let
+                   pcs = rotate (rotN `mod` length pitchClasses) (rmdups pitchClasses)
+                   in
+                     return $ Scale pcs $ reverse pcs
     where
-      rmdups = map head . group . sort  
+      rmdups = map head . group . sort
+      rotate n xs = drop n xs ++ take n xs
 
 propTransposePitchId :: Scale -> Pitch -> Interval -> Property
 propTransposePitchId scale pitch@(Pitch pc _) interval =
-  not (length (getScale scale) < 2) && interval > 0 && any (==pc) (getScale scale) ==>
+  length (ascendingScale scale) >= 2 && interval > 0 && elem pc (ascendingScale scale) ==>
     pitch == pitch''
   where
     pitch'  = transposePitch scale interval pitch

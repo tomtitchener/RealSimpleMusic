@@ -53,13 +53,19 @@ pitchClass2MaybeOneAccidentalScaleIndex tonic =
 --   i.e. no scales with double sharps or double flats.
 majorScale :: PitchClass -> Scale
 majorScale tonic =
-  case pitchClass2MaybeOneAccidentalScaleIndex tonic of
-   Nothing -> error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show loFifth ++ " to " ++ show hiFifth
-   Just idx -> Scale $ rotateTo tonic . sort $ slice (idx - lowSingleAccidentalScaleIndex) (idx + highSingleAccidentalScaleIndex) cycleOfFifths
-  where
+  let 
     lenFifths = length cycleOfFifths
-    loFifth = cycleOfFifths !! lowSingleAccidentalScaleIndex
-    hiFifth = cycleOfFifths !! (lenFifths - highSingleAccidentalScaleIndex - 1)
+    loFifth   = cycleOfFifths !! lowSingleAccidentalScaleIndex
+    hiFifth   = cycleOfFifths !! (lenFifths - highSingleAccidentalScaleIndex - 1)
+  in
+    case pitchClass2MaybeOneAccidentalScaleIndex tonic of
+      Nothing -> error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show loFifth ++ " to " ++ show hiFifth
+      Just idx -> Scale ascending $ reverse ascending
+        where
+          start     = idx - lowSingleAccidentalScaleIndex
+          stop      = idx + highSingleAccidentalScaleIndex
+          pcs       = slice start stop cycleOfFifths
+          ascending = rotateTo tonic $ sort pcs
 
 -- | Given a pitch class answer the natural minor scale
 naturalMinorScale :: PitchClass -> Scale
@@ -69,7 +75,7 @@ naturalMinorScale tonic =
     naturalMinorScale' Nothing = error $ "naturalMinorScale tonic " ++ show tonic ++ " not found in cycle of fiths " ++ show cycleOfFifths
     naturalMinorScale' (Just idx)
       | idx - lo < 0 || idx + hi >= lenFifths = error $ "naturalMinorScale tonic " ++ show tonic  ++ " is out of range " ++ show loFifth ++ " to " ++ show hiFifth
-      | otherwise = Scale $ drop 5 (getScale major) ++ take 5 (getScale major)
+      | otherwise = Scale minorUp $ reverse minorUp
       where
         major = majorScale $ cycleOfFifths !! (idx - 3)
         lenFifths = length cycleOfFifths
@@ -77,21 +83,34 @@ naturalMinorScale tonic =
         hi = 2 
         loFifth = cycleOfFifths !! lo
         hiFifth = cycleOfFifths !! (lenFifths - hi - 1)
-        
+        minorUp = drop 5 (ascendingScale major) ++ take 5 (ascendingScale major)
+
+-- | For a list of pitch classes, an interval, and a
+--   starting pitch, compute the transposed pitch by
+--   counting over pitch classes by interval for the
+--   tranposed pitch class and by dividing over the
+--   length of the pitch classes from the sorted index
+--   for the octave (octaves are absolute from C based
+--   on sorted pitch classes with C being the lowest in
+--   the enumeration).
+transposePitches :: [PitchClass] -> Interval -> Pitch -> Pitch                          
+transposePitches pcs interval (Pitch pc (Octave oct)) =
+  case elemIndex pc pcs of
+   Nothing -> error $ "transposePitch scale " ++ show pcs ++ " does not contain pitch class " ++ show pc
+   Just idx -> Pitch pc' (Octave oct')
+     where
+       len  = length pcs
+       pc'  = pcs !! ((idx + interval) `mod` len)
+       idx' = fromJust $ elemIndex pc (sort pcs)
+       oct' = oct + ((idx' + interval) `div` len)
+          
 -- | Given a scale, an interval, and a pitch, answer
---   a new pitch interval steps away from the old pitch
+--   a new pitch interval steps away from the old pitch.
 transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
-transposePitch scale interval (Pitch pc (Octave oct)) =
-  let scale' = getScale scale in
-    case elemIndex pc scale' of
-      Nothing -> error $ "transposePitch scale " ++ show scale ++ " does not contain pitch class " ++ show pc
-      Just idx -> Pitch pc' (Octave oct')
-        where
-          len  = length scale'
-          pc'  = scale' !! ((idx + interval) `mod` len)
-          idx' = fromJust $ elemIndex pc (sort scale')
-          oct' = oct + ((idx' + interval) `div` len)
-      
+transposePitch scale interval
+  | interval >= 0 = transposePitches (ascendingScale scale) interval
+  | otherwise     = transposePitches (reverse (descendingScale scale)) interval
+        
 -- | Given a scale, an interval, and an octave answer 
 --   the Pitch "interval" steps frome the first note of
 --   "scale" at "octave".  Used to map a list of intervals
@@ -99,7 +118,7 @@ transposePitch scale interval (Pitch pc (Octave oct)) =
 --   octave.    
 getPitch :: Scale -> Octave -> Interval -> Pitch
 getPitch scale octave step =
-  transposePitch scale step $ Pitch (head (getScale scale)) octave
+  transposePitch scale step $ Pitch (head (ascendingScale scale)) octave
   
 -- | Parse rhythm common to all Notes.
 noteToRhythm :: Note -> Rhythm

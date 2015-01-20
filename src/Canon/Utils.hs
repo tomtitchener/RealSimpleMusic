@@ -1,5 +1,10 @@
 -- | Canons to explore RealSimpleMusic
 
+-- TBD:  all <>ToScore methods for SimpleCanon, TransposingCanon, ScalesCanon
+-- should be specialized calls to CanonToScore.
+-- Create CompoundSequentialCanon.
+-- Consider CompoundSimultaneousCanon:  must it be fractal, or 
+
 module Canon.Utils where
 
 import           Control.Applicative
@@ -20,6 +25,48 @@ data SimpleCanon = SimpleCanon
                    ,sRepetitions :: Int
                    } deriving (Show)
 
+-- | Additionally parameterize by imitative interval, list of instruments
+data TransposingCanon = TransposingCanon
+                        {xpTitle       :: Title
+                        ,xpNotes       :: NoteMotto
+                        ,xpDistance    :: Rhythm
+                        ,xpScale       :: Scale
+                        ,xpIntervals   :: [Interval]
+                        ,xpInstruments :: [Instrument]
+                        ,xpRepetitions :: Int
+                        } deriving (Show)
+
+-- | Additionally parameterize by scale.  Tune becomes lists of rhythms 
+--   and of intervals for mapping over scale.  Parameterize by lists 
+--   of scale, octave  tranposition for scale root, and instruments
+--   per voice.
+data ScalesCanon = ScalesCanon
+                   {scTitle       :: Title
+                   ,scIntervals   :: [Interval]
+                   ,scRhythms     :: [Rhythm]
+                   ,scDistance    :: Rhythm
+                   ,scScales      :: [Scale]
+                   ,scOctaves     :: [Octave]
+                   ,scInstruments :: [Instrument]
+                   ,scRepetitions :: Int
+                   } deriving (Show)
+
+-- | Additionally parameterize by imitative distance.
+data Canon = Canon
+             {cTitle       :: Title
+             ,cRepetitions :: Int
+             -- these two lists must have the same lengths,
+             -- can that be part of the type definition?
+             ,cIntervals   :: [Interval]
+             ,cRhythms     :: [Rhythm]
+             -- these four lists must have the same lengths,
+             -- can that be part of the type definition?
+             ,cDistances   :: [Rhythm]
+             ,cScales      :: [Scale]
+             ,cOctaves     :: [Octave]
+             ,cInstruments :: [Instrument]
+             } deriving (Show)
+
 -- | Render a simple canon as a Midi voices score
 --  (no percussion).  Count of voices less than
 --  Midi max (16).  Skip standard statement of
@@ -33,17 +80,6 @@ simpleCanonToScore (SimpleCanon title (Motto notes) (Rhythm dist) instrument cou
     voices = zipWith (\rest pan -> Voice instrument (rest : tune) [[pan]]) rests pans
     incr = getPan (maxBound::Pan) `div` countVoices
     pans = map (\i -> PanControl (Pan (incr * i)) (Rhythm (0%4))) [0,1..]
-
--- | Additionally parameterize by imitative interval, list of instruments
-data TransposingCanon = TransposingCanon
-                        {xpTitle       :: Title
-                        ,xpNotes       :: NoteMotto
-                        ,xpDistance    :: Rhythm
-                        ,xpScale       :: Scale
-                        ,xpIntervals   :: [Interval]
-                        ,xpInstruments :: [Instrument]
-                        ,xpRepetitions :: Int
-                        } deriving (Show)
 
 -- | Refactored for common behavior between transposingCanonToScore and commonCanonToScore.
 assembleVoices :: [Rhythm] -> Int -> [[Note]] -> [Instrument] -> [Voice]
@@ -85,27 +121,12 @@ commonCanonToScore title intervals rhythms distances scales octaves instruments 
       Score title voices
       where
         lenScales = length scales
-        lenHeadScale = (length . getScale) (head scales)
-        lensTailScales = map (length . getScale) (tail scales)
+        lenHeadScale = (length . ascendingScale) (head scales)
+        lensTailScales = map (length . ascendingScale) (tail scales)
         genPitches scale octave = map (getPitch scale octave) intervals
         genTune scale octave = zipWith Note (genPitches scale octave) rhythms
         tuness = zipWith genTune scales octaves
         voices = assembleVoices distances repetitions tuness instruments
-
--- | Additionally parameterize by scale.  Tune becomes lists of rhythms 
---   and of intervals for mapping over scale.  Parameterize by lists 
---   of scale, octave  tranposition for scale root, and instruments
---   per voice.
-data ScalesCanon = ScalesCanon
-                   {scTitle       :: Title
-                   ,scIntervals   :: [Interval]
-                   ,scRhythms     :: [Rhythm]
-                   ,scDistance    :: Rhythm
-                   ,scScales      :: [Scale]
-                   ,scOctaves     :: [Octave]
-                   ,scInstruments :: [Instrument]
-                   ,scRepetitions :: Int
-                   } deriving (Show)
 
 -- | Render a scales canon as a Midi voices score (no percussion).
 scalesCanonToScore :: ScalesCanon -> Score
@@ -115,21 +136,6 @@ scalesCanonToScore (ScalesCanon title intervals rhythms dist scales octaves inst
     lenScales = length scales
     dists = replicate lenScales dist
 
--- | Additionally parameterize by imitative distance.
-data Canon = Canon
-             {cTitle       :: Title
-             ,cRepetitions :: Int
-             -- these lists must have the same lengths,
-             -- can that be part of the type definition?
-             ,cIntervals   :: [Interval]
-             ,cRhythms     :: [Rhythm]
-             -- these lists must have the same lengths,
-             -- can that be part of the type definition?
-             ,cDistances   :: [Rhythm]
-             ,cScales      :: [Scale]
-             ,cOctaves     :: [Octave]
-             ,cInstruments :: [Instrument]
-             } deriving (Show)
 
 canonToScore :: Canon -> Score
 canonToScore (Canon title repetitions intervals rhythms dists scales octaves instruments) =
