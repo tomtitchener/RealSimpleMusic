@@ -1,7 +1,7 @@
 module Music.UtilsTest where
 
 import Data.List  (findIndex, elemIndex, sort, group)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust)
 
 import Test.HUnit
 import Test.QuickCheck
@@ -46,7 +46,7 @@ getChromaticScaleIndex :: PitchClass -> Int
 getChromaticScaleIndex pc  =
   fromJust $ findIndex (\pcs -> pc `elem` pcs) scale
   where
-    scale = [[Bs,C],[Cs,Df],[D],[Ds,Ef],[E,Ff],[Es,F],[Fs,Gf],[G],[Gs,Af],[A],[As,Bf],[B,Cf]]
+    scale = [[Bs,C,Dff],[Bss,Cs,Df],[Css,D,Eff],[Ds,Ef,Fff],[Dss,E,Ff],[Es,F,Gff],[Ess,Fs,Gf],[Fss,G,Aff],[Gs,Af],[Gss,A,Bff],[As,Bf,Cff],[Ass,B,Cf]]
 
 testGetChromaticScaleIndex :: Assertion
 testGetChromaticScaleIndex =
@@ -78,9 +78,7 @@ instance Arbitrary PitchClass where
 
 pitchClassInSingleAccidentalRange :: PitchClass -> Bool
 pitchClassInSingleAccidentalRange tonic =
-  case pitchClass2MaybeOneAccidentalScaleIndex tonic of
-    Nothing -> False
-    Just _ -> True
+  isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
 
 propMajorScaleIntervals :: PitchClass -> Property
 propMajorScaleIntervals tonic = 
@@ -125,7 +123,6 @@ instance Arbitrary Scale where
                      return $ Scale pcs $ reverse pcs
     where
       rmdups = map head . group . sort
-      rotate n xs = drop n xs ++ take n xs
 
 propTransposePitchId :: Scale -> Pitch -> Interval -> Property
 propTransposePitchId scale pitch@(Pitch pc _) interval =

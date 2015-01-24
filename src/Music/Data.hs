@@ -6,9 +6,8 @@ module Music.Data where
 
 import Control.Applicative
 
--- | Pitch classes with one accidental only, enharmonic equivalents
---   TBD: extend to double accidentals.
-data PitchClass = Bs | C | Cs | Df | D | Ds | Ef | E | Es | Ff | F | Fs | Gf | G | Gs | Af | A | As | Bf | B | Cf deriving (Bounded, Enum, Show, Ord, Eq)
+-- | Pitch classes with two accidentals enharmonic equivalents
+data PitchClass = Bs|C|Dff|Bss|Cs|Df|Css|D|Eff|Ds|Ef|Fff|Dss|E|Ff|Es|F|Gff|Ess|Fs|Gf|Fss|G|Aff|Gs|Af|Gss|A|Bff|As|Bf|Cff|Ass|B| Cf deriving (Bounded, Enum, Show, Ord, Eq) 
 
 -- | Motto is just a list
 --   TBD: is there any value in this?
