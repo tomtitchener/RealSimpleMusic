@@ -26,6 +26,8 @@ tests =
   , testProperty       "major scale intervals"  propMajorScaleIntervals
   , testCase           "transpose pitch"        testTransposePitch
   , testProperty       "transpose pitch id"     propTransposePitchId
+  , testProperty       "major scale"            propMajorScaleId
+  , testProperty       "natural minor scale"    propNaturalMinorScaleId
   ]
 
 

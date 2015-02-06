@@ -13,7 +13,10 @@ slice from to =
   DV.toList . DV.slice from (to - from + 1) . DV.fromList
 
 rotate :: Int -> [a] -> [a]
-rotate x xs = drop x xs ++ take x xs
+rotate x xs =
+  drop x' xs ++ take x' xs
+  where
+    x' = x `mod` length xs
 
 -- | Rotate a list, taking element from start
 --   and putting it at end, until you reach
@@ -44,14 +47,53 @@ equivEnh pc1 pc2 =
     idx2 = pitchClass2EnhEquivIdx pc2 equivPitchClasses
 
 equivEnhIdx :: PitchClass -> [PitchClass] -> Maybe Int
-equivEnhIdx pc  = findIndex (equivEnh pc) 
+equivEnhIdx pc = findIndex (equivEnh pc)
+
+-- TBD:  ugly!  Make this less verbose.
+{--
+adjPitchClass :: Int -> PitchClass -> PitchClass -> Bool
+adjPitchClass dir pc1 pc2 =
+  (diff == 6 || diff == -6 || not (abs diff > 2))
+    && ((dir == 1 && (diff == 1 || diff == -6))
+        || (dir == -1 && (diff == 1 || diff == -6)))
+  where
+    idx1 = pitchClass2EnhEquivIdx pc1 equivPitchClasses
+    idx2 = pitchClass2EnhEquivIdx pc2 equivPitchClasses
+    diff = if (dir == 1) then idx2 - idx1 else idx1 - idx2
+--}    
+-- TBD: why does abs diff == 6 fail unit test?
+adjPitchClass :: Int -> PitchClass -> PitchClass -> Bool
+adjPitchClass dir pc1 pc2 =
+  diff == 1 || diff == -6
+  where
+    idx1 = pitchClass2EnhEquivIdx pc1 equivPitchClasses
+    idx2 = pitchClass2EnhEquivIdx pc2 equivPitchClasses
+    diff = if (dir == 1) then idx2 - idx1 else idx1 - idx2
+
+-- | For a pitch class and a list of pitch classes and an
+--   interval of value [-2, -1, 1, 2], answer the adjacent
+--   pitch class in the list up or down from the initial
+--   pitch class where 
+findAdj :: PitchClass -> [PitchClass] -> Interval -> PitchClass
+findAdj pc pcs int =
+  fromMaybe
+    (error $ "findAdj no adjacent pitch class for " ++ show pc ++ " in " ++ show pcs ++ " interval " ++ show int)
+    (find (adjPitchClass dir pc) pcs)
+  where
+    dir = if (int > 0) then 1 else (-1)
 
 transpose'' :: PitchClass -> Interval -> PitchClass
-transpose'' pc int =  -- D 1
-  maybe (head pcs) (\idx' -> pcs !! (idx' + 1)) $ findIndex (equivEnh pc) pcs
+transpose'' pc int =
+  if (elem int [1,2,-1,-2])
+  then
+    findAdj pc pcs int
+  else
+    error $ "transpose'' called with interval " ++ show int ++ " < -2 || > 2 || 0"
   where
     idx  = pitchClass2EnhEquivIdx pc enhChromPitchClasses
-    pcs  = enhChromPitchClasses !! ((idx + int) `mod` length enhChromPitchClasses)
+    off  = idx  + int
+    off' = if off < 0 then off + length enhChromPitchClasses else off
+    pcs  = enhChromPitchClasses !! (off' `mod` length enhChromPitchClasses)
 
 -- | Cycle extending through a count of two flats and sharps.
 cycleOfFifths :: [PitchClass]
@@ -96,14 +138,12 @@ lowestMinorScalePitchClass = cycleOfFifths !! lowestMinorScaleOffset
 highestMinorScalePitchClass :: PitchClass
 highestMinorScalePitchClass = cycleOfFifths !! (length cycleOfFifths - highestMinorScaleOffset - 1)
 
--- | Factor this out so it can be used to filter
---   Arbitrary PitchClass during property testing.
 pitchClass2MaybeCycleOfFifthsIndex :: PitchClass -> Int -> Int -> Maybe Int
 pitchClass2MaybeCycleOfFifthsIndex tonic low high =
-  maybe Nothing testIdx $ elemIndex tonic cycleOfFifths
+  elemIndex tonic cycleOfFifths >>= testIdx
   where
     testIdx idx = if idx - low < 0 || idx + high >= length cycleOfFifths then Nothing else Just idx
-
+    
 pitchClass2MaybeCycleOfFifthsMajorScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic =
   pitchClass2MaybeCycleOfFifthsIndex tonic lowestMajorScaleOffset highestMajorScaleOffset
@@ -111,53 +151,52 @@ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic =
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic =
   pitchClass2MaybeCycleOfFifthsIndex tonic lowestMinorScaleOffset highestMinorScaleOffset
-                  
-majorScaleFromEnhChromaticScale :: PitchClass -> Scale
-majorScaleFromEnhChromaticScale tonic =
-  if isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
-  then
-    Scale up down
-  else
-    error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ "in cycle of fifths " ++ show cycleOfFifths
-  where
-    ints = [2,2,1,2,2,2]
-    up = foldl (\scale int -> let next = transpose'' (last scale) int in scale ++ [next]) [tonic] ints
-    down = reverse $ rotate 1 up
-    
-naturalMinorScaleFromEnhChromaticScale :: PitchClass -> Scale
-naturalMinorScaleFromEnhChromaticScale tonic =
-  if isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
-  then
-    Scale up down
-  else
-    error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ "in cycle of fifths " ++ show cycleOfFifths
-  where
-    ints = [2,1,2,2,1,2]
-    up = foldl (\scale int -> let next = transpose'' (last scale) int in scale ++ [next]) [tonic] ints
-    down = reverse $ rotate 1 up
 
+scaleFromEnhChromaticScale :: PitchClass -> [Int] -> [Int] -> Scale
+scaleFromEnhChromaticScale tonic up down =
+  Scale up' down'
+  where
+    accUp scale int = scale ++ [transpose'' (last scale) int]
+    accDown scale int = scale ++ [transpose'' (last scale) int]
+    up' = foldl accUp [tonic] up
+    down' = foldl accDown [tonic] down
+                  
 -- | Given a pitch class answer the major scale, up to two accidentals.
 majorScale :: PitchClass -> Scale
 majorScale tonic =
-  case pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic of
-    Nothing -> error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ "in cycle of fifths " ++ show cycleOfFifths
-    Just idx -> Scale ascending $ reverse ascending
-      where
-        start     = idx - lowestMajorScaleOffset
-        stop      = idx + highestMajorScaleOffset
-        pcs       = slice start stop cycleOfFifths
-        ascending = rotateTo tonic $ sort pcs
-
+  if isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
+  then
+    scaleFromEnhChromaticScale tonic ascendingMajorScaleIntervals descendingMajorScaleIntervals
+  else
+    error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+  where
+    ascendingMajorScaleIntervals = [2,2,1,2,2,2]
+    descendingMajorScaleIntervals = [-1,-2,-2,-2,-1,-2]
+    
 -- | Given a pitch class answer the natural minor scale, up to two accidentals.
 naturalMinorScale :: PitchClass -> Scale
 naturalMinorScale tonic =
-  case pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic of
-    Nothing -> error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ "in cycle of fifths " ++ show cycleOfFifths
-    Just idx -> Scale ascending $ reverse ascending
-      where
-        major = majorScale $ cycleOfFifths !! (idx - 3)
-        ascending = rotate 5 $ ascendingScale major
-  
+  if isJust $ pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic
+  then
+    scaleFromEnhChromaticScale tonic ascendingNaturalMinorScaleIntervals descendingNaturalMinorScaleIntervals
+  else
+    error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+  where
+    ascendingNaturalMinorScaleIntervals = [2,1,2,2,1,2]
+    descendingNaturalMinorScaleIntervals = [-2,-2,-1,-2,-2,-1]
+
+-- | Given a pitch class answer the melodic minor scale, up to two accidentals.
+melodicMinorScale :: PitchClass -> Scale
+melodicMinorScale tonic =
+  if isJust $ pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic
+  then
+    scaleFromEnhChromaticScale tonic ascendingMelodicScaleIntervals descendingMelodicScaleIntervals
+  else
+    error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+  where
+    ascendingMelodicScaleIntervals = [2,1,2,2,2,2]
+    descendingMelodicScaleIntervals = [-2,-2,-1,-2,-2,-1]
+
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch.
 transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
@@ -211,4 +250,3 @@ transposeNote _ _ (AccentedPercussionNote rhythm accent) =
 transposeNoteMotto :: Scale -> Interval -> NoteMotto -> NoteMotto
 transposeNoteMotto scale interval noteMotto =
   Motto $ map (transposeNote scale interval) (getMotto noteMotto)
-  

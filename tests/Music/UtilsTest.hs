@@ -76,13 +76,13 @@ testMajorScaleInterval =
 instance Arbitrary PitchClass where
   arbitrary = arbitraryBoundedEnum
 
-pitchClassInSingleAccidentalRange :: PitchClass -> Bool
-pitchClassInSingleAccidentalRange tonic =
+pitchClassInMajorScaleRange :: PitchClass -> Bool
+pitchClassInMajorScaleRange tonic =
   isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
 
 propMajorScaleIntervals :: PitchClass -> Property
 propMajorScaleIntervals tonic = 
-  pitchClassInSingleAccidentalRange tonic ==>
+  pitchClassInMajorScaleRange tonic ==>
     testMajorScaleIntervals (majorScale tonic)
 
 getIntervalForScale :: Scale -> Pitch -> Pitch -> Interval
@@ -114,6 +114,9 @@ instance Arbitrary Octave where
 instance Arbitrary Pitch where
   arbitrary = liftM2 Pitch arbitrary arbitrary
 
+-- For transposing up and transposing down to land on the
+-- same scale degree there cannot be any duplicates in the
+-- scale.  
 instance Arbitrary Scale where
   arbitrary = do pitchClasses <- listOf1 arbitrary
                  rotN <- arbitrary
@@ -131,4 +134,39 @@ propTransposePitchId scale pitch@(Pitch pc _) interval =
   where
     pitch'  = transposePitch scale interval pitch
     pitch'' = transposePitch scale (-interval) pitch'
-    
+
+-- | Given a pitch class answer the major scale, up to two accidentals.
+majorScaleFromCycleOfFifths :: PitchClass -> Scale
+majorScaleFromCycleOfFifths tonic =
+  case pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic of
+    Nothing -> error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+    Just idx -> Scale ascending $ (rotate (-1) . reverse) ascending
+      where
+        start     = idx - lowestMajorScaleOffset
+        stop      = idx + highestMajorScaleOffset
+        pcs       = slice start stop cycleOfFifths
+        ascending = rotateTo tonic $ sort pcs
+
+propMajorScaleId :: PitchClass -> Property
+propMajorScaleId tonic =
+  pitchClassInMajorScaleRange tonic ==>
+    majorScale tonic == majorScaleFromCycleOfFifths tonic
+
+-- | Given a pitch class answer the natural minor scale, up to two accidentals.
+naturalMinorScaleFromCycleOfFifths :: PitchClass -> Scale
+naturalMinorScaleFromCycleOfFifths tonic =
+  case pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic of
+    Nothing -> error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+    Just idx -> Scale ascending $ (rotate (-1) . reverse) ascending
+      where
+        major = majorScaleFromCycleOfFifths $ cycleOfFifths !! (idx - 3)
+        ascending = rotate 5 $ ascendingScale major
+  
+pitchClassInNaturalMinorScaleRange :: PitchClass -> Bool
+pitchClassInNaturalMinorScaleRange tonic =
+  isJust $ pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic
+  
+propNaturalMinorScaleId :: PitchClass -> Property
+propNaturalMinorScaleId tonic =
+  pitchClassInNaturalMinorScaleRange tonic ==>
+    naturalMinorScale tonic == naturalMinorScaleFromCycleOfFifths tonic
