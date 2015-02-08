@@ -42,6 +42,33 @@ propRotateToFirstIsSame xs =
   not (null xs) ==>
     rotateTo (head xs) xs == xs
 
+allPitchClasses :: [PitchClass]
+allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]
+
+testCycleOfFifthsLength :: Assertion
+testCycleOfFifthsLength =
+  length allPitchClasses @=? length cycleOfFifths
+  
+testCycleOfFifthsValues :: Assertion
+testCycleOfFifthsValues =
+  map (flip elem cycleOfFifths) allPitchClasses @=? replicate (length allPitchClasses) True
+
+testEquivPitchClassValues :: Assertion
+testEquivPitchClassValues =
+ allPitchClasses @=? (sort . concat) equivPitchClasses
+ 
+testEnhChromPitchClassValues :: Assertion
+testEnhChromPitchClassValues =
+ allPitchClasses @=? (sort . concat) enhChromPitchClasses
+
+testFifthsEnhDegreesLen :: Assertion 
+testFifthsEnhDegreesLen =
+  length cycleOfFifths @=? length fifthsEnhDegrees
+
+testFifthsEnhDegreesValues :: Assertion 
+testFifthsEnhDegreesValues =
+  map head (group fifthsEnhDegrees) @=? [-2,-1,0,1,2]
+    
 getChromaticScaleIndex :: PitchClass -> Int
 getChromaticScaleIndex pc  =
   fromJust $ findIndex (\pcs -> pc `elem` pcs) scale

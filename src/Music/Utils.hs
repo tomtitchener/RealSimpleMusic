@@ -38,66 +38,56 @@ pitchClass2EnhEquivIdx pc pcs =
   fromMaybe
     (error $ "pitchClass2Index no match for PitchClass " ++ show pc ++ " in " ++ show pcs)
     (findIndex (elem pc) pcs)
-
-equivEnh :: PitchClass -> PitchClass -> Bool
-equivEnh pc1 pc2 =
-  idx1 == idx2
-  where
-    idx1 = pitchClass2EnhEquivIdx pc1 equivPitchClasses
-    idx2 = pitchClass2EnhEquivIdx pc2 equivPitchClasses
-
-equivEnhIdx :: PitchClass -> [PitchClass] -> Maybe Int
-equivEnhIdx pc = findIndex (equivEnh pc)
-
--- TBD:  ugly!  Make this less verbose.
-{--
-adjPitchClass :: Int -> PitchClass -> PitchClass -> Bool
-adjPitchClass dir pc1 pc2 =
-  (diff == 6 || diff == -6 || not (abs diff > 2))
-    && ((dir == 1 && (diff == 1 || diff == -6))
-        || (dir == -1 && (diff == 1 || diff == -6)))
-  where
-    idx1 = pitchClass2EnhEquivIdx pc1 equivPitchClasses
-    idx2 = pitchClass2EnhEquivIdx pc2 equivPitchClasses
-    diff = if (dir == 1) then idx2 - idx1 else idx1 - idx2
---}    
--- TBD: why does abs diff == 6 fail unit test?
-adjPitchClass :: Int -> PitchClass -> PitchClass -> Bool
-adjPitchClass dir pc1 pc2 =
-  diff == 1 || diff == -6
-  where
-    idx1 = pitchClass2EnhEquivIdx pc1 equivPitchClasses
-    idx2 = pitchClass2EnhEquivIdx pc2 equivPitchClasses
-    diff = if (dir == 1) then idx2 - idx1 else idx1 - idx2
-
--- | For a pitch class and a list of pitch classes and an
---   interval of value [-2, -1, 1, 2], answer the adjacent
---   pitch class in the list up or down from the initial
---   pitch class where 
-findAdj :: PitchClass -> [PitchClass] -> Interval -> PitchClass
-findAdj pc pcs int =
-  fromMaybe
-    (error $ "findAdj no adjacent pitch class for " ++ show pc ++ " in " ++ show pcs ++ " interval " ++ show int)
-    (find (adjPitchClass dir pc) pcs)
-  where
-    dir = if (int > 0) then 1 else (-1)
-
-transpose'' :: PitchClass -> Interval -> PitchClass
-transpose'' pc int =
-  if (elem int [1,2,-1,-2])
-  then
-    findAdj pc pcs int
-  else
-    error $ "transpose'' called with interval " ++ show int ++ " < -2 || > 2 || 0"
-  where
-    idx  = pitchClass2EnhEquivIdx pc enhChromPitchClasses
-    off  = idx  + int
-    off' = if off < 0 then off + length enhChromPitchClasses else off
-    pcs  = enhChromPitchClasses !! (off' `mod` length enhChromPitchClasses)
-
+    
 -- | Cycle extending through a count of two flats and sharps.
 cycleOfFifths :: [PitchClass]
 cycleOfFifths = [Fff, Cff, Gff, Dff, Aff, Eff, Bff, Ff, Cf, Gf, Df, Af, Ef, Bf, F, C, G, D, A, E, B, Fs, Cs, Gs, Ds, As, Es, Bs, Fss, Css, Gss, Dss, Ass, Ess, Bss]
+
+-- | Count of flats (<0) or sharps (>0) for matching PitchClass in cycleOfFifths.
+fifthsEnhDegrees :: [Int]
+fifthsEnhDegrees = [-2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]  
+
+cycleOfFifthsIdx :: PitchClass -> Int
+cycleOfFifthsIdx pc =
+  fromMaybe
+    (error $ "cycleOfFifths pitch class " ++ show pc ++ " not an elment of cycle of fifths " ++ show cycleOfFifths)
+    (elemIndex pc cycleOfFifths)
+
+pitchClass2AccidentalDegree :: PitchClass -> Int
+pitchClass2AccidentalDegree pc =
+  fifthsEnhDegrees !! cycleOfFifthsIdx pc
+
+isSharp :: PitchClass -> Bool
+isSharp pc =
+  pitchClass2AccidentalDegree pc  > 0
+  
+isFlat :: PitchClass -> Bool
+isFlat pc =
+  pitchClass2AccidentalDegree pc  < 0
+
+fifthsDistance :: PitchClass -> PitchClass -> Int
+fifthsDistance pc1 pc2 =
+  abs $ idx2 - idx1
+  where
+    idx1 = cycleOfFifthsIdx pc1
+    idx2 = cycleOfFifthsIdx pc2
+
+findAdjByFifths :: PitchClass -> [PitchClass] -> PitchClass
+findAdjByFifths pc pcs =
+  if fstDst < sndDst || (isFlat pc && isFlat fstPc) then fstPc else sndPc
+  where
+    prs            = zip pcs $ map (fifthsDistance pc) pcs
+    sorted         = sortBy (\(_, d1) (_, d2) -> compare d1 d2) prs
+    (fstPc,fstDst) = sorted !! 0
+    (sndPc,sndDst) = sorted !! 1
+
+transposeByAdjFifths :: PitchClass -> Interval -> PitchClass
+transposeByAdjFifths pc interval =
+  findAdjByFifths pc enhPcs
+  where
+    idx1   = pitchClass2EnhEquivIdx pc enhChromPitchClasses
+    idx2   = (idx1 + interval) `mod` length enhChromPitchClasses
+    enhPcs = enhChromPitchClasses !! idx2
 
 -- | Offset from start of cycle of fifths for pitch class
 --   from which you can form a major scale while remaining
@@ -156,8 +146,8 @@ scaleFromEnhChromaticScale :: PitchClass -> [Int] -> [Int] -> Scale
 scaleFromEnhChromaticScale tonic up down =
   Scale up' down'
   where
-    accUp scale int = scale ++ [transpose'' (last scale) int]
-    accDown scale int = scale ++ [transpose'' (last scale) int]
+    accUp scale int = scale ++ [transposeByAdjFifths (last scale) int]
+    accDown scale int = scale ++ [transposeByAdjFifths (last scale) int]
     up' = foldl accUp [tonic] up
     down' = foldl accDown [tonic] down
                   
