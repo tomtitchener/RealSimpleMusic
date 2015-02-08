@@ -51,7 +51,7 @@ testCycleOfFifthsLength =
   
 testCycleOfFifthsValues :: Assertion
 testCycleOfFifthsValues =
-  map (flip elem cycleOfFifths) allPitchClasses @=? replicate (length allPitchClasses) True
+  map (`elem` cycleOfFifths) allPitchClasses @=? replicate (length allPitchClasses) True
 
 testEquivPitchClassValues :: Assertion
 testEquivPitchClassValues =

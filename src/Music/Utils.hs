@@ -78,7 +78,7 @@ findAdjByFifths pc pcs =
   where
     prs            = zip pcs $ map (fifthsDistance pc) pcs
     sorted         = sortBy (\(_, d1) (_, d2) -> compare d1 d2) prs
-    (fstPc,fstDst) = sorted !! 0
+    (fstPc,fstDst) = head sorted
     (sndPc,sndDst) = sorted !! 1
 
 transposeByAdjFifths :: PitchClass -> Interval -> PitchClass
@@ -150,42 +150,47 @@ scaleFromEnhChromaticScale tonic up down =
     accDown scale int = scale ++ [transposeByAdjFifths (last scale) int]
     up' = foldl accUp [tonic] up
     down' = foldl accDown [tonic] down
+
+genScale :: PitchClass -> String -> [Int] -> [Int] -> (PitchClass -> Maybe Int) -> PitchClass -> PitchClass -> Scale
+genScale tonic name up down genInt low high =
+  if isJust $ genInt tonic
+  then
+    scaleFromEnhChromaticScale tonic up down
+  else
+    error $ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
                   
 -- | Given a pitch class answer the major scale, up to two accidentals.
 majorScale :: PitchClass -> Scale
 majorScale tonic =
-  if isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
-  then
-    scaleFromEnhChromaticScale tonic ascendingMajorScaleIntervals descendingMajorScaleIntervals
-  else
-    error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+  genScale tonic "major" up down genInt low high
   where
-    ascendingMajorScaleIntervals = [2,2,1,2,2,2]
-    descendingMajorScaleIntervals = [-1,-2,-2,-2,-1,-2]
-    
+    up     = [2,2,1,2,2,2]
+    down   = [-1,-2,-2,-2,-1,-2]
+    genInt = pitchClass2MaybeCycleOfFifthsMajorScaleIndex
+    low    = lowestMajorScalePitchClass 
+    high   = highestMajorScalePitchClass
+
 -- | Given a pitch class answer the natural minor scale, up to two accidentals.
 naturalMinorScale :: PitchClass -> Scale
 naturalMinorScale tonic =
-  if isJust $ pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic
-  then
-    scaleFromEnhChromaticScale tonic ascendingNaturalMinorScaleIntervals descendingNaturalMinorScaleIntervals
-  else
-    error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+  genScale tonic "natural minor" up down genInt low high
   where
-    ascendingNaturalMinorScaleIntervals = [2,1,2,2,1,2]
-    descendingNaturalMinorScaleIntervals = [-2,-2,-1,-2,-2,-1]
+    up     = [2,1,2,2,1,2]
+    down   = [-2,-2,-1,-2,-2,-1]
+    genInt = pitchClass2MaybeCycleOfFifthsMinorScaleIndex
+    low    = lowestMinorScalePitchClass
+    high   = highestMinorScalePitchClass
 
 -- | Given a pitch class answer the melodic minor scale, up to two accidentals.
 melodicMinorScale :: PitchClass -> Scale
 melodicMinorScale tonic =
-  if isJust $ pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic
-  then
-    scaleFromEnhChromaticScale tonic ascendingMelodicScaleIntervals descendingMelodicScaleIntervals
-  else
-    error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
+  genScale tonic "melodic minor" up down genInt low high
   where
-    ascendingMelodicScaleIntervals = [2,1,2,2,2,2]
-    descendingMelodicScaleIntervals = [-2,-2,-1,-2,-2,-1]
+    up     = [2,1,2,2,2,2]
+    down   = [-2,-2,-1,-2,-2,-1]
+    genInt = pitchClass2MaybeCycleOfFifthsMinorScaleIndex
+    low    = lowestMinorScalePitchClass
+    high   = highestMinorScalePitchClass
 
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch.
