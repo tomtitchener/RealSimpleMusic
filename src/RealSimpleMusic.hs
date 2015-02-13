@@ -7,6 +7,7 @@ module RealSimpleMusic (
    ,  naturalMinorScale
    ,  Octave(..)
    ,  Pitch(..)
+   ,  IndexedPitch(..)
    ,  transposePitch
    ,  getPitch
    ,  PitchMotto
@@ -21,9 +22,13 @@ module RealSimpleMusic (
    ,  Instrument(..)
    ,  Control(..)
    ,  Note(..)
+   ,  IndexedNote(..)
+   ,  indexedNoteToNote
+   ,  indexedNotesToNotes
    ,  transposeNote
    ,  noteToRhythm
    ,  NoteMotto
+   ,  IndexedNoteMotto
    ,  transposeNoteMotto
    ,  Interval
    ,  Intervals

@@ -379,20 +379,26 @@ scoreToMidiFiles (Score title voices) =
 --   file for each voice.  Unlimited by Midi
 --   track count constraints.  But files must
 --   be assembled one-by-one into editor like
---   Logic or GarageBand.    
-titleVoicessAndChannelssToOneMidiFile :: Title -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
-titleVoicessAndChannelssToOneMidiFile title voicess channelss
-  | null voicess = error "titleVoicessAndChannelssToOneMidiFile empty voicess"
-  | null channelss = error "titleVoicessAndChannelssToOneMidiFile empty channelss"
-  | length voicess /= length channelss = error $ "titleVoicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
-  | null midiVoices = error "titleVoicessAndChannelssToOneMidiFile empty midiVoices"
-  | null voiceEventLists = error "titleVoicessAndChannelssToOneMidiFile empty voiceEventLists"
-  | otherwise = LazyByteString.writeFile fileName $ SaveFile.toByteString midiFile
+--   Logic or GarageBand.
+voicessAndChannelssToByteString :: [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
+voicessAndChannelssToByteString voicess channelss
+  | null voicess = error "voicessAndChannelssToOneMidiFile empty voicess"
+  | null channelss = error "voicessAndChannelssToOneMidiFile empty channelss"
+  | length voicess /= length channelss = error $ "voicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
+  | null midiVoices = error "voicessAndChannelssToOneMidiFile empty midiVoices"
+  | null voiceEventLists = error "voicessAndChannelssToOneMidiFile empty voiceEventLists"
+  | otherwise = SaveFile.toByteString midiFile
   where
-    fileName = title ++ ".mid"
     midiVoices = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
     voiceEventLists = map midiVoiceToEventList midiVoices
     midiFile = MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge voiceEventLists]
+    
+titleVoicessAndChannelssToOneMidiFile :: Title -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
+titleVoicessAndChannelssToOneMidiFile title voicess channelss =
+  LazyByteString.writeFile fileName byteStream
+  where
+    fileName = title ++ ".mid"
+    byteStream = voicessAndChannelssToByteString voicess channelss
 
 -- | Map list of list of voice to list of list of midi channel
 --   using drum channel for percussion voices, otherwise channels
@@ -466,6 +472,15 @@ scoreToMidiFile :: Score -> IO ()
 scoreToMidiFile (Score title voices)
   | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
   | otherwise = titleVoicessAndChannelssToOneMidiFile title voicess channelss
+  where
+    voicess = collectVoicesByInstrument voices
+    countInstruments = length voicess
+    channelss = assignMidiChannelsByVoices voicess
+
+scoreToByteString :: Score -> LazyByteString.ByteString
+scoreToByteString (Score _ voices)
+  | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
+  | otherwise = voicessAndChannelssToByteString voicess channelss
   where
     voicess = collectVoicesByInstrument voices
     countInstruments = length voicess

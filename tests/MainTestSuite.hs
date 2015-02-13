@@ -8,6 +8,7 @@ import Test.Tasty.QuickCheck
 import Test.Tasty.HUnit
 
 import Music.UtilsTest
+import Canon.UtilsTest
 
 main :: IO ()
 main = defaultMain tests
@@ -34,6 +35,8 @@ tests =
   , testProperty       "transpose pitch id"              propTransposePitchId
   , testProperty       "major scale"                     propMajorScaleId
   , testProperty       "natural minor scale"             propNaturalMinorScaleId
+  -- canons
+  , testCase           "major simple canon"              testSimpleCanon
   ]
 
 

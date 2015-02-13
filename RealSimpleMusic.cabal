@@ -24,7 +24,7 @@ source-repository head
    location: git://github.com/tomtitchener/RealSimpleMusic.git
 
 library
-  hs-source-dirs:   src
+  hs-source-dirs:   src, tests
   exposed-modules:  RealSimpleMusic, Canon
   other-modules:    Music.Data Music.Utils MusicToMidi.Utils Canon.Utils
   other-extensions: GeneralizedNewtypeDeriving
@@ -58,5 +58,4 @@ test-suite music-tests
                     tasty-quickcheck,
                     vector
   default-language: Haskell2010
-  ghc-options:      -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
---ghc-options:      -Wall -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
+  ghc-options:      -Wall -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans

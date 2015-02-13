@@ -170,27 +170,29 @@ majorScale tonic =
     low    = lowestMajorScalePitchClass 
     high   = highestMajorScalePitchClass
 
--- | Given a pitch class answer the natural minor scale, up to two accidentals.
-naturalMinorScale :: PitchClass -> Scale
-naturalMinorScale tonic =
-  genScale tonic "natural minor" up down genInt low high
+-- | Refactored 
+commonMinorScale :: String -> [Int] -> PitchClass -> Scale
+commonMinorScale name down tonic =
+  genScale tonic name up down genInt low high
   where
     up     = [2,1,2,2,1,2]
-    down   = [-2,-2,-1,-2,-2,-1]
     genInt = pitchClass2MaybeCycleOfFifthsMinorScaleIndex
     low    = lowestMinorScalePitchClass
     high   = highestMinorScalePitchClass
 
+-- | Given a pitch class answer the natural minor scale, up to two accidentals.
+naturalMinorScale :: PitchClass -> Scale
+naturalMinorScale  =
+  commonMinorScale "natural minor" down
+  where
+    down = [-2,-2,-1,-2,-2,-1]
+
 -- | Given a pitch class answer the melodic minor scale, up to two accidentals.
 melodicMinorScale :: PitchClass -> Scale
-melodicMinorScale tonic =
-  genScale tonic "melodic minor" up down genInt low high
+melodicMinorScale =
+  commonMinorScale "melodic minor" down
   where
-    up     = [2,1,2,2,2,2]
-    down   = [-2,-2,-1,-2,-2,-1]
-    genInt = pitchClass2MaybeCycleOfFifthsMinorScaleIndex
-    low    = lowestMinorScalePitchClass
-    high   = highestMinorScalePitchClass
+    down = [-2,-2,-1,-2,-2,-1]
 
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch.
@@ -245,3 +247,27 @@ transposeNote _ _ (AccentedPercussionNote rhythm accent) =
 transposeNoteMotto :: Scale -> Interval -> NoteMotto -> NoteMotto
 transposeNoteMotto scale interval noteMotto =
   Motto $ map (transposeNote scale interval) (getMotto noteMotto)
+
+ixPitchToPitch :: IndexedPitch -> Scale -> Pitch
+ixPitchToPitch (IndexedPitch ix octave) scale
+  | length up /= length down = error $ "ixPitchToPitch ascending and descending scales of different lengths " ++ show scale
+  | ix < 0 || ix > length up = error $ "ixPitchToPitch index " ++ show ix ++ " out of range for scale " ++ show scale
+  | otherwise = Pitch (up !! ix) octave
+  where
+    up = ascendingScale scale
+    down = descendingScale scale
+
+indexedNoteToNote :: Scale -> IndexedNote -> Note
+indexedNoteToNote scale (IndexedNote ixPitch rhythm) =
+  Note (ixPitchToPitch ixPitch scale) rhythm
+indexedNoteToNote scale (IndexedAccentedNote ixPitch rhythm accent) =
+  AccentedNote (ixPitchToPitch ixPitch scale) rhythm accent
+indexedNoteToNote _ (IndexedRest rhythm) =
+  Rest rhythm
+indexedNoteToNote _ (IndexedPercussionNote rhythm) =
+  PercussionNote rhythm
+indexedNoteToNote _ (IndexedAccentedPercussionNote rhythm accent) =
+  AccentedPercussionNote rhythm accent
+
+indexedNotesToNotes :: Scale -> [IndexedNote] -> [Note]
+indexedNotesToNotes scale = map (indexedNoteToNote scale)

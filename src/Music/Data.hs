@@ -31,6 +31,9 @@ instance Bounded Octave where
 -- | Pitch requires PitchClass and Octave.
 data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 
+-- | Indexed pitch requires index into a Scale and Octave
+data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
+
 -- | A PitchMotto is a list of pitches
 type PitchMotto = Motto Pitch
 
@@ -88,6 +91,18 @@ data Note = Note Pitch Rhythm
 
 -- | A NoteMotto is a list of Notes
 type NoteMotto = Motto Note
+
+-- | An indexed note follows the shape of a note but with
+--   an indexed pitch replacing Pitch.
+data IndexedNote =
+    IndexedNote IndexedPitch Rhythm
+  | IndexedAccentedNote IndexedPitch Rhythm Accent
+  | IndexedRest Rhythm
+  | IndexedPercussionNote Rhythm
+  | IndexedAccentedPercussionNote Rhythm Accent deriving (Eq, Show)
+
+-- | An IndexedNoteMotto is a list of IndexedNotes, requiring a Scale to convert to a NoteMotto
+type IndexedNoteMotto = Motto IndexedNote
 
 -- | Intervals may be negative or positive and are computed as steps in a Scale
 type Interval = Int
