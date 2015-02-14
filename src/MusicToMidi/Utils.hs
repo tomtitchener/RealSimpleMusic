@@ -380,13 +380,13 @@ scoreToMidiFiles (Score title voices) =
 --   track count constraints.  But files must
 --   be assembled one-by-one into editor like
 --   Logic or GarageBand.
-voicessAndChannelssToByteString :: [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
-voicessAndChannelssToByteString voicess channelss
-  | null voicess = error "voicessAndChannelssToOneMidiFile empty voicess"
-  | null channelss = error "voicessAndChannelssToOneMidiFile empty channelss"
-  | length voicess /= length channelss = error $ "voicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
-  | null midiVoices = error "voicessAndChannelssToOneMidiFile empty midiVoices"
-  | null voiceEventLists = error "voicessAndChannelssToOneMidiFile empty voiceEventLists"
+titleVoicessAndChannelssToByteString :: String -> [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
+titleVoicessAndChannelssToByteString _ voicess channelss
+  | null voicess = error "titleVoicessAndChannelssToOneMidiFile empty voicess"
+  | null channelss = error "titleVoicessAndChannelssToOneMidiFile empty channelss"
+  | length voicess /= length channelss = error $ "titleVoicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
+  | null midiVoices = error "titleVoicessAndChannelssToOneMidiFile empty midiVoices"
+  | null voiceEventLists = error "titleVoicessAndChannelssToOneMidiFile empty voiceEventLists"
   | otherwise = SaveFile.toByteString midiFile
   where
     midiVoices = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
@@ -398,7 +398,7 @@ titleVoicessAndChannelssToOneMidiFile title voicess channelss =
   LazyByteString.writeFile fileName byteStream
   where
     fileName = title ++ ".mid"
-    byteStream = voicessAndChannelssToByteString voicess channelss
+    byteStream = titleVoicessAndChannelssToByteString title voicess channelss
 
 -- | Map list of list of voice to list of list of midi channel
 --   using drum channel for percussion voices, otherwise channels
@@ -458,6 +458,16 @@ assignMidiChannelsByVoices voicess
   where
     countAllVoices = sum $ map length voicess
 
+-- | Refactor
+convertScore :: (String -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
+convertScore convert (Score title voices) 
+  | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
+  | otherwise = convert title voicess channelss
+  where
+    voicess = collectVoicesByInstrument voices
+    countInstruments = length voicess
+    channelss = assignMidiChannelsByVoices voicess
+
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
 --   create a parallel list of list of Midi
@@ -469,19 +479,8 @@ assignMidiChannelsByVoices voicess
 --   of 1 percussion track and 15 non-percussion
 --   tracks.
 scoreToMidiFile :: Score -> IO ()
-scoreToMidiFile (Score title voices)
-  | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
-  | otherwise = titleVoicessAndChannelssToOneMidiFile title voicess channelss
-  where
-    voicess = collectVoicesByInstrument voices
-    countInstruments = length voicess
-    channelss = assignMidiChannelsByVoices voicess
+scoreToMidiFile = convertScore titleVoicessAndChannelssToOneMidiFile
 
+-- | Short-circuit write to MidiFile with output to byte string for test.
 scoreToByteString :: Score -> LazyByteString.ByteString
-scoreToByteString (Score _ voices)
-  | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
-  | otherwise = voicessAndChannelssToByteString voicess channelss
-  where
-    voicess = collectVoicesByInstrument voices
-    countInstruments = length voicess
-    channelss = assignMidiChannelsByVoices voicess
+scoreToByteString = convertScore titleVoicessAndChannelssToByteString
