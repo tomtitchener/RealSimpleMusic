@@ -285,6 +285,12 @@ noteToMidiNote (Instrument instr) (PercussionNote rhythm) =
 isMidiPercussion :: String -> Bool
 isMidiPercussion = flip elem (map show GeneralMidi.drums)
 
+isMidiInstrument :: Instrument -> Bool
+isMidiInstrument (Instrument instrName) =
+  case GeneralMidi.instrumentNameToProgram instrName of
+       Nothing  -> False
+       Just _ -> True
+
 voiceAndChannelToMidiVoice :: Voice -> ChannelMsg.Channel -> MidiVoice
 voiceAndChannelToMidiVoice (Voice instr notes controlss) channel =
   MidiVoice instr channel midiNotes controlss
@@ -354,6 +360,10 @@ assignAnyMidiChannelsByVoices =
     toAnyMidiChannel (Voice (Instrument instr) _ _)
       | isMidiPercussion instr = GeneralMidi.drumChannel
       | otherwise = ChannelMsg.toChannel 0
+
+voicesToNotMidiInstruments :: [Voice] -> [Instrument]
+voicesToNotMidiInstruments voices =
+  filter (not . isMidiInstrument) $ map voiceInstrument voices
     
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -361,14 +371,16 @@ assignAnyMidiChannelsByVoices =
 --   channels for each voices and use the
 --   title, list of list of voices, and list
 --   of list of channels to create individual
---   Midi files, one per voice, with name e.g.
+--   Midi files, one per voice, with name e.ag.
 --   "<title>-<instrument>-1.mid".
 scoreToMidiFiles :: Score -> IO ()
-scoreToMidiFiles (Score title voices) =
-  zipWithM_ (titleVoicesAndChannelsToMidiFiles title) voicess channelss
+scoreToMidiFiles (Score title voices) 
+  | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
+  | otherwise                     = zipWithM_ (titleVoicesAndChannelsToMidiFiles title) voicess channelss
   where
-    voicess = collectVoicesByInstrument voices
-    channelss = assignAnyMidiChannelsByVoices voicess
+    notMidiInstruments = voicesToNotMidiInstruments voices
+    voicess            = collectVoicesByInstrument voices
+    channelss          = assignAnyMidiChannelsByVoices voicess
 
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -461,12 +473,14 @@ assignMidiChannelsByVoices voicess
 -- | Refactor
 convertScore :: (String -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
 convertScore convert (Score title voices) 
-  | countInstruments > 16 = error $ "scoreToMidiFile, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
-  | otherwise = convert title voicess channelss
+  | countInstruments > 16         = error $ "convertScore, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
+  | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
+  | otherwise                     = convert title voicess channelss
   where
-    voicess = collectVoicesByInstrument voices
-    countInstruments = length voicess
-    channelss = assignMidiChannelsByVoices voicess
+    notMidiInstruments = voicesToNotMidiInstruments voices
+    voicess            = collectVoicesByInstrument voices
+    countInstruments   = length voicess
+    channelss          = assignMidiChannelsByVoices voicess
 
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
