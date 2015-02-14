@@ -36,7 +36,9 @@ tests =
   , testProperty       "major scale"                     propMajorScaleId
   , testProperty       "natural minor scale"             propNaturalMinorScaleId
   -- canons
-  , testCase           "major simple canon"              testSimpleCanon
+  , testCase           "simple canon"                    testSimpleCanon
+  , testCase           "scales canon"                    testScalesCanon
+  , testCase           "canon"                           testCanon
   ]
 
 

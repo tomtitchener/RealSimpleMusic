@@ -40,7 +40,8 @@ library
                     tasty-quickcheck,
                     vector
   default-language: Haskell2010
-  ghc-options:      -Wall -Werror -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns
+  ghc-options:      -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns
+--ghc-options:      -Wall -Werror -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns
 
 test-suite music-tests
   type:             exitcode-stdio-1.0
@@ -58,4 +59,5 @@ test-suite music-tests
                     tasty-quickcheck,
                     vector
   default-language: Haskell2010
-  ghc-options:      -Wall -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
+  ghc-options:      -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
+--ghc-options:      -Wall -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans

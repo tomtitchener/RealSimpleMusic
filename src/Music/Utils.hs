@@ -248,14 +248,27 @@ transposeNoteMotto :: Scale -> Interval -> NoteMotto -> NoteMotto
 transposeNoteMotto scale interval noteMotto =
   Motto $ map (transposeNote scale interval) (getMotto noteMotto)
 
+-- Given the ascending part of a scale, an index for a pitch in that scale,
+-- and an octave relative to the tonic of that scale, answer the absolute 
+-- octave, e.g. for the major scale starting at G and index 3 and relative
+-- octave 0, the answer should be Octave 1.
+adjustOctave :: [PitchClass] -> Int -> Octave -> Octave
+adjustOctave up ix (Octave octave) =
+  Octave $ ((ix + off) `div` len) + octave
+  where
+    tonic = head up
+    len   = length up
+    off   = fromJust $ elemIndex (head up) (sort up)
+
 ixPitchToPitch :: IndexedPitch -> Scale -> Pitch
 ixPitchToPitch (IndexedPitch ix octave) scale
   | length up /= length down = error $ "ixPitchToPitch ascending and descending scales of different lengths " ++ show scale
   | ix < 0 || ix > length up = error $ "ixPitchToPitch index " ++ show ix ++ " out of range for scale " ++ show scale
-  | otherwise = Pitch (up !! ix) octave
+  | otherwise = Pitch (up !! ix) octave'
   where
-    up = ascendingScale scale
-    down = descendingScale scale
+    up      = ascendingScale scale
+    down    = descendingScale scale
+    octave' = adjustOctave up ix octave
 
 indexedNoteToNote :: Scale -> IndexedNote -> Note
 indexedNoteToNote scale (IndexedNote ixPitch rhythm) =

@@ -1,10 +1,5 @@
 -- | Canons to explore RealSimpleMusic
 
--- TBD:  all <>ToScore methods for SimpleCanon, TransposingCanon, ScalesCanon
--- should be specialized calls to CanonToScore.
--- Create CompoundSequentialCanon.
--- Consider CompoundSimultaneousCanon:  must it be fractal, or 
-
 module Canon.Utils where
 
 import           Data.Ratio
@@ -12,17 +7,20 @@ import           Data.List
 import           RealSimpleMusic
 import           Canon.Data
 
+-- Bug:  transpose behavior failing octave threshold.
+-- Point to octave transposition is to be absolute.
+
 commonCanonToScore ::  Title -> [IndexedNoteMotto] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
 commonCanonToScore title mottos scales rhythms octaves instruments repetitions =
   Score title voices
   where
     lenScale  = length $ ascendingScale $ head scales
-    notess    = zipWith indexedNotesToNotes scales $ map (\(Motto m) -> m) mottos
+    notess    = zipWith indexedNotesToNotes scales $ map (\(Motto ixNotes) -> ixNotes) mottos
     intervals = map ((* lenScale) . getOctave) octaves
     xpNotes   = zipWith3 (\interval notes scale -> map (transposeNote scale interval) notes) intervals notess scales
     tunes     = map (concat . replicate repetitions) xpNotes
     numVoices = length instruments
-    rests     = zipWith (\x y -> (Rest . Rhythm) (x*y)) [(0%1),(1%1)..] $ map getRhythm rhythms
+    rests     = map (Rest . Rhythm) $ scanl (+) (0%1) $ map getRhythm rhythms
     incr      = getPan (maxBound::Pan) `div` numVoices
     pans      = map (\i -> PanControl (Pan (incr * i)) (Rhythm (0%4))) [0,1..]
     voices    = zipWith4 (\instrument rest pan tune -> Voice instrument (rest : tune) [[pan]]) instruments rests pans tunes

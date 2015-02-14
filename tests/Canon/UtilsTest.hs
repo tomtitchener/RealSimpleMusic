@@ -160,11 +160,13 @@ writeFJCanonToByteString instruments scales octaveInts durs =
     canon    = createFJCanon instruments scales octaves durs
     score    = canonToScore canon
 
+-- | Generate test data for canon
+--   writeFJCanonToFile [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [(2%1), (1%4), (1%8)]
 testCanon :: Assertion
 testCanon =
   do
     referenceFileCanonByteString <- LazyByteString.readFile "./tests/data/Frere Jacques Canon.mid"
     referenceFileCanonByteString @=? generatedCanonByteString
   where
-    generatedCanonByteString = writeFJCanonToByteString [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [(2%1), (1%4), (1%8), (5%16)]
+    generatedCanonByteString = writeFJCanonToByteString [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [(2%1), (1%4), (1%8)]
 
