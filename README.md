@@ -74,7 +74,7 @@ points:
   the voices one-by-one into editors that handle more than 16 voices,
   e.g. GarageBand and Logic.  
 
-Note the structure of the `Score` is too simple, lacking tempo, key
+The structure of the `Score` is too simple, lacking tempo, key
 signature, or other global settings.  And it may be other aggregates,
 like the `Motto` types seem to be of little value and may be
 deprecated. 
@@ -87,10 +87,31 @@ e.g. `Dynamic` in `DynamicControl` maps to Midi volume, `Balance` and
 `Pan` map to Midi pan, and etc., including `InstrumentControl`, which,
 in principal, lets you swap the piccolo part to a tuba if you want.
 Absent a tempo control, the Midi file defaults to 120 beats per
-minute.  
-
-Note finally it's a one-way trip.  There's no conversion from MIDI to the
+minute.  It's a one-way trip.  There's no conversion from MIDI to the
 simple music types.  
 
+Here's a minimal `Score` that contains one `Voice` with one note,
+middle `C` that's one whole-note long:
+
+    Score
+      "Minimal" -- Title
+	  [Voice
+	    (Instrument "Marimba")            -- Instrument
+        [Note (Pitch C 0) (Rhythm (1%1))] -- Notes
+		[]                                -- Controls
+      ]
+
+Here's a `cabal repl`sesion to create the score and convert it to a
+Midi file:
+
+	bash-3.2$ cabal repl
+	Preprocessing library RealSimpleMusic-0.1.0.0...
+	GHCi, version 7.8.3: http://www.haskell.org/ghc/  :? for help
+	...
+	λ: :m +Data.Ratio
+	λ: :m +RealSimpleMusic
+	λ: let score = Score "Minimal" [Voice (Instrument "Marimba") [Note (Pitch C 0) (Rhythm (1%1))] []]
+	λ: scoreToMidiFile score
+	
 See the file `tests/Canon/UtilsTest.hs` for examples showing the use
-of simple types, score, and conversion routines.
+of simple types, score, and conversion routines.  
