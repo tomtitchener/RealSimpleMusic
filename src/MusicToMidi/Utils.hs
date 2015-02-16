@@ -21,6 +21,9 @@ import qualified Sound.MIDI.Message.Channel.Voice as VoiceMsg
 import qualified Sound.MIDI.File.Save             as SaveFile
 import qualified Data.ByteString.Lazy             as LazyByteString
 
+maxMidiTrack :: Int
+maxMidiTrack = 16
+
 newtype Duration = Dur { getDur :: Integer } deriving (Read, Show, Ord, Eq, Num)
 
 -- | Midi-ism:  bounds for Duration are from Midi
@@ -32,10 +35,10 @@ instance Bounded Duration where
 --   e.g. 1:1 for whole note * 64 * 8 => 512 ticks.  NB: conversion to Midi doesn't accept ratios that don't divide evenly into 512.
 rhythmToDuration :: Rhythm -> Duration
 rhythmToDuration rhythm
-  | 1 /= toInteger (denominator (512%1 * r)) = error $ "rhythm " ++ show rhythm ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * r)
-  | otherwise = fromIntegral $ fromEnum $ 512%1 * r
+  | 1 /= toInteger (denominator (512%1 * rat)) = error $ "rhythm " ++ show rhythm ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * rat)
+  | otherwise = fromIntegral $ fromEnum $ 512%1 * rat
   where
-    r = getRhythm rhythm
+    rat = getRhythm rhythm
     
 pitchClassToOffset :: (Num a) => PitchClass -> a
 pitchClassToOffset Bs  = 0
@@ -112,12 +115,11 @@ articulationToSustenuto Staccato       = 0
 
 pitchToMidi :: Pitch -> Int
 pitchToMidi (Pitch pitchClass oct) =
-  let
-    pitchOffset = pitchClassToOffset pitchClass
+  pitchOffset + octaveOffset + midiOffset
+  where
+    pitchOffset  = pitchClassToOffset pitchClass
     octaveOffset = getOctave $ oct * 12
-    midiOffset = 60
-  in
-    pitchOffset + octaveOffset + midiOffset
+    midiOffset   = 60
 
 stringToDrum :: String -> GeneralMidi.Drum
 stringToDrum instr = GeneralMidi.drums !! Data.Maybe.fromJust (Data.List.elemIndex instr (map show GeneralMidi.drums))
@@ -157,11 +159,11 @@ genMidiNoteOff channel pitch accent =
 --   and second contains duration and note off (e.g. for length of note).
 genMidiNoteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Accent -> [(Duration, Event.T)]
 genMidiNoteEvents delay channel pitch duration accent
-  | minBound > delay = error $ "genMidiNoteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
-  | maxBound < delay = error $ "genMidiNoteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
+  | minBound > delay    = error $ "genMidiNoteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
+  | maxBound < delay    = error $ "genMidiNoteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
   | minBound > duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is less than minimum value " ++ show (minBound::Duration)
   | maxBound < duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is greater than minimum value " ++ show (maxBound::Duration)
-  | otherwise = [(delay, genMidiNoteOn channel pitch accent), (duration, genMidiNoteOff channel pitch accent)]
+  | otherwise           = [(delay, genMidiNoteOn channel pitch accent), (duration, genMidiNoteOff channel pitch accent)]
 
 -- | Translate the note-on/note-off pair of events for a MidiNote into
 --   a State where the answer is the duration carried over from the
@@ -198,7 +200,7 @@ genMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
 genMidiPanControlEvent chan pan
   | minBound > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum " ++ show (minBound::Pan)
   | maxBound < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum " ++ show (maxBound::Pan)
-  | otherwise = genEvent chan (VoiceMsg.Control VoiceMsg.panorama (getPan pan))
+  | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama (getPan pan))
 
 genMidiTempoMetaEvent :: Tempo -> Event.T
 genMidiTempoMetaEvent (Tempo tempo) =
@@ -252,13 +254,13 @@ midiVoiceToEventList (MidiVoice (Instrument instrName) channel notes controlss)
   | null ctrlEventLists = progAndNoteEvents
   | otherwise           = EventList.merge progAndNoteEvents ctrlEvents
   where
-    instr = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
-    noteEventss = map (\ns -> snd $ execState (traverse (midiNoteToEvents channel) ns) (Dur 0, [])) [notes]
-    noteEventLists = map (EventList.fromPairList . map durEventToNumEvent) noteEventss
-    ctrlEventss = map (map (controlToEvent channel)) controlss
-    ctrlEventLists = map (EventList.fromPairList . map durEventToNumEvent) ctrlEventss
+    instr             = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
+    noteEventss       = map (\ns -> snd $ execState (traverse (midiNoteToEvents channel) ns) (Dur 0, [])) [notes]
+    noteEventLists    = map (EventList.fromPairList . map durEventToNumEvent) noteEventss
+    ctrlEventss       = map (map (controlToEvent channel)) controlss
+    ctrlEventLists    = map (EventList.fromPairList . map durEventToNumEvent) ctrlEventss
     progAndNoteEvents = EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) (foldl1 EventList.merge noteEventLists)
-    ctrlEvents = foldl1 EventList.merge ctrlEventLists
+    ctrlEvents        = foldl1 EventList.merge ctrlEventLists
 
 -- | rhythmToDuration(Rhythm(1%4)) == 512%1 * 1%4 == 512%4 == 128 ticks per quarter note
 standardTicks :: MidiFile.Division
@@ -285,11 +287,18 @@ noteToMidiNote (Instrument instr) (PercussionNote rhythm) =
 isMidiPercussion :: String -> Bool
 isMidiPercussion = flip elem (map show GeneralMidi.drums)
 
+isMidiPercussionInstrument :: Instrument -> Bool
+isMidiPercussionInstrument (Instrument name) = isMidiPercussion name
+
+isMidiPercussionVoice :: Voice -> Bool
+isMidiPercussionVoice = isMidiPercussionInstrument . voiceInstrument
+
+isMidiPercussionVoices :: [Voice] -> Bool
+isMidiPercussionVoices = any isMidiPercussionVoice 
+
 isMidiInstrument :: Instrument -> Bool
 isMidiInstrument (Instrument instrName) =
-  case GeneralMidi.instrumentNameToProgram instrName of
-       Nothing  -> False
-       Just _ -> True
+  isJust $ GeneralMidi.instrumentNameToProgram instrName
 
 voiceAndChannelToMidiVoice :: Voice -> ChannelMsg.Channel -> MidiVoice
 voiceAndChannelToMidiVoice (Voice instr notes controlss) channel =
@@ -336,34 +345,43 @@ equalVoiceByInstrument (Voice (Instrument instr1) _ _) (Voice (Instrument instr2
 orderVoiceByInstrument :: Voice -> Voice -> Ordering
 orderVoiceByInstrument (Voice (Instrument instr1) _ _) (Voice (Instrument instr2) _ _)
   | isMidiPercussion instr1 && isMidiPercussion instr2 = EQ
-  | otherwise = instr1 `compare` instr2
+  | otherwise                                          = instr1 `compare` instr2
 
 -- | Organize a list of voices into a list of list of
 --   voices grouped by instrument where all percussion
---   instruments are one instrument.
-collectVoicesByInstrument :: [Voice] -> [[Voice]]
-collectVoicesByInstrument =
-  groupVoicesByInstrument . sortVoicesByInstrument
+--   instruments are one instrument and voices list for
+--   percussion instruments (if any) are always last.
+collectVoicesByInstrumentWithPercussionLast :: [Voice] -> [[Voice]]
+collectVoicesByInstrumentWithPercussionLast voices = 
+  snd splitVoices ++ fst splitVoices
   where
     groupVoicesByInstrument = groupBy equalVoiceByInstrument
-    sortVoicesByInstrument = sortBy orderVoiceByInstrument
+    sortVoicesByInstrument  = sortBy orderVoiceByInstrument
+    allVoices               = (groupVoicesByInstrument . sortVoicesByInstrument) voices
+    splitVoices             = partition isMidiPercussionVoices allVoices
 
 -- | Map list of list of voice to list of list of midi channel
 --   using drum channel for percussion voices, otherwise channel
 --   zero.  Use when emitting Midi file per voice to be assembled
 --   later on, e.g. with Logic or GarageBand.
-assignAnyMidiChannelsByVoices :: [[Voice]] -> [[ChannelMsg.Channel]]
-assignAnyMidiChannelsByVoices =
-  map toMidiChannelss
+mapVoicessToPercussionChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
+mapVoicessToPercussionChannelss voicess = 
+  zipWith voiceAndLenToChans (map head voicess) (map length voicess)
   where
-    toMidiChannelss = map toAnyMidiChannel 
-    toAnyMidiChannel (Voice (Instrument instr) _ _)
-      | isMidiPercussion instr = GeneralMidi.drumChannel
-      | otherwise = ChannelMsg.toChannel 0
-
+    voiceAndLenToChans voice len =
+      replicate len $ if isMidiPercussionVoice voice then GeneralMidi.drumChannel else zeroChannel
+    zeroChannel =
+      ChannelMsg.toChannel 0
+    
 voicesToNotMidiInstruments :: [Voice] -> [Instrument]
 voicesToNotMidiInstruments voices =
-  filter (not . isMidiInstrument) $ map voiceInstrument voices
+  filter (not . isMidiInstrumentOrPercussion) $ map voiceInstrument voices
+  where
+    isMidiInstrumentOrPercussion instr = isMidiInstrument instr || isMidiPercussionInstrument instr
+
+{--
+  RealSimpleMusic API: scoreToMidiFiles
+--}
     
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -379,8 +397,8 @@ scoreToMidiFiles (Score title voices)
   | otherwise                     = zipWithM_ (titleVoicesAndChannelsToMidiFiles title) voicess channelss
   where
     notMidiInstruments = voicesToNotMidiInstruments voices
-    voicess            = collectVoicesByInstrument voices
-    channelss          = assignAnyMidiChannelsByVoices voicess
+    voicess            = collectVoicesByInstrumentWithPercussionLast voices
+    channelss          = mapVoicessToPercussionChannelss voicess
 
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -394,94 +412,103 @@ scoreToMidiFiles (Score title voices)
 --   Logic or GarageBand.
 titleVoicessAndChannelssToByteString :: String -> [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
 titleVoicessAndChannelssToByteString _ voicess channelss
-  | null voicess = error "titleVoicessAndChannelssToOneMidiFile empty voicess"
-  | null channelss = error "titleVoicessAndChannelssToOneMidiFile empty channelss"
+  | null voicess                       = error "titleVoicessAndChannelssToOneMidiFile empty voicess"
+  | null channelss                     = error "titleVoicessAndChannelssToOneMidiFile empty channelss"
   | length voicess /= length channelss = error $ "titleVoicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
-  | null midiVoices = error "titleVoicessAndChannelssToOneMidiFile empty midiVoices"
-  | null voiceEventLists = error "titleVoicessAndChannelssToOneMidiFile empty voiceEventLists"
-  | otherwise = SaveFile.toByteString midiFile
+  | null midiVoices                    = error "titleVoicessAndChannelssToOneMidiFile empty midiVoicess"
+  | null voiceEventLists               = error "titleVoicessAndChannelssToOneMidiFile empty voiceEventLists"
+  | otherwise                          = SaveFile.toByteString midiFile
   where
-    midiVoices = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
+    midiVoices      = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
     voiceEventLists = map midiVoiceToEventList midiVoices
-    midiFile = MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge voiceEventLists]
+    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge voiceEventLists]
     
 titleVoicessAndChannelssToOneMidiFile :: Title -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
 titleVoicessAndChannelssToOneMidiFile title voicess channelss =
   LazyByteString.writeFile fileName byteStream
   where
-    fileName = title ++ ".mid"
+    fileName   = title ++ ".mid"
     byteStream = titleVoicessAndChannelssToByteString title voicess channelss
 
--- | Map list of list of voice to list of list of midi channel
---   using drum channel for percussion voices, otherwise channels
---   0 to 15, with 9 reserved for percussion instruments (if any).
---   TBD: refactor using traverse.        
-assignCommonMidiChannelsByVoicess :: [[Voice]] -> [[ChannelMsg.Channel]]
-assignCommonMidiChannelsByVoicess voicess =
+-- | For each Voice in [[Voice]] (given that Instrument is the same),
+--   for non-percussion voices, allocate the next Midi channel, else
+--   for percussion voices, allocate the single Midi percussion channel.
+--   Answer the list of [[ChannelMsg.Channel]] sorted by channel value.
+mapVoicessToRepeatedChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
+mapVoicessToRepeatedChannelss voicess = 
   reverse $ snd $ foldl foldVoices (0, []) voicess
   where
-    foldVoices (count, chanss) voices
-      | isMidiPercussion instr = (count, replicate countVoices GeneralMidi.drumChannel : chanss)
-      | otherwise = (count', replicate countVoices (ChannelMsg.toChannel count) : chanss)
+    foldVoices (chan, chans) voices =
+      if isMidiPercussionVoices voices
+      then (chan, replicate countVoices GeneralMidi.drumChannel:chans)
+      else (chan + 1, replicate countVoices (ChannelMsg.toChannel chan):chans)
       where
-        (Voice (Instrument instr) _ _) = head voices
         countVoices = length voices
-        isAnyPerc = (any . any) isPercVoice voicess
-        isPercVoice (Voice (Instrument instrName) _ _) = isMidiPercussion instrName
-        count'
-          | isAnyPerc = count + 1
-          | otherwise = (+) count $ if count + 1 == ChannelMsg.fromChannel GeneralMidi.drumChannel then 2 else 1
 
--- | Deep copy from [[Voice]] to [[ChannelMsg.Channel]]
---   incrementing channel per Voice, for use only when
---   count of all Voice across [[Voice]] is less than 16,
---   otherwise ChannelMsg.Channel > 16 violates Midi
---   constraint and fails when converting.  Reserve
---   channel 9 for drums, if any are present.
---   TBD: refactor using traverse.        
-assignUniqueMidiChannelsByVoicess :: [[Voice]] -> [[ChannelMsg.Channel]]
-assignUniqueMidiChannelsByVoicess voicess =
-  reverse $ snd $ foldl foldVoices (0, []) voicess 
+-- | For each Voice in [[Voice]] (given that Instrument is the same),
+--   for non-percussion voices, allocate the next Midi channel, else
+--   for percussion voices, allocate the single Midi percussion channel.
+--   Answer the list of [[ChannelMsg.Channel]] sorted by channel value.
+mapVoicessToUniqueChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
+mapVoicessToUniqueChannelss voicess =
+  reverse $ snd $ foldl foldVoices (0, []) voicess
   where
-    foldVoices (count, chanss) voices =
-      (count', chans : chanss)
+    foldVoices (chan, chans) voices =
+      if isMidiPercussionVoices voices
+      then (chan, replicate countVoices GeneralMidi.drumChannel:chans)
+      else (chan + countVoices, map ChannelMsg.toChannel [chan..(chan + (countVoices - 1))]:chans)
       where
-        (count', chans) = foldl foldVoice (count, []) voices
-          where
-            isAnyPerc = any isPercVoice voices
-            isPercVoice (Voice (Instrument instr) _ _) = isMidiPercussion instr
-            foldVoice (count'', chans') (Voice (Instrument instr) _ _) 
-              | isMidiPercussion instr = (count'', GeneralMidi.drumChannel : chans')
-              | otherwise = (next, ChannelMsg.toChannel count'' : chans')
-              where
-                next
-                  | isAnyPerc = count'' + 1
-                  | otherwise = (+) count'' (if count'' + 1 == ChannelMsg.fromChannel GeneralMidi.drumChannel then 2 else 1)
+        countVoices = length voices
 
--- | Traverse [[Voice]] assigning ChannelMsg.Channel either
---   individually Voice by Voice e.g. if count of Voice is
---   less than highest allowed enum value (16) else in blocks
---   with same ChannelMsg.Channel per [Voice], in which case,
---   count of [Voice] still cannot exceed 16.
-assignMidiChannelsByVoices :: [[Voice]] -> [[ChannelMsg.Channel]]
-assignMidiChannelsByVoices voicess 
-  | countAllVoices < 16 = assignUniqueMidiChannelsByVoicess voicess
-  | otherwise =  assignCommonMidiChannelsByVoicess voicess
+-- | When writing to a single file and the count of all voices exceeds
+--   the maximum allowed number of Midi channels, then voices with the
+--   same instruments share a single Midi channel.  But each Voice carries
+--   a unique list of Controls (dynamic, balance, tempo), most of which
+--   are expected to be set once at a rhythmic point and remain in effect
+--   until a new value for that same control arrives.  To avoid controls
+--   being repeatedly reset, voice-by-voice, pass the controls list for
+--   the first voice through and suppress the controls list for all other
+--   voices.  If this is a problem, save the Score to a Midi file per
+--   voice and let an editor like GarageBand or Logic manage the extra
+--   channels.        
+maybeStripControls :: [[Voice]] -> [[Voice]]
+maybeStripControls voicess =
+  if (countAllVoices < maxMidiTrack)
+  then
+    voicess
+  else
+    map (\voices -> head voices:map stripControls (tail voices)) voicess
+  where
+    stripControls (Voice instr notes _) = Voice instr notes []
+    countAllVoices = sum $ map length voicess
+  
+-- | Given list of list of voices where each list is for the same instrument,
+--   return a list of list of channels.  When the count of unique instruments
+--   is fewer than the maximum count of Midi channels, then allocate a new
+--   channel per voice (allowing for the traditional association of for the
+--   percussion channel).  Else, allocate unique channels per list of voice.
+mapVoicessToChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
+mapVoicessToChannelss voicess 
+  | countAllVoices < maxMidiTrack = mapVoicessToUniqueChannelss voicess
+  | otherwise                     = mapVoicessToRepeatedChannelss voicess
   where
     countAllVoices = sum $ map length voicess
-
+      
 -- | Refactor
 convertScore :: (String -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
 convertScore convert (Score title voices) 
-  | countInstruments > 16         = error $ "convertScore, count of instruments: " ++ show countInstruments ++ " exceeds count of Midi channels: 16"
-  | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
-  | otherwise                     = convert title voicess channelss
+  | countVoices > maxMidiTrack = error $ "convertScore, count of voices: " ++ show countVoices ++ " exceeds count of Midi channels: " ++ show maxMidiTrack
+  | not (null notMidiInstruments)   = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
+  | otherwise                       = convert title voicess channelss
   where
     notMidiInstruments = voicesToNotMidiInstruments voices
-    voicess            = collectVoicesByInstrument voices
-    countInstruments   = length voicess
-    channelss          = assignMidiChannelsByVoices voicess
-
+    voicess            = (maybeStripControls . collectVoicesByInstrumentWithPercussionLast) voices
+    channelss          = mapVoicessToChannelss voicess
+    countVoices        = length voicess
+{--
+  RealSimpleMusic APIs: scoreToMidiFile, scoreToByteString (for test)
+--}
+                                         
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
 --   create a parallel list of list of Midi
@@ -498,3 +525,10 @@ scoreToMidiFile = convertScore titleVoicessAndChannelssToOneMidiFile
 -- | Short-circuit write to MidiFile with output to byte string for test.
 scoreToByteString :: Score -> LazyByteString.ByteString
 scoreToByteString = convertScore titleVoicessAndChannelssToByteString
+
+{--
+bash$ cabal repl
+λ: :m +Sound.MIDI.General
+λ: Sound.MIDI.General.drums
+[AcousticBassDrum,BassDrum1,SideStick,AcousticSnare,HandClap,ElectricSnare,LowFloorTom,ClosedHiHat,HighFloorTom,PedalHiHat,LowTom,OpenHiHat,LowMidTom,HiMidTom,CrashCymbal1,HighTom,RideCymbal1,ChineseCymbal,RideBell,Tambourine,SplashCymbal,Cowbell,CrashCymbal2,Vibraslap,RideCymbal2,HiBongo,LowBongo,MuteHiConga,OpenHiConga,LowConga,HighTimbale,LowTimbale,HighAgogo,LowAgogo,Cabasa,Maracas,ShortWhistle,LongWhistle,ShortGuiro,LongGuiro,Claves,HiWoodBlock,LowWoodBlock,MuteCuica,OpenCuica,MuteTriangle,OpenTriangle]
+--}

@@ -65,7 +65,7 @@ createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon
 createFJSimpleCanon instrName voices dur =
   SimpleCanon title ixNoteMotto cMaj distance instr voices repetitions  
   where
-    title = "Frere Jacques"
+    title = "Frere Jacques Simple"
     ixNoteMotto = Motto fjIxNotes
     instr = Instrument instrName
     distance = Rhythm dur
@@ -79,8 +79,7 @@ writeFJSimpleCanon scoreWriter instrName voices dur =
     score       = simpleCanonToScore simpleCanon
 
 -- | Generate test data for simple canon
---   writeFJSimpleCanon "Acoustic Grand Piano" 4 (2%1) -- traditional.
---   writeFJSimpleCanon "Marimba" 16 (1%16) -- "haze" effect.
+--   writeFJSimpleCanonToFile "Acoustic Grand Piano" 4 (2%1)
 writeFJSimpleCanonToFile :: String -> Int -> Rational -> IO ()
 writeFJSimpleCanonToFile = writeFJSimpleCanon scoreToMidiFile
     
@@ -90,7 +89,7 @@ writeFJSimpleCanonToByteString = writeFJSimpleCanon scoreToByteString
 testSimpleCanon :: Assertion
 testSimpleCanon =
   do
-    referenceFileSimpleCanonByteString <- LazyByteString.readFile "./tests/data/Frere Jacques.mid"
+    referenceFileSimpleCanonByteString <- LazyByteString.readFile "./tests/data/Frere Jacques Simple.mid"
     referenceFileSimpleCanonByteString @=? generatedSimpleCanonByteString
   where
     generatedSimpleCanonByteString = writeFJSimpleCanonToByteString "Acoustic Grand Piano" 4 (2%1)

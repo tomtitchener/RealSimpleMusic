@@ -8,6 +8,7 @@ import Test.Tasty.QuickCheck
 import Test.Tasty.HUnit
 
 import Music.UtilsTest
+import MusicToMidi.UtilsTest
 import Canon.UtilsTest
 
 main :: IO ()
@@ -35,6 +36,10 @@ tests =
   , testProperty       "transpose pitch id"              propTransposePitchId
   , testProperty       "major scale"                     propMajorScaleId
   , testProperty       "natural minor scale"             propNaturalMinorScaleId
+  -- MusicToMidi
+  , testCase           "mapVoicessToChannelss"           testMapVoicessToChannelss
+  , testCase           "mapManyVoicessToChannelss"       testMapManyVoicessToChannelss
+  , testCase           "mapVoicessToPercussionChannelss" testMapVoicessToPercussionChannelss
   -- canons
   , testCase           "simple canon"                    testSimpleCanon
   , testCase           "scales canon"                    testScalesCanon
