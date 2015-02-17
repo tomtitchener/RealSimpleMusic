@@ -142,6 +142,7 @@ pitchClass2MaybeCycleOfFifthsMinorScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic =
   pitchClass2MaybeCycleOfFifthsIndex tonic lowestMinorScaleOffset highestMinorScaleOffset
 
+-- | TBD: document this!  External API.
 scaleFromEnhChromaticScale :: PitchClass -> [Int] -> [Int] -> Scale
 scaleFromEnhChromaticScale tonic up down =
   Scale up' down'

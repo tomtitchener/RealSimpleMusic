@@ -1,10 +1,25 @@
 
+-- | RealSimpleMusic API.
+--   Types and records PitchClass, Scale, Octave, Pitch,
+--   IndexedPitch, and etc. implement components aggregated
+--   by top-level Score type.
+--   Convenience functions to
+--   1) generate scales: majorScale,
+--   naturalMinorScale, melodicMinorScale, and
+--   scaleFromEnhChromaticScale, 2) manipulate Pitch
+--   transposePitch, getPitch, 3) manipulate Note:
+--   indexedNoteToNote, indexedNoteToNotes, tranposeNote,
+--   transposeNoteMotto, noteToRhythm.
+--   Workhorse functions to convert Score to Midi file or
+--   files:  scoreToMidiFile, scoreToMidiFiles.
 module RealSimpleMusic (
    PitchClass(..)
    ,  Motto(..)
    ,  Scale(..)
    ,  majorScale
    ,  naturalMinorScale
+   ,  melodicMinorScale
+   ,  scaleFromEnhChromaticScale
    ,  Octave(..)
    ,  Pitch(..)
    ,  IndexedPitch(..)
@@ -36,8 +51,8 @@ module RealSimpleMusic (
    ,  Voice(..)
    ,  Title
    ,  Score(..)
-   , scoreToMidiFiles
    , scoreToMidiFile
+   , scoreToMidiFiles
   ) where
 
 import Music.Data
