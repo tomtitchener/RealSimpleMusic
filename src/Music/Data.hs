@@ -4,6 +4,8 @@
 
 module Music.Data where
 
+import Data.Ratio
+
 import Control.Applicative
 
 -- | Pitch classes with two accidentals enharmonic equivalents
@@ -56,6 +58,19 @@ newtype Tempo = Tempo { getTempo :: Int } deriving (Bounded, Enum, Show, Ord, Eq
 -- | Key Signature, negative for count flats, positive for count sharps
 newtype KeySignature = KeySignature { accidentals :: Int } deriving (Bounded, Enum, Show, Ord, Eq)
 
+-- | Time Signature, numerator and denominator
+data TimeSignature = TimeSignature { timeSigNum   :: Integer
+                                   , timeSigDenom :: Integer } deriving (Show)
+
+toRatio :: TimeSignature -> Rational
+toRatio ts = timeSigNum ts % timeSigDenom ts
+
+instance Ord TimeSignature where
+  x `compare` y = toRatio x `compare` toRatio y
+  
+instance Eq TimeSignature where
+  (==) x y = toRatio x == toRatio y
+
 -- | Articulation
 data Articulation = NoArticulation | Legato | Marcato | Staccato deriving (Bounded, Enum, Show, Ord, Eq)
 
@@ -68,6 +83,7 @@ data Control = DynamicControl Dynamic Rhythm
              | PanControl Pan Rhythm
              | TempoControl Tempo Rhythm
              | KeySignatureControl KeySignature Rhythm
+             | TimeSignatureControl TimeSignature Rhythm
              | ArticulationControl Articulation Rhythm
              | TextControl String Rhythm
              | InstrumentControl Instrument Rhythm deriving (Ord, Eq, Show)
@@ -76,6 +92,7 @@ data Control = DynamicControl Dynamic Rhythm
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
+--   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
 newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num)
 
 -- | A note is either an ordinary note with pitch and rhythm,

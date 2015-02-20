@@ -209,6 +209,10 @@ genMidiTempoMetaEvent (Tempo tempo) =
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
   (Event.MetaEvent . Meta.KeySig) $ MidiKeySignature.Cons MidiKeySignature.Major (MidiKeySignature.Accidentals countAccidentals)
+
+genMidiTimeSignatureMetaEvent :: TimeSignature -> Event.T
+genMidiTimeSignatureMetaEvent (TimeSignature numerator denominator) =
+  Event.MetaEvent $ Meta.TimeSig (fromIntegral numerator) (fromIntegral denominator) 0 0 -- metronome, n32notes
   
 genMidiSustenutoControlEvent :: ChannelMsg.Channel -> Articulation -> Event.T    
 genMidiSustenutoControlEvent chan articulation =
@@ -234,6 +238,8 @@ controlToEvent _ (TempoControl tempo rhythm) =
   (rhythmToDuration rhythm, genMidiTempoMetaEvent tempo)
 controlToEvent _ (KeySignatureControl keySignature rhythm) =
   (rhythmToDuration rhythm, genMidiKeySignatureMetaEvent keySignature)
+controlToEvent _ (TimeSignatureControl timeSignature rhythm) =
+  (rhythmToDuration rhythm, genMidiTimeSignatureMetaEvent timeSignature)
 controlToEvent channel (ArticulationControl articulation rhythm) =
   (rhythmToDuration rhythm, genMidiSustenutoControlEvent channel articulation)
 controlToEvent channel (InstrumentControl instrument rhythm) =
@@ -473,7 +479,7 @@ mapVoicessToUniqueChannelss voicess =
 --   channels.        
 maybeStripControls :: [[Voice]] -> [[Voice]]
 maybeStripControls voicess =
-  if (countAllVoices < maxMidiTrack)
+  if countAllVoices < maxMidiTrack
   then
     voicess
   else
