@@ -142,7 +142,10 @@ pitchClass2MaybeCycleOfFifthsMinorScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic =
   pitchClass2MaybeCycleOfFifthsIndex tonic lowestMinorScaleOffset highestMinorScaleOffset
 
--- | TBD: document this!  External API.
+-- | Given a starting pitch class (tonic), a list of ascending chromatic
+--   intervals, and a list of descending chromatic intervals, answer a
+--   scale by successively transposing the intervals, picking among
+--   enharmonic equivalents the target closest by the cycle of fifths.
 scaleFromEnhChromaticScale :: PitchClass -> [Int] -> [Int] -> Scale
 scaleFromEnhChromaticScale tonic up down =
   Scale up' down'
