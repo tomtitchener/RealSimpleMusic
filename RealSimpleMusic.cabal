@@ -26,7 +26,7 @@ source-repository head
 library
   hs-source-dirs:   src, tests
   exposed-modules:  RealSimpleMusic, Canon
-  other-modules:    Music.Data Music.Utils MusicToMidi.Utils Canon.Utils
+  other-modules:    Music.Data Music.Utils ScoreToMidi.Utils Canon.Utils ScoreToLilypond.Utils
   other-extensions: GeneralizedNewtypeDeriving
   build-depends:    base,
                     bytestring,
@@ -40,8 +40,7 @@ library
                     tasty-quickcheck,
                     vector
   default-language: Haskell2010
-  ghc-options:      -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns
---ghc-options:      -Wall -Werror -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns
+  ghc-options:      -Wall -Werror -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns
 
 test-suite music-tests
   type:             exitcode-stdio-1.0
@@ -59,5 +58,4 @@ test-suite music-tests
                     tasty-quickcheck,
                     vector
   default-language: Haskell2010
-  ghc-options:      -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
---ghc-options:      -Wall -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
+  ghc-options:      -Wall -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans

@@ -27,9 +27,6 @@ rotateTo x xs =
     Nothing -> error $ "rotateTo element " ++ show x ++ " is not in list " ++ show xs
     Just i  -> rotate i xs
 
-equivPitchClasses :: [[PitchClass]]
-equivPitchClasses = [[Cff, Cf, C, Cs, Css], [Dff, Df, D, Ds, Dss], [Eff, Ef, E, Es, Ess], [Fff, Ff, F, Fs, Fss], [Gff, Gf, G, Gs, Gss], [Aff, Af, A, As, Ass], [Bff, Bf, B, Bs, Bss]]
-
 enhChromPitchClasses :: [[PitchClass]]
 enhChromPitchClasses = [[Bs, C, Dff], [Bss, Cs, Df], [Css, D, Eff], [Ds, Ef, Fff], [Dss, E, Ff], [Es, F, Gff], [Ess, Fs, Gf], [Fss, G, Aff], [Gs, Af], [Gss, A, Bff], [As, Bf, Cff], [Ass, B, Cf]]
 
@@ -260,7 +257,6 @@ adjustOctave :: [PitchClass] -> Int -> Octave -> Octave
 adjustOctave up ix (Octave octave) =
   Octave $ ((ix + off) `div` len) + octave
   where
-    tonic = head up
     len   = length up
     off   = fromJust $ elemIndex (head up) (sort up)
 

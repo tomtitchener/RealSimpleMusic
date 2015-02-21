@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module MusicToMidi.Utils where
+module ScoreToMidi.Utils where
 
 import           Data.List
 import           Data.Maybe
@@ -211,8 +211,8 @@ genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
   (Event.MetaEvent . Meta.KeySig) $ MidiKeySignature.Cons MidiKeySignature.Major (MidiKeySignature.Accidentals countAccidentals)
 
 genMidiTimeSignatureMetaEvent :: TimeSignature -> Event.T
-genMidiTimeSignatureMetaEvent (TimeSignature numerator denominator) =
-  Event.MetaEvent $ Meta.TimeSig (fromIntegral numerator) (fromIntegral denominator) 0 0 -- metronome, n32notes
+genMidiTimeSignatureMetaEvent (TimeSignature num denom) =
+  Event.MetaEvent $ Meta.TimeSig (fromIntegral num) (fromIntegral denom) 0 0 -- metronome, n32notes
   
 genMidiSustenutoControlEvent :: ChannelMsg.Channel -> Articulation -> Event.T    
 genMidiSustenutoControlEvent chan articulation =

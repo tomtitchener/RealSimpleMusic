@@ -8,8 +8,9 @@ import Test.Tasty.QuickCheck
 import Test.Tasty.HUnit
 
 import Music.UtilsTest
-import MusicToMidi.UtilsTest
+import ScoreToMidi.UtilsTest
 import Canon.UtilsTest
+import ScoreToLilypond.UtilsTest
 
 main :: IO ()
 main = defaultMain tests
@@ -25,7 +26,6 @@ tests =
   , testProperty       "rotateTo head is id"             propRotateToFirstIsSame
   , testCase           "cycle of fifths length"          testCycleOfFifthsLength
   , testCase           "cycle of fifths vals"            testCycleOfFifthsValues
-  , testCase           "equiv pitch class vals"          testEquivPitchClassValues
   , testCase           "enh chromatic pitch class vals"  testEnhChromPitchClassValues
   , testCase           "fifths enh degrees len"          testFifthsEnhDegreesLen
   , testCase           "fifths enh degrees vals"         testFifthsEnhDegreesValues
@@ -36,10 +36,14 @@ tests =
   , testProperty       "transpose pitch id"              propTransposePitchId
   , testProperty       "major scale"                     propMajorScaleId
   , testProperty       "natural minor scale"             propNaturalMinorScaleId
-  -- MusicToMidi
+  -- ScoreToMidi
   , testCase           "mapVoicessToChannelss"           testMapVoicessToChannelss
   , testCase           "mapManyVoicessToChannelss"       testMapManyVoicessToChannelss
   , testCase           "mapVoicessToPercussionChannelss" testMapVoicessToPercussionChannelss
+  -- ScoreToLilypond
+  , testCase           "equiv pitch class vals"          testEquivPitchClassValues
+  , testCase           "testPitchNames"                  testPitchNames
+  , testCase           "testAccidentalNames"             testAccidentalNames
   -- canons
   , testCase           "simple canon"                    testSimpleCanon
   , testCase           "scales canon"                    testScalesCanon

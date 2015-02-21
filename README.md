@@ -8,7 +8,7 @@ Folder hierarchy:
        ./src + -- source files
              RealSimpleMusic.hs -- module definition for music types and
                                    conversion functions, implementation
-                                   files in Music and MusicToMidi folders
+                                   files in Music and ScoreToMidi folders
              Canon.hs -- module definition for canon types and conversion
                          functions
              ./Canon +
@@ -18,19 +18,19 @@ Folder hierarchy:
                      Data.hs -- Music types
                      Utils.hs -- Functions, majorScale, transposeNote, 
                                  transposePitch, etc.
-             ./MusicToMidi +
+             ./ScoreToMidi +
                      Utils.hs -- scoreToMidi and ScoreToMidiFiles functions
                                  and support functions
        ./tests + -- test files
-               MainTestSuite.hs -- tests for Music, MusicToMidi, and Canon
+               MainTestSuite.hs -- tests for Music, ScoreToMidi, and Canon
                                    functions
                ./Canon +
                        UtilsTest.hs -- HUnit tests for Canon functions
                ./Music +
                        UtilsTest.hs -- HUnit and QuickCheck tests for Music
                                        functions
-               ./MusicToMidi +
-                       UtilsTest.hs -- HUnit tests for MusicToMidi functions
+               ./ScoreToMidi +
+                       UtilsTest.hs -- HUnit tests for ScoreToMidi functions
                ./data
                        Frere Jacques Canon.mid   -- simple canon reference
                        Frere Jacques Scales.mid  -- scales canon reference
@@ -59,7 +59,7 @@ up, element-by-element into a simple `Score` type:
   corresonds to a half-note, `1%16` to a sixteenth, and etc, including
   multiples, e.g. `7%16`, `3%2`, or `2%1`.
 
-The file `./src/MusicToMidi/Utils.hs` contains the two main entry  
+The file `./src/ScoreToMidi/Utils.hs` contains the two main entry  
 points:
 
 * `scoreToMidiFile`: convert a score to a single Midi file, assigning

@@ -57,4 +57,4 @@ module RealSimpleMusic (
 
 import Music.Data
 import Music.Utils
-import MusicToMidi.Utils
+import ScoreToMidi.Utils

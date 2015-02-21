@@ -1,8 +1,8 @@
 
-module MusicToMidi.UtilsTest where
+module ScoreToMidi.UtilsTest where
 
 import           RealSimpleMusic
-import           MusicToMidi.Utils
+import           ScoreToMidi.Utils
 import           Test.HUnit
 import qualified Sound.MIDI.Message.Channel       as ChannelMsg
 

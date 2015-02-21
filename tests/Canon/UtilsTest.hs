@@ -9,7 +9,7 @@ import Test.HUnit
 import Canon.Data
 import Canon.Utils
 
-import MusicToMidi.Utils
+import ScoreToMidi.Utils
 
 import qualified Data.ByteString.Lazy as LazyByteString
 
