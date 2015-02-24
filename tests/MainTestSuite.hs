@@ -43,7 +43,10 @@ tests =
   -- ScoreToLilypond
   , testCase           "equiv pitch class vals"          testEquivPitchClassValues
   , testCase           "testPitchNames"                  testPitchNames
-  , testCase           "testAccidentalNames"             testAccidentalNames
+  , testCase           "testRenderPitchOctaves"          testRenderPitchOctaves
+  , testCase           "testRenderPitchAccidentals"      testRenderPitchAccidentals
+  , testCase           "testRenderRhythmBase"            testRenderRhythmBase
+  , testCase           "testRenderRhythmDots"            testRenderRhythmDots
   -- canons
   , testCase           "simple canon"                    testSimpleCanon
   , testCase           "scales canon"                    testScalesCanon
