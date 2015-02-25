@@ -119,6 +119,30 @@ renderNotes :: [Note] -> Builder
 renderNotes [] = mempty
 renderNotes (note:notes) = renderNote note <> mconcat [ charEncoding ' ' <> renderNote note' | note' <- notes]
 
+renderInstrument :: Instrument -> Builder
+renderInstrument (Instrument instrumentName) =
+  stringEncoding $ "\\set Staff.instrumentName = #\"" ++ instrumentName ++ "\""
+
+renderedVoicePrefix :: Builder
+renderedVoicePrefix = stringEncoding "\\new Voice \\with {\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}"
+
+renderedGlobalPrefix :: Builder
+renderedGlobalPrefix = stringEncoding "\\global"
+
+renderedSpace :: Builder
+renderedSpace = charEncoding ' '
+
+renderedOpen :: Builder
+renderedOpen = charEncoding '{'
+
+renderedClose :: Builder
+renderedClose = charEncoding '}'
+
+-- TBD:  [[Controls]]
+renderVoice :: Voice -> Builder
+renderVoice (Voice instrument notes _) =
+  renderedVoicePrefix <> renderedOpen <> renderInstrument instrument <> renderedSpace <> renderedGlobalPrefix <> renderedSpace <> renderNotes notes <> renderedClose
+
 {-- WIP
 
 {--
@@ -156,9 +180,6 @@ staffFrame instrument =
   where
     encodedInstrument = stringEncoding instrument
 
-renderInstrument :: Instrument -> Builder
-renderInstrument (Instrument name) =
-  undefined
   
 {--
 Long notes which overrun bar lines can be converted automatically to tied notes. This is done by replacing the Note_heads_engraver with the Completion_heads_engraver.
@@ -170,13 +191,14 @@ In the following example, notes and rests crossing the bar lines are split, note
        \remove "Rest_engraver"
        \consists "Completion_rest_engraver"
       }
+      {\set Staff.instrumentName = #"Viola"
+       \violaMusic
+      }
 --}
 
-voicePrefix :: Builder
-voicePrefix = stringEncoding "\\new Voice \\with {\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\""
 
-renderVoice :: Voice -> Builder
-renderVoice (Voice instrument notes _) =
-  voicePrefix <> renderInstrument instrument <> renderNotes notes <> charEncoding '}'
+What's pattern given a Voice?  Want something that can be captured in both score and part books.
+Is readability really an issue?  Might as well encode in-line.  Assume global context for time
+and key signatures at least for the start.
 
 --}
