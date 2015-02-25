@@ -35,12 +35,40 @@ testRenderPitchAccidentals =
 
 testRenderRhythmBase :: Assertion
 testRenderRhythmBase =
-  map (toLazyByteString . stringEncoding) ["1", "2", "4", "8", "16", "32", "64"] @=? map toLazyByteString (concatMap (renderRhythm . Rhythm) [1%1, 1%2, 1%4, 1%8, 1%16, 1%32, 1%64])
+  (map . map) (toLazyByteString . stringEncoding) [["1"], ["2"], ["4"], ["8"], ["16"], ["32"], ["64"]] @=? (map . map) toLazyByteString (map (renderRhythm . Rhythm) [1%1, 1%2, 1%4, 1%8, 1%16, 1%32, 1%64])
 
 testRenderRhythmDots :: Assertion
 testRenderRhythmDots =
-  map (toLazyByteString . stringEncoding) ["1.", "2.", "4.", "8.", "16.", "32.", "64."] @=? map toLazyByteString (concatMap (renderRhythm . Rhythm) [3%2, 3%4, 3%8, 3%16, 3%32, 3%64, 3%128])
+  (map . map) (toLazyByteString . stringEncoding) [["1."], ["2."], ["4."], ["8."], ["16."], ["32."], ["64."]] @=? (map . map) toLazyByteString (map (renderRhythm . Rhythm) [3%2, 3%4, 3%8, 3%16, 3%32, 3%64, 3%128])
 
 testRenderRhythmTies :: Assertion
 testRenderRhythmTies =
-  undefined
+  (map . map) (toLazyByteString . stringEncoding) [["1", "4"], ["1", "2."], ["1", "1", "4"], ["2", "8"], ["2."]] @=? (map . map) toLazyByteString (map (renderRhythm . Rhythm) [5%4, 7%4, 9%4, 5%8, 6%8])
+
+testRenderNote :: Assertion
+testRenderNote =
+  (toLazyByteString . stringEncoding) "c'64"  @=? (toLazyByteString . renderNote) (Note (Pitch C (Octave 0)) (Rhythm (1%64)))
+  
+testRenderAccentedNote :: Assertion
+testRenderAccentedNote =
+  (toLazyByteString . stringEncoding) "d'32 \\mf"  @=? (toLazyByteString . renderNote) (AccentedNote (Pitch D (Octave 0)) (Rhythm (1%32)) Normal)
+
+testRenderRest :: Assertion
+testRenderRest =
+  (toLazyByteString . stringEncoding) "r64"  @=? (toLazyByteString . renderNote) (Rest (Rhythm (1%64)))
+  
+testRenderPercussionNote :: Assertion
+testRenderPercussionNote =
+  (toLazyByteString . stringEncoding) "c64"  @=? (toLazyByteString . renderNote) (PercussionNote (Rhythm (1%64)))
+  
+testRenderAccentedPercussionNote :: Assertion
+testRenderAccentedPercussionNote =
+  (toLazyByteString . stringEncoding) "c32 \\f"  @=? (toLazyByteString . renderNote) (AccentedPercussionNote (Rhythm (1%32)) Hard)
+
+testRenderTiedNote :: Assertion
+testRenderTiedNote =
+  (toLazyByteString . stringEncoding) "c'1~ c'4" @=? (toLazyByteString . renderNote) (Note (Pitch C (Octave 0)) (Rhythm (5%4)))
+
+testRenderNotes :: Assertion
+testRenderNotes =
+  (toLazyByteString . stringEncoding) "c8 d16 e32 f64 g128 a64 b32" @=? (toLazyByteString . renderNotes) (zipWith (\pc dur -> Note (Pitch pc (Octave (-1))) (Rhythm dur)) (ascendingScale (majorScale C)) [1%8, 1%16, 1%32, 1%64, 1%128, 1%64, 1%32])

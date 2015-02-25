@@ -66,7 +66,7 @@ renderPitch (Pitch pitchClass octave) =
 
 renderRhythm :: Rhythm -> [Builder]
 renderRhythm (Rhythm rhythm)
-  | num > 1 && denom == 1 = replicate num $ intDec denom
+  | num > 1 && denom == 1 = replicate num $ intDec denom  -- TBD: longa, breve (if it matters)
   | num == 1              = [intDec denom]
   | num == 3              = [intDec (denom `div` 2) <> dot]
   | otherwise             = intDec remdenom : renderRhythm (Rhythm (rhythm - remain))
@@ -93,15 +93,19 @@ renderNoteForRhythms renderedPitch (renderedRhythm:renderedRhythms) =
 
 renderAccentedNoteForRhythms :: Builder -> Builder -> [Builder] -> Builder
 renderAccentedNoteForRhythms _ _ [] = mempty
-renderAccentedNoteForRhythms renderedPitch renderedAccent [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedAccent
+renderAccentedNoteForRhythms renderedPitch renderedAccent [renderedRhythm] = renderedPitch <> renderedRhythm <> charEncoding ' ' <> renderedAccent
 renderAccentedNoteForRhythms renderedPitch renderedAccent (renderedRhythm:renderedRhythms) =
-  renderedPitch <> renderedRhythm <> renderedAccent <> mconcat [stringEncoding "~ " <> renderAccentedNoteForRhythms renderedPitch renderedAccent renderedRhythms]
+  renderedPitch <> renderedRhythm <> charEncoding ' ' <> renderedAccent <> mconcat [stringEncoding "~ " <> renderAccentedNoteForRhythms renderedPitch renderedAccent renderedRhythms]
 
 renderRestForRhythms :: [Builder] -> Builder
 renderRestForRhythms [] = mempty
 renderRestForRhythms [renderedRhythm] = charEncoding 'r' <> renderedRhythm
 renderRestForRhythms (renderedRhythm:renderedRhythms) =
   charEncoding 'r' <> renderedRhythm <> mconcat [charEncoding ' ' <> renderRestForRhythms renderedRhythms]
+
+-- Pitch doesn't matter when written to a percussion staff
+dummyPercussionPitch :: Pitch
+dummyPercussionPitch = Pitch C $ Octave (-1)
 
 renderNote :: Note -> Builder
 renderNote (Note pitch rhythm) =
@@ -111,9 +115,9 @@ renderNote (AccentedNote pitch rhythm accent) =
 renderNote (Rest rhythm) =
   renderRestForRhythms (renderRhythm rhythm)
 renderNote (PercussionNote rhythm) =
-  renderNoteForRhythms (renderPitch (Pitch C (Octave (-1)))) (renderRhythm rhythm)
+  renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderRhythm rhythm) 
 renderNote (AccentedPercussionNote rhythm accent) =
-  renderAccentedNoteForRhythms (renderPitch (Pitch C (Octave (-1)))) (renderAccent accent) (renderRhythm rhythm)
+  renderAccentedNoteForRhythms (renderPitch dummyPercussionPitch) (renderAccent accent) (renderRhythm rhythm) 
 
 renderNotes :: [Note] -> Builder
 renderNotes [] = mempty
