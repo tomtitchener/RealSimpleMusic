@@ -141,7 +141,8 @@ data Voice = Voice { voiceInstrument :: Instrument
 -- | Synonym for String
 type Title = String
 
--- | Title and List of voices make up a score (composer and date, too?).
+-- | Title and List of voices make up a score.
+--   TBD:  time and key signatures, composer, date.
 data Score = Score { scoreTitle :: Title
                    , scoreVoices :: [Voice]
                    } deriving (Show)

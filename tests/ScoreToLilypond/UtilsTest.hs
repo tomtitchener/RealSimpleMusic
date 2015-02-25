@@ -25,6 +25,10 @@ testAccidentalNames :: Assertion
 testAccidentalNames =
   replicate (length equivPitchClasses) (length accidentalNames) @=? map length equivPitchClasses
 
+testAccentNames :: Assertion
+testAccentNames = 
+  fromEnum (maxBound::Accent) @=? (length accentStrings) - 1
+
 testRenderPitchOctaves :: Assertion
 testRenderPitchOctaves =
   map (toLazyByteString . stringEncoding) ["c'", "c''", "c'''", "c", "c,", "c,,"] @=? map (toLazyByteString . renderPitch) [Pitch C (Octave octave) | octave <- [0, 1, 2, -1, -2, -3]]
@@ -51,7 +55,7 @@ testRenderNote =
   
 testRenderAccentedNote :: Assertion
 testRenderAccentedNote =
-  (toLazyByteString . stringEncoding) "d'32 \\mf"  @=? (toLazyByteString . renderNote) (AccentedNote (Pitch D (Octave 0)) (Rhythm (1%32)) Normal)
+  (toLazyByteString . stringEncoding) "d'32 \\verysoft"  @=? (toLazyByteString . renderNote) (AccentedNote (Pitch D (Octave 0)) (Rhythm (1%32)) VerySoft)
 
 testRenderRest :: Assertion
 testRenderRest =
@@ -63,7 +67,7 @@ testRenderPercussionNote =
   
 testRenderAccentedPercussionNote :: Assertion
 testRenderAccentedPercussionNote =
-  (toLazyByteString . stringEncoding) "c32 \\f"  @=? (toLazyByteString . renderNote) (AccentedPercussionNote (Rhythm (1%32)) Hard)
+  (toLazyByteString . stringEncoding) "c32 \\hard"  @=? (toLazyByteString . renderNote) (AccentedPercussionNote (Rhythm (1%32)) Hard)
 
 testRenderTiedNote :: Assertion
 testRenderTiedNote =
@@ -72,3 +76,4 @@ testRenderTiedNote =
 testRenderNotes :: Assertion
 testRenderNotes =
   (toLazyByteString . stringEncoding) "c8 d16 e32 f64 g128 a64 b32" @=? (toLazyByteString . renderNotes) (zipWith (\pc dur -> Note (Pitch pc (Octave (-1))) (Rhythm dur)) (ascendingScale (majorScale C)) [1%8, 1%16, 1%32, 1%64, 1%128, 1%64, 1%32])
+
