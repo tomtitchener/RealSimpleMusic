@@ -63,10 +63,10 @@ afMin = naturalMinorScale Af
 -- Simple Canon
 createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon
 createFJSimpleCanon instrName voices dur =
-  SimpleCanon title ixNoteMotto cMaj distance instr voices repetitions  
+  SimpleCanon title ixNotes cMaj distance instr voices repetitions  
   where
     title = "Frere Jacques Simple"
-    ixNoteMotto = Motto fjIxNotes
+    ixNotes = fjIxNotes
     instr = Instrument instrName
     distance = Rhythm dur
     repetitions = 5
@@ -97,10 +97,10 @@ testSimpleCanon =
 -- Scales Canon
 createFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> ScalesCanon
 createFJScalesCanon instruments scales octaves dur =
-  ScalesCanon title ixNoteMotto scales distance octaves instruments repetitions  
+  ScalesCanon title ixNotes scales distance octaves instruments repetitions  
   where
     title = "Frere Jacques Scales"
-    ixNoteMotto = Motto fjIxNotes
+    ixNotes = fjIxNotes
     distance = Rhythm dur
     repetitions = 5
 
@@ -131,10 +131,10 @@ testScalesCanon =
 -- Canon
 createFJCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> Canon
 createFJCanon instruments scales octaves durs =
-  Canon title ixNoteMottos scales distances octaves instruments repetitions  
+  Canon title ixNotess scales distances octaves instruments repetitions  
   where
     title = "Frere Jacques Canon"
-    ixNoteMottos = replicate (length instruments) $ Motto fjIxNotes
+    ixNotess = replicate (length instruments) fjIxNotes
     distances = map Rhythm durs
     repetitions = 5
 

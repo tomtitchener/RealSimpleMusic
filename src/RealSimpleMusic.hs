@@ -9,12 +9,11 @@
 --   scaleFromEnhChromaticScale, 2) manipulate Pitch
 --   transposePitch, getPitch, 3) manipulate Note:
 --   indexedNoteToNote, indexedNoteToNotes, tranposeNote,
---   transposeNoteMotto, noteToRhythm.
+--   transposeNotes, noteToRhythm.
 --   Workhorse functions to convert Score to Midi file or
 --   files:  scoreToMidiFile, scoreToMidiFiles.
 module RealSimpleMusic (
    PitchClass(..)
-   ,  Motto(..)
    ,  Scale(..)
    ,  majorScale
    ,  naturalMinorScale
@@ -25,7 +24,6 @@ module RealSimpleMusic (
    ,  IndexedPitch(..)
    ,  transposePitch
    ,  getPitch
-   ,  PitchMotto
    ,  Dynamic(..)
    ,  Balance(..)
    ,  Pan(..)
@@ -42,9 +40,7 @@ module RealSimpleMusic (
    ,  indexedNotesToNotes
    ,  transposeNote
    ,  noteToRhythm
-   ,  NoteMotto
-   ,  IndexedNoteMotto
-   ,  transposeNoteMotto
+   ,  transposeNotes
    ,  Interval
    ,  Intervals
    ,  Chord(..)

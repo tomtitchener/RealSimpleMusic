@@ -27,7 +27,7 @@ testAccidentalNames =
 
 testAccentNames :: Assertion
 testAccentNames = 
-  fromEnum (maxBound::Accent) @=? (length accentStrings) - 1
+  fromEnum (maxBound::Accent) @=? (length accentValues)
 
 testRenderPitchOctaves :: Assertion
 testRenderPitchOctaves =

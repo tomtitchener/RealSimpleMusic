@@ -6,14 +6,8 @@ module Music.Data where
 
 import Data.Ratio
 
-import Control.Applicative
-
 -- | Pitch classes with two accidentals enharmonic equivalents
 data PitchClass = Bs|C|Dff|Bss|Cs|Df|Css|D|Eff|Ds|Ef|Fff|Dss|E|Ff|Es|F|Gff|Ess|Fs|Gf|Fss|G|Aff|Gs|Af|Gss|A|Bff|As|Bf|Cff|Ass|B| Cf deriving (Bounded, Enum, Show, Ord, Eq) 
-
--- | Motto is just a list
---   TBD: is there any value in this?
-newtype Motto a = Motto { getMotto :: [a] } deriving (Eq, Show, Functor, Applicative, Monad)
 
 -- | Scale is two lists of pitch classes
 data Scale = Scale { ascendingScale  :: [PitchClass]
@@ -35,9 +29,6 @@ data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 
 -- | Indexed pitch requires index into a Scale and Octave
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
-
--- | A PitchMotto is a list of pitches
-type PitchMotto = Motto Pitch
 
 -- | Dynamic
 data Dynamic = NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo deriving (Bounded, Enum, Show, Ord, Eq)
@@ -87,9 +78,21 @@ data Control = DynamicControl Dynamic Rhythm
              | ArticulationControl Articulation Rhythm
              | TextControl String Rhythm
              | InstrumentControl Instrument Rhythm deriving (Ord, Eq, Show)
-
+                                                            
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
+
+-- | Integrated controls
+data Control' = DynamicControl' Dynamic
+              | BalanceControl' Balance
+              | PanControl' Pan
+              | TempoControl' Tempo
+              | KeySignatureControl' KeySignature
+              | TimeSignatureControl' TimeSignature
+              | ArticulationControl' Articulation
+              | TextControl' String
+              | InstrumentControl' Instrument
+              | AccentControl' Accent deriving (Ord, Eq, Show)
 
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
 --   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
@@ -105,9 +108,10 @@ data Note = Note Pitch Rhythm
           | Rest Rhythm
           | PercussionNote Rhythm
           | AccentedPercussionNote Rhythm Accent deriving (Eq, Show)
-
--- | A NoteMotto is a list of Notes
-type NoteMotto = Motto Note
+                                                          
+data Note' = Note' Pitch Rhythm [Control']
+           | Rest' Rhythm [Control']
+           | PercussionNote' Rhythm [Control'] deriving (Eq, Show)
 
 -- | An indexed note follows the shape of a note but with
 --   an indexed pitch replacing Pitch.
@@ -117,9 +121,6 @@ data IndexedNote =
   | IndexedRest Rhythm
   | IndexedPercussionNote Rhythm
   | IndexedAccentedPercussionNote Rhythm Accent deriving (Eq, Show)
-
--- | An IndexedNoteMotto is a list of IndexedNotes, requiring a Scale to convert to a NoteMotto
-type IndexedNoteMotto = Motto IndexedNote
 
 -- | Intervals may be negative or positive and are computed as steps in a Scale
 type Interval = Int

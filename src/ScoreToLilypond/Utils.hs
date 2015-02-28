@@ -225,6 +225,28 @@ renderedVoicePrefix = stringEncoding "\\new Voice \\with \n{\\remove \"Note_head
 
 -- | A voice depends on global, score, and accent contexts.
 --   TBD:  [[Controls]]  Each of these should be processed alongside notes!
+--   Therre are two problems: 1) map the various controls to Lilypond text:
+--   DynamicControl, BalanceControl, PanControl, TempoControl, KeySignatureControl,
+--   TimeSignatureControl, ArticulationControl, TextControl, InstrumentControl
+--   2) add the Lilypond text at the right rhythmic point in the list of notes
+--   for the voice.  To solve the second problem, each of the lists in the
+--   controlss and the notes must be iterated across simultaneously so that
+--   the control text comes at the right point in the score.
+--   For articulations, see Section A.13 in the reference.
+--   Dynamics and Articulations are attached to individual notes, raising a
+--   question about the way I keep them strictly separate in my Music type
+--   definitions.  It'd certainly render more simply if my notes each had
+--   attached an optionally empty list of controls.  For some controls, it
+--   just doesn't make much sense to have the control abstracted from a note!
+--   And maybe for simplicity I just convert and have all controls associate
+--   with a note.  For continuously varying behavior like a crescendo across
+--   a sustained note there's already an annotation. At most I might be losing
+--   some degree of control from the Midi rendering, e.g. continuously varying
+--   the pan setting across a sustained note.  It all sort of falls out nicely
+--   the way things are, thanks to the Midi merge behavior.  And I'm going to
+--   have to rework my rendering code with integrated controls e.g. turning
+--   into zero delay Midi events that come before a note on event.  
+
 renderVoice :: Voice -> Builder
 renderVoice (Voice instrument notes _) =
   renderedVoicePrefix

@@ -1,5 +1,7 @@
 -- | Canons to explore RealSimpleMusic
 
+-- TBD:  rests at the end of the voices.
+
 module Canon.Utils where
 
 import           Data.Ratio
@@ -9,12 +11,12 @@ import           Canon.Data
 
 -- | Generalized converter for all Canon types to Score.
 --   Assumes:  lengths of ascending and descending notes of Scale are the same.
-commonCanonToScore ::  Title -> [IndexedNoteMotto] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
-commonCanonToScore title mottos scales rhythms octaves instruments repetitions =
+commonCanonToScore ::  Title -> [[IndexedNote]] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
+commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions =
   Score title voices
   where
     lenScale  = length $ ascendingScale $ head scales
-    notess    = zipWith indexedNotesToNotes scales $ map (\(Motto ixNotes) -> ixNotes) mottos
+    notess    = zipWith indexedNotesToNotes scales ixNotess
     intervals = map ((* lenScale) . getOctave) octaves
     xpNotes   = zipWith3 (\scale interval notes -> map (transposeNote scale interval) notes) scales intervals notess
     tunes     = map (concat . replicate repetitions) xpNotes
@@ -26,15 +28,15 @@ commonCanonToScore title mottos scales rhythms octaves instruments repetitions =
 
 -- | Converting most general Canon to Score is just a call to most general conversion function.
 canonToScore :: Canon -> Score
-canonToScore (Canon title ixNoteMottos scales rhythms octaves instruments repetitions) =
-  commonCanonToScore title ixNoteMottos scales rhythms octaves instruments repetitions
+canonToScore (Canon title ixNotess scales rhythms octaves instruments repetitions) =
+  commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions
 
 -- | To convert scales canon to a canon, replicate notes and imitative distances.
 scalesCanonToCanon :: ScalesCanon -> Canon
 scalesCanonToCanon scalesCanon =
   Canon {
   cTitle         = scTitle scalesCanon
-  ,cIxNoteMottos = replicate countVoices $ scIxNoteMotto scalesCanon
+  ,cIxNotess     = replicate countVoices $ scIxNotes scalesCanon
   ,cScales       = scScales scalesCanon
   ,cDistances    = replicate countVoices $ scDistance scalesCanon
   ,cOctaves      = scOctaves scalesCanon
@@ -53,7 +55,7 @@ simpleCanonToScalesCanon :: SimpleCanon -> ScalesCanon
 simpleCanonToScalesCanon simpleCanon =
   ScalesCanon {
   scTitle        = sTitle simpleCanon
-  ,scIxNoteMotto = sIxNoteMotto simpleCanon
+  ,scIxNotes     = sIxNotes simpleCanon
   ,scScales      = replicate countVoices $ sScale simpleCanon
   ,scDistance    = sDistance simpleCanon
   ,scOctaves     = replicate countVoices (Octave 0)

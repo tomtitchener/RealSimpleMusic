@@ -243,11 +243,11 @@ transposeNote _ _ (PercussionNote rhythm) =
 transposeNote _ _ (AccentedPercussionNote rhythm accent) =
   AccentedPercussionNote rhythm accent
     
--- | Given a scale, an interval, and a NoteMotto, answer
---   a new NoteMotto with all the Pitches transposed 
-transposeNoteMotto :: Scale -> Interval -> NoteMotto -> NoteMotto
-transposeNoteMotto scale interval noteMotto =
-  Motto $ map (transposeNote scale interval) (getMotto noteMotto)
+-- | Given a scale, an interval, and a list of Notes, answer
+--   a new list of Notes with all the Pitches transposed 
+transposeNotes :: Scale -> Interval -> [Note] -> [Note]
+transposeNotes scale interval notes =
+  map (transposeNote scale interval) notes
 
 -- Given the ascending part of a scale, an index for a pitch in that scale,
 -- and an octave relative to the tonic of that scale, answer the absolute 

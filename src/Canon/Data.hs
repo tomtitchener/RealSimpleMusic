@@ -12,7 +12,7 @@ import           RealSimpleMusic
 data SimpleCanon =
   SimpleCanon
   {sTitle       :: Title
-  ,sIxNoteMotto :: IndexedNoteMotto
+  ,sIxNotes     :: [IndexedNote]
   ,sScale       :: Scale
   ,sDistance    :: Rhythm
   ,sInstrument  :: Instrument
@@ -24,7 +24,7 @@ data SimpleCanon =
 data ScalesCanon =
   ScalesCanon
   {scTitle       :: Title
-  ,scIxNoteMotto :: IndexedNoteMotto
+  ,scIxNotes     :: [IndexedNote]
   ,scScales      :: [Scale]
   ,scDistance    :: Rhythm
   ,scOctaves     :: [Octave]
@@ -36,7 +36,7 @@ data ScalesCanon =
 data Canon =
   Canon
   {cTitle       :: Title
-  ,cIxNoteMottos :: [IndexedNoteMotto]
+  ,cIxNotess    :: [[IndexedNote]]
   ,cScales      :: [Scale]
   ,cDistances   :: [Rhythm]
   ,cOctaves     :: [Octave]
