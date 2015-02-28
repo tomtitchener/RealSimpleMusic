@@ -1,9 +1,8 @@
 
-
 module ScoreToLilypond.Utils where
 
-import           RealSimpleMusic
---import qualified Data.ByteString.Lazy               as L
+import           Music.Data
+import qualified Data.ByteString.Lazy               as L
 import           Data.ByteString.Builder
 import           Data.List
 import           Data.Ratio
@@ -30,17 +29,18 @@ quoteChar = '\''
 commaChar = ','
 
 -- | Rendered character constants 
-renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie :: Builder
-renderedSpace = charEncoding ' '
-renderedOpen  = charEncoding '{'
-renderedClose = charEncoding '}'
-renderedDot   = charEncoding '.'
-renderedRest  = charEncoding 'r'
-renderedTie   = charEncoding '~'
+renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline :: Builder
+renderedSpace   = charEncoding ' '
+renderedOpen    = charEncoding '{'
+renderedClose   = charEncoding '}'
+renderedDot     = charEncoding '.'
+renderedRest    = charEncoding 'r'
+renderedTie     = charEncoding '~'
+renderedNewline = charEncoding '\n'
 
 -- | Global reference sets key and time signatures.
-renderedGlobalPrefix :: Builder
-renderedGlobalPrefix = stringEncoding "\\global"
+renderedGlobalKey :: Builder
+renderedGlobalKey = stringEncoding "\\global"
 
 -- | Unique PitchClass by pitch and accidental, aggregated by name for all accidentals
 --   to map to separate encoding for Lilypond pitch and accidentals.
@@ -110,8 +110,13 @@ renderPitch (Pitch pitchClass octave) =
 --   non-integral, non-dotted rhythms are rendered as
 --   multiple values meant to be tied notes when matched
 --   up with pitch, accidental, and octave renderings.
+--   Note zero-length duration may be placeholder e.g.
+--   for "no rest" for the first voice of a canon.
+--   Answser empty list so higher-level renderer drops
+--   value.
 renderRhythm :: Rhythm -> [Builder]
 renderRhythm (Rhythm rhythm)
+  | num == 0              = [] 
   | num > 1 && denom == 1 = replicate num $ intDec denom 
   | num == 1              = [intDec denom]
   | num == 3              = [intDec (denom `div` 2) <> renderedDot]
@@ -128,8 +133,8 @@ renderRhythm (Rhythm rhythm)
 --   and are interepreted by scoreToMidi as modifications to the normalVelocity.
 --   There's no span of accent markings to match a range of three on either side
 --   of unaccented.  Invent a set here using glyphs and characters.  The "!!" for
---   accentStrings always works so long as fromEnum maxBound::Accent is the length
---   of accentStrings - 1, see testAccentNames.    
+--   accentKeys always works so long as fromEnum maxBound::Accent is the length
+--   of accentKeys - 1, see testAccentNames.    
 --    
 --   softest  = "\\markup {\\musicglyph #\"scripts.dmarcato\"}"
 --   verysoft = "\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
@@ -137,15 +142,29 @@ renderRhythm (Rhythm rhythm)
 --   hard     = ">"
 --   veryhard = "\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
 --   hardest  = "\\markup {\\musicglyph #\"scripts.umarcato\"}
-accentStrings :: [String]
-accentStrings = ["\\softest", "\\verysoft", "\\soft", "", "\\hard", "\\veryhard", "\\hardest"]
+accentKeys :: [String]
+accentKeys = ["\\softest", "\\verysoft", "\\soft", "", "\\hard", "\\veryhard", "\\hardest"]
 
-renderedAccentNames :: Builder
-renderedAccentNames = stringEncoding "softest = \"\\markup {\\musicglyph #\"scripts.dmarcato\"} verysoft = \"\\markup {\\musicglyph #\"scripts.upedaltoe\"} soft = \"<\" hard = \">\"veryhard = \"\\markup {\\musicglyph #\"scripts.dpedaltoe\"}hardest  = \"\\markup {\\musicglyph #\"scripts.umarcato\"}"
+softestString, verysoftString, softString, hardString, veryhardString, hardestString :: String
+softestString  = "\\markup {\\musicglyph #\"scripts.dmarcato\"}"
+verysoftString = "\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
+softString     = "\"<\""
+hardString     = "\">\""
+veryhardString = "\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
+hardestString  = "\\markup {\\musicglyph #\"scripts.umarcato\"}"
+
+accentValues :: [String]
+accentValues = [softestString, verysoftString, softString, hardString, veryhardString, hardestString]
+
+renderAccentKeyValue :: String -> String -> Builder
+renderAccentKeyValue key val = stringEncoding $ (filter (/= '\\') key) ++ " = " ++ val ++ "\n"
+
+renderedAccentValues :: Builder
+renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") accentKeys) accentValues
 
 -- | Interpreting accents requires the emitting the list accent of symbols above.
 renderAccent :: Accent -> Builder
-renderAccent accent =  stringEncoding $ accentStrings !! fromEnum accent 
+renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent 
 
 -- | Combine a rendered pitch with a list of rendered rhythms into
 --   a rendered note, annotating with ties where there are multiple
@@ -173,7 +192,7 @@ renderRestForRhythms [renderedRhythm] = renderedRest <> renderedRhythm
 renderRestForRhythms (renderedRhythm:renderedRhythms) =
   renderedRest <> renderedRhythm <> mconcat [renderedSpace <> renderRestForRhythms renderedRhythms]
 
--- Pitch doesn't matter when written to a percussion staff
+-- | Pitch doesn't matter when written to a percussion staff
 dummyPercussionPitch :: Pitch
 dummyPercussionPitch = Pitch C $ Octave (-1)
 
@@ -202,65 +221,59 @@ renderInstrument (Instrument instrumentName) =
 
 -- | Start each voice with a block that enables automatic ties across bar lines.
 renderedVoicePrefix :: Builder
-renderedVoicePrefix = stringEncoding "\\new Voice \\with {\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}"
+renderedVoicePrefix = stringEncoding "\\new Voice \\with \n{\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}\n"
 
 -- | A voice depends on global, score, and accent contexts.
 --   TBD:  [[Controls]]  Each of these should be processed alongside notes!
 renderVoice :: Voice -> Builder
 renderVoice (Voice instrument notes _) =
-  renderedVoicePrefix <> renderedOpen <> renderInstrument instrument <> renderedSpace <> renderedGlobalPrefix <> renderedSpace <> renderNotes notes <> renderedClose
+  renderedVoicePrefix
+  <> renderedOpen
+  <> renderInstrument instrument
+  <> renderedSpace
+  <> renderedGlobalKey
+  <> renderedSpace
+  <> renderNotes notes
+  <> renderedClose
+  <> renderedNewline
 
 renderVoices :: [Voice] -> Builder
 renderVoices [] = mempty
-renderVoices (voice:voices) = renderVoice voice <> mconcat [renderedSpace <> renderVoices voices]
+renderVoices (voice:voices) = renderVoice voice <> mconcat [renderVoices voices]
 
 -- | Every Lilypond file should start with a version number.
 renderedVersion :: Builder
-renderedVersion = stringEncoding "\\version \"2.18.2\""
+renderedVersion = stringEncoding "\\version \"2.18.2\"\n"
 
 -- | TBD: add time and key signatures to Score, then renderers for each.
 renderedGlobalValues :: Builder
-renderedGlobalValues = stringEncoding "global = {\\time 4/4 \\key c \\major}"
+renderedGlobalValues = stringEncoding "global = {\\time 4/4 \\key c \\major}\n"
 
 renderedHeader :: String -> String -> Builder
-renderedHeader title composer = stringEncoding "\\header {title = " <> stringEncoding title <> stringEncoding " composer = " <> stringEncoding composer <> renderedClose
+renderedHeader title composer =
+  stringEncoding "\\header {title = "
+  <> stringEncoding title
+  <> stringEncoding " composer = \""
+  <> stringEncoding composer
+  <> charEncoding '\"'
+  <> renderedClose
+  <> renderedNewline
   
 renderScore :: Score -> Builder
-renderScore (Score title voices) = renderedVersion <> renderedSpace <> renderedHeader title "" <> renderedGlobalValues <> renderedAccentNames <> stringEncoding "\\score { \\new StaffGroup << " <> renderVoices voices <> stringEncoding ">> \\layout { } \\midi { } " <> renderedClose
+renderScore (Score title voices) =
+  renderedVersion
+  <> renderedHeader title ""
+  <> renderedGlobalValues
+  <> renderedAccentValues
+  <> stringEncoding "\\score {\n\\new StaffGroup << \n"
+  <> renderVoices voices
+  <> stringEncoding ">>\n\\layout { }\n\\midi { }\n"
+  <> renderedClose
+  <> renderedNewline
+
+scoreToLilypondByteString :: Score -> L.ByteString
+scoreToLilypondByteString = toLazyByteString . renderScore
+
+scoreToLilypondFile :: Score -> IO ()
+scoreToLilypondFile score@(Score title _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString score
   
-{-- Snippets
-version = "2.18.2"
-global = { \time 4/4 \key c \major }
-\header {
-  title = "SUITE I."
-  composer = "J. S. Bach."
-}
-softest  = "\\markup {\\musicglyph #\"scripts.dmarcato\"}"
-verysoft = "\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
-soft     = "<"
-hard     = ">"
-veryhard = "\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
-hardest  = "\\markup {\\musicglyph #\"scripts.umarcato\"}
-\score {
-  \new Staff \relative g, {
-    \clef bass
-    \key g \major
-    \repeat unfold 2 { g16( d' b') a b d, b' d, } |
-    \repeat unfold 2 { g,16( e' c') b c e, c' e, } |
-}
-\header {
-piece = "Pr ́elude." }
-}
-\score {
-  \new Staff \relative b {
-    \clef bass
-    \key g \major
-    \partial 16 b16 |
-    <g, d' b'~>4 b'16 a( g fis) g( d e fis) g( a b c) |
-    d16( b g fis) g( e d c) b(c d e) fis( g a b) |
-}
-\header {
-    piece = "Allemande."
-  }
-}
---}

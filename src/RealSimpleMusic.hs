@@ -53,8 +53,10 @@ module RealSimpleMusic (
    ,  Score(..)
    , scoreToMidiFile
    , scoreToMidiFiles
+   , scoreToLilypondFile
   ) where
 
 import Music.Data
 import Music.Utils
 import ScoreToMidi.Utils
+import ScoreToLilypond.Utils
