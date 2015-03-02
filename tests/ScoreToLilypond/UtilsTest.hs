@@ -1,15 +1,15 @@
 module ScoreToLilypond.UtilsTest where
 
-import           Data.List  (sort)
-import           Data.Ratio
-import qualified Data.Set                  as Set
 import           Data.ByteString.Builder
+import           Data.List (sort)
+import           Data.Ratio
+import qualified Data.Set as Set
   
-import Test.HUnit
+import           Test.HUnit
 -- import Test.QuickCheck
 
-import RealSimpleMusic
-import ScoreToLilypond.Utils
+import           RealSimpleMusic
+import           ScoreToLilypond.Utils
 
 allPitchClasses :: [PitchClass]
 allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]
@@ -52,29 +52,29 @@ testRenderRhythmTies =
 
 testRenderNote :: Assertion
 testRenderNote =
-  (toLazyByteString . stringEncoding) "c'64"  @=? (toLazyByteString . renderNote') (Note' (Pitch C (Octave 0)) (Rhythm (1%64)) Set.empty)
+  (toLazyByteString . stringEncoding) "c'64"  @=? (toLazyByteString . renderNote) (Note (Pitch C (Octave 0)) (Rhythm (1%64)) Set.empty)
   
 testRenderAccentedNote :: Assertion
 testRenderAccentedNote =
-  (toLazyByteString . stringEncoding) "d'32\\verysoft"  @=? (toLazyByteString . renderNote') (Note' (Pitch D (Octave 0)) (Rhythm (1%32)) (Set.singleton (AccentControl' VerySoft)))
+  (toLazyByteString . stringEncoding) "d'32\\verysoft"  @=? (toLazyByteString . renderNote) (Note (Pitch D (Octave 0)) (Rhythm (1%32)) (Set.singleton (AccentControl VerySoft)))
 
 testRenderRest :: Assertion
 testRenderRest =
-  (toLazyByteString . stringEncoding) "r64"  @=? (toLazyByteString . renderNote') (Rest' (Rhythm (1%64)) Set.empty)
+  (toLazyByteString . stringEncoding) "r64"  @=? (toLazyByteString . renderNote) (Rest (Rhythm (1%64)) Set.empty)
   
 testRenderPercussionNote :: Assertion
 testRenderPercussionNote =
-  (toLazyByteString . stringEncoding) "c64"  @=? (toLazyByteString . renderNote') (PercussionNote' (Rhythm (1%64)) Set.empty)
+  (toLazyByteString . stringEncoding) "c64"  @=? (toLazyByteString . renderNote) (PercussionNote (Rhythm (1%64)) Set.empty)
   
 testRenderAccentedPercussionNote :: Assertion
 testRenderAccentedPercussionNote =
-  (toLazyByteString . stringEncoding) "c32\\hard"  @=? (toLazyByteString . renderNote') (PercussionNote' (Rhythm (1%32)) (Set.singleton (AccentControl' Hard)))
+  (toLazyByteString . stringEncoding) "c32\\hard"  @=? (toLazyByteString . renderNote) (PercussionNote (Rhythm (1%32)) (Set.singleton (AccentControl Hard)))
 
 testRenderTiedNote :: Assertion
 testRenderTiedNote =
-  (toLazyByteString . stringEncoding) "c'1~ c'4" @=? (toLazyByteString . renderNote') (Note' (Pitch C (Octave 0)) (Rhythm (5%4)) Set.empty)
+  (toLazyByteString . stringEncoding) "c'1~ c'4" @=? (toLazyByteString . renderNote) (Note (Pitch C (Octave 0)) (Rhythm (5%4)) Set.empty)
 
 testRenderNotes :: Assertion
 testRenderNotes =
-  (toLazyByteString . stringEncoding) "c8 d16 e32 f64 g128 a64 b32" @=? (toLazyByteString . renderNotes') (zipWith (\pc dur -> Note' (Pitch pc (Octave (-1))) (Rhythm dur) Set.empty) (ascendingScale (majorScale C)) [1%8, 1%16, 1%32, 1%64, 1%128, 1%64, 1%32])
+  (toLazyByteString . stringEncoding) "c8 d16 e32 f64 g128 a64 b32" @=? (toLazyByteString . renderNotes) (zipWith (\pc dur -> Note (Pitch pc (Octave (-1))) (Rhythm dur) Set.empty) (ascendingScale (majorScale C)) [1%8, 1%16, 1%32, 1%64, 1%128, 1%64, 1%32])
 

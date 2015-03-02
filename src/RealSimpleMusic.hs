@@ -35,35 +35,22 @@ module RealSimpleMusic (
    ,  Rhythm(..)
    ,  Instrument(..)
    ,  Control(..)
-   ,  Control'(..)
    ,  Note(..)
-   ,  Note'(..)
    ,  IndexedNote(..)
-   ,  IndexedNote'(..)
    ,  indexedNoteToNote
    ,  indexedNotesToNotes
-   ,  indexedNoteToNote'
-   ,  indexedNotesToNotes'
    ,  transposeNote
-   ,  transposeNote'
    ,  noteToRhythm
-   ,  noteToRhythm'
    ,  transposeNotes
-   ,  transposeNotes'
    ,  Interval
    ,  Intervals
    ,  Chord(..)
    ,  Voice(..)
-   ,  Voice'(..)
    ,  Title
    ,  Score(..)
-   ,  Score'(..)
    , scoreToMidiFile
    , scoreToMidiFiles
-   , scoreToMidiFile'
-   , scoreToMidiFiles'
    , scoreToLilypondFile
-   , scoreToLilypondFile'
   ) where
 
 import Music.Data

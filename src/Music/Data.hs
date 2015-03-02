@@ -69,32 +69,22 @@ data Articulation = NoArticulation | Tenuto | Portato | Marcato | Staccato | Sta
 -- | Instruments.
 newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord, Eq)
 
--- | Controls with their durations as a rhythm.
-data Control = DynamicControl Dynamic Rhythm
-             | BalanceControl Balance Rhythm
-             | PanControl Pan Rhythm
-             | TempoControl Tempo Rhythm
-             | KeySignatureControl KeySignature Rhythm
-             | TimeSignatureControl TimeSignature Rhythm
-             | ArticulationControl Articulation Rhythm
-             | TextControl String Rhythm
-             | InstrumentControl Instrument Rhythm deriving (Ord, Eq, Show)
-                                                            
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
--- | Integrated controls
-data Control' = DynamicControl' Dynamic
-              | BalanceControl' Balance
-              | PanControl' Pan
-              | TempoControl' Tempo
-              | KeySignatureControl' KeySignature
-              | TimeSignatureControl' TimeSignature
-              | ArticulationControl' Articulation
-              | TextControl' String
-              | InstrumentControl' Instrument
-              | AccentControl' Accent deriving (Ord, Eq, Show)
-
+-- | Controls
+data Control =
+  DynamicControl Dynamic
+  | BalanceControl Balance
+  | PanControl Pan
+  | TempoControl Tempo
+  | KeySignatureControl KeySignature
+  | TimeSignatureControl TimeSignature
+  | ArticulationControl Articulation
+  | TextControl String
+  | InstrumentControl Instrument
+  | AccentControl Accent deriving (Ord, Eq, Show)
+                                  
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
 --   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
 newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num)
@@ -104,29 +94,17 @@ newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num)
 --   a rest with only a rhythm, a percussion note with
 --   a rhythm, or an accented percussion note with rhythm
 --   and accent.
-data Note = Note Pitch Rhythm
-          | AccentedNote Pitch Rhythm Accent
-          | Rest Rhythm
-          | PercussionNote Rhythm
-          | AccentedPercussionNote Rhythm Accent deriving (Eq, Show)
-                                                          
-data Note' = Note' Pitch Rhythm (Set.Set Control')
-           | Rest' Rhythm (Set.Set Control')
-           | PercussionNote' Rhythm (Set.Set Control') deriving (Eq, Show)
+data Note =
+  Note Pitch Rhythm (Set.Set Control)
+  | Rest Rhythm (Set.Set Control)
+  | PercussionNote Rhythm (Set.Set Control) deriving (Eq, Show)
 
 -- | An indexed note follows the shape of a note but with
 --   an indexed pitch replacing Pitch.
 data IndexedNote =
-    IndexedNote IndexedPitch Rhythm
-  | IndexedAccentedNote IndexedPitch Rhythm Accent
-  | IndexedRest Rhythm
-  | IndexedPercussionNote Rhythm
-  | IndexedAccentedPercussionNote Rhythm Accent deriving (Eq, Show)
-
-data IndexedNote' =
-    IndexedNote' IndexedPitch Rhythm (Set.Set Control')
-  | IndexedRest' Rhythm (Set.Set Control')
-  | IndexedPercussionNote' Rhythm (Set.Set Control') deriving (Eq, Show)
+  IndexedNote IndexedPitch Rhythm (Set.Set Control)
+  | IndexedRest Rhythm (Set.Set Control)
+  | IndexedPercussionNote Rhythm (Set.Set Control) deriving (Eq, Show)
 
 -- | Intervals may be negative or positive and are computed as steps in a Scale
 type Interval = Int
@@ -140,27 +118,17 @@ data Chord = Chord Scale Intervals deriving (Show)
 -- | Voice has instrument, list of notes, and
 --   list of list of controls organized by control,
 --   e.g. one list for sequence of dynamics, tempos, etc.
-data Voice = Voice { voiceInstrument :: Instrument
-                   , voiceNotes :: [Note]
-                   , voiceControls :: [[Control]]
-                   } deriving (Show)
-
--- | Voice has instrument, list of notes, and
---   list of list of controls organized by control,
---   e.g. one list for sequence of dynamics, tempos, etc.
-data Voice' = Voice' { voiceInstrument' :: Instrument
-                     , voiceNotes' :: [Note']
-                     } deriving (Show)
+data Voice =
+  Voice { voiceInstrument :: Instrument
+        , voiceNotes :: [Note]
+        } deriving (Show)
 
 -- | Synonym for String
 type Title = String
 
 -- | Title and List of voices make up a score.
 --   TBD:  time and key signatures, composer, date.
-data Score = Score { scoreTitle :: Title
-                   , scoreVoices :: [Voice]
-                   } deriving (Show)
-
-data Score' = Score' { scoreTitle' :: Title
-                     , scoreVoices' :: [Voice']
-                     } deriving (Show)
+data Score =
+  Score { scoreTitle :: Title
+        , scoreVoices :: [Voice]
+        } deriving (Show)

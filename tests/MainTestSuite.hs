@@ -3,14 +3,13 @@ module Main (
     main
   ) where
 
-import Test.Tasty
-import Test.Tasty.QuickCheck
-import Test.Tasty.HUnit
-
-import Music.UtilsTest
-import ScoreToMidi.UtilsTest
 import Canon.UtilsTest
+import Music.UtilsTest
 import ScoreToLilypond.UtilsTest
+import ScoreToMidi.UtilsTest
+import Test.Tasty
+import Test.Tasty.HUnit
+import Test.Tasty.QuickCheck
 
 main :: IO ()
 main = defaultMain tests

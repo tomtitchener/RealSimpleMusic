@@ -1,15 +1,15 @@
 
 module ScoreToLilypond.Utils where
 
-import           Music.Data
-import           Music.Utils
-import qualified Data.ByteString.Lazy               as L
 import           Data.ByteString.Builder
+import qualified Data.ByteString.Lazy as L
 import           Data.List
-import qualified Data.Set                           as Set
-import           Data.Ratio
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Ratio
+import qualified Data.Set as Set
+import           Music.Data
+import           Music.Utils
 
 -- | Data.ByteString.Builder provides alternative encodings: string7, string8, stringUtf8
 --   Does Lilypond care?  Seems like string7 (ASCII) should suffice.
@@ -228,34 +228,30 @@ renderText text = renderedDash <> renderedQuote <> stringEncoding text <> render
 -- | Combine a rendered pitch with a list of rendered rhythms into
 --   a rendered note, annotating with ties where there are multiple
 --   rhythms.
-renderNoteForRhythms :: Builder -> [Builder] -> Builder
-renderNoteForRhythms _ [] = mempty
-renderNoteForRhythms renderedPitch [renderedRhythm] = renderedPitch <> renderedRhythm
-renderNoteForRhythms renderedPitch (renderedRhythm:renderedRhythms) =
-  renderedPitch <> renderedRhythm <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms renderedPitch renderedRhythms]
+renderNoteForRhythms :: Builder -> Builder -> [Builder] -> Builder
+renderNoteForRhythms _ _ [] = mempty
+renderNoteForRhythms renderedPitch renderedControls [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedControls 
+renderNoteForRhythms renderedPitch renderedControls (renderedRhythm:renderedRhythms) =
+  renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms renderedPitch renderedNothing renderedRhythms]
 
-renderNoteForRhythms' :: Builder -> Builder -> [Builder] -> Builder
-renderNoteForRhythms' _ _ [] = mempty
-renderNoteForRhythms' renderedPitch renderedControls [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedControls 
-renderNoteForRhythms' renderedPitch renderedControls (renderedRhythm:renderedRhythms) =
-  renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms' renderedPitch renderedNothing renderedRhythms]
+-- | Emit Lilypond text corresponding to Music Control enum.
+renderControl :: Control -> Builder
+renderControl (DynamicControl dynamic)             = renderDynamic       dynamic
+renderControl (BalanceControl balance)             = renderBalance       balance
+renderControl (PanControl pan)                     = renderPan           pan
+renderControl (TempoControl tempo)                 = renderTempo         tempo
+renderControl (KeySignatureControl keySignature)   = renderKeySignature  keySignature
+renderControl (TimeSignatureControl timeSignature) = renderTimeSignature timeSignature
+renderControl (ArticulationControl articulation)   = renderArticulation  articulation
+renderControl (TextControl text)                   = renderText          text
+renderControl (AccentControl accent)               = renderAccent        accent
+renderControl (InstrumentControl instrument)       = renderInstrument    instrument
 
--- | Supply accent glyph along with pitch and rhythm.
---   Rendered pitch is first, then accent, then rhythm.
---   To avoid repeated accents, call renderNoteForRhythms
---   for recursive case
-renderAccentedNoteForRhythms :: Builder -> Builder -> [Builder] -> Builder
-renderAccentedNoteForRhythms _ _ [] = mempty
-renderAccentedNoteForRhythms renderedPitch renderedAccent [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedSpace <> renderedAccent
-renderAccentedNoteForRhythms renderedPitch renderedAccent (renderedRhythm:renderedRhythms) =
-  renderedPitch <> renderedRhythm <> renderedSpace <> renderedAccent <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms renderedPitch renderedRhythms]
-
--- | Render rest or tied rests according to list of rendered rhythms.
-renderRestForRhythms :: [Builder] -> Builder
-renderRestForRhythms [] = mempty
-renderRestForRhythms [renderedRhythm] = renderedRest <> renderedRhythm
-renderRestForRhythms (renderedRhythm:renderedRhythms) =
-  renderedRest <> renderedRhythm <> mconcat [renderedSpace <> renderRestForRhythms renderedRhythms]
+-- | Emit a list list of space-separated controls.
+renderControls :: [Control] -> Builder
+renderControls [] = mempty
+renderControls [control] = renderControl control
+renderControls (control:controls) = renderControl control <> mconcat [renderedSpace <> renderControls controls]
 
 -- | Pitch doesn't matter when written to a percussion staff
 dummyPercussionPitch :: Pitch
@@ -263,50 +259,17 @@ dummyPercussionPitch = Pitch C $ Octave (-1)
 
 -- | Render Note instances.
 renderNote :: Note -> Builder
-renderNote (Note pitch rhythm) =
-  renderNoteForRhythms (renderPitch pitch) (renderRhythm rhythm)
-renderNote (AccentedNote pitch rhythm accent) =
-  renderAccentedNoteForRhythms (renderPitch pitch) (renderAccent accent) (renderRhythm rhythm)
-renderNote (Rest rhythm) =
-  renderRestForRhythms (renderRhythm rhythm)
-renderNote (PercussionNote rhythm) =
-  renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderRhythm rhythm) 
-renderNote (AccentedPercussionNote rhythm accent) =
-  renderAccentedNoteForRhythms (renderPitch dummyPercussionPitch) (renderAccent accent) (renderRhythm rhythm)
-
-renderControl :: Control' -> Builder
-renderControl (DynamicControl' dynamic)             = renderDynamic       dynamic
-renderControl (BalanceControl' balance)             = renderBalance       balance
-renderControl (PanControl' pan)                     = renderPan           pan
-renderControl (TempoControl' tempo)                 = renderTempo         tempo
-renderControl (KeySignatureControl' keySignature)   = renderKeySignature  keySignature
-renderControl (TimeSignatureControl' timeSignature) = renderTimeSignature timeSignature
-renderControl (ArticulationControl' articulation)   = renderArticulation  articulation
-renderControl (TextControl' text)                   = renderText          text
-renderControl (AccentControl' accent)               = renderAccent        accent
-renderControl (InstrumentControl' instrument)       = renderInstrument    instrument
-
-renderControls :: [Control'] -> Builder
-renderControls [] = mempty
-renderControls [control] = renderControl control
-renderControls (control:controls) = renderControl control <> mconcat [renderedSpace <> renderControls controls]
-
-renderNote' :: Note' -> Builder
-renderNote' (Note' pitch rhythm controls) =
-  renderNoteForRhythms' (renderPitch pitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
-renderNote' (Rest' rhythm controls) =
-  renderNoteForRhythms' renderedRest (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
-renderNote' (PercussionNote' rhythm controls) =
-  renderNoteForRhythms' (renderPitch dummyPercussionPitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm) 
+renderNote (Note pitch rhythm controls) =
+  renderNoteForRhythms (renderPitch pitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
+renderNote (Rest rhythm controls) =
+  renderNoteForRhythms renderedRest (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
+renderNote (PercussionNote rhythm controls) =
+  renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm) 
 
 -- | Spaces separate notes in a rendered list of notes.
 renderNotes :: [Note] -> Builder
 renderNotes [] = mempty
 renderNotes (note:notes) = renderNote note <> mconcat [ renderedSpace <> renderNote note' | note' <- notes]
-
-renderNotes' :: [Note'] -> Builder
-renderNotes' [] = mempty
-renderNotes' (note:notes) = renderNote' note <> mconcat [ renderedSpace <> renderNote' note' | note' <- notes]
 
 -- | An instrument expects to be in a Staff or Voice context.
 renderInstrument :: Instrument -> Builder
@@ -317,8 +280,9 @@ renderInstrument (Instrument instrumentName) =
 renderedVoicePrefix :: Builder
 renderedVoicePrefix = stringEncoding "\\new Voice \\with \n{\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}\n"
 
+-- | Render the Voice type in Lilypond syntax.
 renderVoice :: Voice -> Builder
-renderVoice (Voice instrument notes _) =
+renderVoice (Voice instrument notes) =
   renderedVoicePrefix
   <> renderedOpen
   <> renderInstrument instrument
@@ -329,25 +293,10 @@ renderVoice (Voice instrument notes _) =
   <> renderedClose
   <> renderedNewline
 
-renderVoice' :: Voice' -> Builder
-renderVoice' (Voice' instrument notes) =
-  renderedVoicePrefix
-  <> renderedOpen
-  <> renderInstrument instrument
-  <> renderedSpace
-  <> renderedGlobalKey
-  <> renderedSpace
-  <> renderNotes' notes
-  <> renderedClose
-  <> renderedNewline
-
+-- | Render a list of Voice types in Lilypond syntax, no separators.
 renderVoices :: [Voice] -> Builder
 renderVoices [] = mempty
 renderVoices (voice:voices) = renderVoice voice <> mconcat [renderVoices voices]
-
-renderVoices' :: [Voice'] -> Builder
-renderVoices' [] = mempty
-renderVoices' (voice:voices) = renderVoice' voice <> mconcat [renderVoices' voices]
 
 -- | Every Lilypond file should start with a version number.
 renderedVersion :: Builder
@@ -378,28 +327,10 @@ renderScore (Score title voices) =
   <> stringEncoding ">>\n\\layout { }\n\\midi { }\n"
   <> renderedClose
   <> renderedNewline
-  
-renderScore' :: Score' -> Builder
-renderScore' (Score' title voices) =
-  renderedVersion
-  <> renderedHeader title ""
-  <> renderedGlobalValues
-  <> renderedAccentValues
-  <> stringEncoding "\\score {\n\\new StaffGroup << \n"
-  <> renderVoices' voices
-  <> stringEncoding ">>\n\\layout { }\n\\midi { }\n"
-  <> renderedClose
-  <> renderedNewline
 
 scoreToLilypondByteString :: Score -> L.ByteString
 scoreToLilypondByteString = toLazyByteString . renderScore
 
-scoreToLilypondByteString' :: Score' -> L.ByteString
-scoreToLilypondByteString' = toLazyByteString . renderScore'
-
 scoreToLilypondFile :: Score -> IO ()
 scoreToLilypondFile score@(Score title _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString score
-
-scoreToLilypondFile' :: Score' -> IO ()
-scoreToLilypondFile' score@(Score' title _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString' score
 

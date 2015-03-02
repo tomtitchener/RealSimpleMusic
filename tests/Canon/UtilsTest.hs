@@ -1,19 +1,14 @@
 
 module Canon.UtilsTest where
 
-import Data.Ratio
-import RealSimpleMusic
-
-import Test.HUnit
-
-import Canon.Data
-import Canon.Utils
-
-import ScoreToMidi.Utils
-
-import qualified Data.Set as Set
-
+import           Canon.Data
+import           Canon.Utils
 import qualified Data.ByteString.Lazy as LazyByteString
+import           Data.Ratio
+import qualified Data.Set as Set
+import           RealSimpleMusic
+import           ScoreToMidi.Utils
+import           Test.HUnit
 
 -- Frere Jacques
 
@@ -32,9 +27,7 @@ ixPt3 = [mIxG, mIxA, mIxG, mIxF, mIxE, mIxC]
 ixPt4 = [mIxC, lIxG, mIxC]
 fjIndexedPitches = ixPt1 ++ ixPt1 ++ ixPt2 ++ ixPt2 ++ ixPt3 ++ ixPt3 ++ ixPt4 ++ ixPt4
 fjIxNotes :: [IndexedNote]
-fjIxNotes = zipWith IndexedNote fjIndexedPitches fjRhythms
-fjIxNotes' :: [IndexedNote']
-fjIxNotes' = zipWith (\pitch rhythm -> IndexedNote' pitch rhythm Set.empty) fjIndexedPitches fjRhythms
+fjIxNotes = zipWith (\pitch rhythm -> IndexedNote pitch rhythm Set.empty) fjIndexedPitches fjRhythms
 
 eig, qtr, hlf :: Rhythm
 eig = Rhythm (1%8)
@@ -65,30 +58,30 @@ cMin  = naturalMinorScale C
 afMin = naturalMinorScale Af
 
 -- Simple Canon
-createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon'
+createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon
 createFJSimpleCanon instrName voices dur =
-  SimpleCanon' title ixNotes cMaj distance instr voices repetitions  
+  SimpleCanon title ixNotes cMaj distance instr voices repetitions  
   where
     title = "Frere Jacques Simple"
-    ixNotes = fjIxNotes'
+    ixNotes = fjIxNotes
     instr = Instrument instrName
     distance = Rhythm dur
     repetitions = 5
 
-writeFJSimpleCanon :: (Score' -> a) -> String -> Int -> Rational -> a
+writeFJSimpleCanon :: (Score -> a) -> String -> Int -> Rational -> a
 writeFJSimpleCanon scoreWriter instrName voices dur =
   scoreWriter score
   where
     simpleCanon = createFJSimpleCanon instrName voices dur
-    score       = simpleCanonToScore' simpleCanon
+    score       = simpleCanonToScore simpleCanon
 
 -- | Generate test data for simple canon
 --   writeFJSimpleCanonToFile "Acoustic Grand Piano" 4 (2%1)
 writeFJSimpleCanonToFile :: String -> Int -> Rational -> IO ()
-writeFJSimpleCanonToFile = writeFJSimpleCanon scoreToMidiFile'
+writeFJSimpleCanonToFile = writeFJSimpleCanon scoreToMidiFile
     
 writeFJSimpleCanonToByteString :: String -> Int -> Rational -> LazyByteString.ByteString
-writeFJSimpleCanonToByteString = writeFJSimpleCanon scoreToByteString'
+writeFJSimpleCanonToByteString = writeFJSimpleCanon scoreToByteString
 
 testSimpleCanon :: Assertion
 testSimpleCanon =
@@ -99,30 +92,30 @@ testSimpleCanon =
     generatedSimpleCanonByteString = writeFJSimpleCanonToByteString "Acoustic Grand Piano" 4 (2%1)
 
 -- Scales Canon
-createFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> ScalesCanon'
+createFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> ScalesCanon
 createFJScalesCanon instruments scales octaves dur =
-  ScalesCanon' title ixNotes scales distance octaves instruments repetitions  
+  ScalesCanon title ixNotes scales distance octaves instruments repetitions  
   where
     title = "Frere Jacques Scales"
-    ixNotes = fjIxNotes'
+    ixNotes = fjIxNotes
     distance = Rhythm dur
     repetitions = 5
 
-writeFJScalesCanon :: (Score' -> a) -> [Instrument] -> [Scale] -> [Int] -> Rational -> a
+writeFJScalesCanon :: (Score -> a) -> [Instrument] -> [Scale] -> [Int] -> Rational -> a
 writeFJScalesCanon scoreWriter instruments scales octaveInts dur =
   scoreWriter score
   where
     octaves     = map Octave octaveInts
     scalesCanon = createFJScalesCanon instruments scales octaves dur
-    score       = scalesCanonToScore' scalesCanon
+    score       = scalesCanonToScore scalesCanon
     
 -- | Generate test data for scales canon
 --   writeFJScalesCanonToFile [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] (2%1)
 writeFJScalesCanonToFile :: [Instrument] -> [Scale] -> [Int] -> Rational -> IO ()
-writeFJScalesCanonToFile = writeFJScalesCanon scoreToMidiFile'
+writeFJScalesCanonToFile = writeFJScalesCanon scoreToMidiFile
 
 writeFJScalesCanonToByteString :: [Instrument] -> [Scale] -> [Int] -> Rational -> LazyByteString.ByteString
-writeFJScalesCanonToByteString = writeFJScalesCanon scoreToByteString'
+writeFJScalesCanonToByteString = writeFJScalesCanon scoreToByteString
   
 testScalesCanon :: Assertion
 testScalesCanon =
@@ -133,30 +126,30 @@ testScalesCanon =
     generatedScalesCanonByteString = writeFJScalesCanonToByteString [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] (2%1)
 
 -- Canon
-createFJCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> Canon'
+createFJCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> Canon
 createFJCanon instruments scales octaves durs =
-  Canon' title ixNotess scales distances octaves instruments repetitions  
+  Canon title ixNotess scales distances octaves instruments repetitions  
   where
     title = "Frere Jacques Canon"
-    ixNotess = replicate (length instruments) fjIxNotes'
+    ixNotess = replicate (length instruments) fjIxNotes
     distances = map Rhythm durs
     repetitions = 5
 
-writeFJCanon :: (Score' -> a) -> [Instrument] -> [Scale] -> [Int] -> [Rational] -> a
+writeFJCanon :: (Score -> a) -> [Instrument] -> [Scale] -> [Int] -> [Rational] -> a
 writeFJCanon scoreWriter instruments scales octaveInts durs =
   scoreWriter score
   where
     octaves = map Octave octaveInts
     canon   = createFJCanon instruments scales octaves durs
-    score   = canonToScore' canon
+    score   = canonToScore canon
 
 -- | Generate test data for canon
 --   writeFJCanonToFile [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [2%1, 1%4, 1%8]
 writeFJCanonToFile :: [Instrument] -> [Scale] -> [Int] -> [Rational] -> IO ()
-writeFJCanonToFile = writeFJCanon scoreToMidiFile'
+writeFJCanonToFile = writeFJCanon scoreToMidiFile
     
 writeFJCanonToByteString :: [Instrument] -> [Scale] -> [Int] -> [Rational] -> LazyByteString.ByteString
-writeFJCanonToByteString = writeFJCanon scoreToByteString'
+writeFJCanonToByteString = writeFJCanon scoreToByteString
 
 testCanon :: Assertion
 testCanon =

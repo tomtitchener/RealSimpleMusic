@@ -11,12 +11,6 @@ module Canon (
   , scalesCanonToScore
   , Canon(..)
   , canonToScore
-  , SimpleCanon'(..)
-  , simpleCanonToScore'
-  , ScalesCanon'(..)
-  , scalesCanonToScore'
-  , Canon'(..)
-  , canonToScore'
   ) where
 
 import Canon.Data

@@ -1,15 +1,12 @@
 module Music.UtilsTest where
 
-import Data.List  (findIndex, elemIndex, sort, group)
+import Control.Monad
+import Data.List (findIndex, elemIndex, sort, group)
 import Data.Maybe (fromJust, isJust)
-
-import Test.HUnit
-import Test.QuickCheck
-
 import Music.Data
 import Music.Utils
-
-import Control.Monad
+import Test.HUnit
+import Test.QuickCheck
 
 allPitchClasses :: [PitchClass]
 allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]
