@@ -5,11 +5,10 @@
 module Canon.Utils where
 
 import           Data.Ratio
+import           Data.List
 import qualified Data.Set           as Set
 import           RealSimpleMusic
 import           Canon.Data
-
--- TBD: rests at ends of voices other than the last.
 
 -- | Generalized converter for all Canon types to Score.
 --   Assumes:  lengths of ascending and descending notes of Scale are the same.
@@ -26,7 +25,7 @@ commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions
     pans      = map (\i -> PanControl (Pan (incr * i))) [0,1..]
     durs      = scanl (+) (0%1) $ map getRhythm rhythms
     rests     = zipWith (\dur pan -> (Rest (Rhythm dur) (Set.singleton pan))) durs pans
-    voices    = zipWith3 (\instrument rest tune -> Voice instrument (rest : tune)) instruments rests tunes
+    voices    = zipWith4 (\instrument start tune stop -> Voice instrument (start : tune ++ [stop])) instruments rests tunes $ reverse rests
 
 -- | Converting most general Canon to Score is just a call to most general conversion function.
 canonToScore :: Canon -> Score

@@ -312,7 +312,7 @@ renderedHeader title composer =
   <> stringEncoding title
   <> stringEncoding " composer = \""
   <> stringEncoding composer
-  <> renderedQuote
+  <> renderedDoubleQuote
   <> renderedClose
   <> renderedNewline
   
