@@ -6,6 +6,7 @@ import           Music.Utils
 import qualified Data.ByteString.Lazy               as L
 import           Data.ByteString.Builder
 import           Data.List
+import qualified Data.Set                           as Set
 import           Data.Ratio
 import           Data.Maybe
 import           Data.Monoid
@@ -22,22 +23,21 @@ stringEncoding = string7
 charEncoding :: Char -> Builder
 charEncoding = char7
 
--- | Char constants, quotes are used to indicate upward octave counts,
---   commas for downward octave counts around the base octave which is
---   the C major scale below middle C
-quoteChar, commaChar :: Char
-quoteChar = '\''
-commaChar = ','
-
 -- | Rendered character constants 
-renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline :: Builder
-renderedSpace   = charEncoding ' '
-renderedOpen    = charEncoding '{'
-renderedClose   = charEncoding '}'
-renderedDot     = charEncoding '.'
-renderedRest    = charEncoding 'r'
-renderedTie     = charEncoding '~'
-renderedNewline = charEncoding '\n'
+renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedNothing :: Builder
+renderedQuote         = charEncoding '\''
+renderedComma         = charEncoding ','
+renderedSpace         = charEncoding ' '
+renderedOpen          = charEncoding '{'
+renderedClose         = charEncoding '}'
+renderedDot           = charEncoding '.'
+renderedRest          = charEncoding 'r'
+renderedTie           = charEncoding '~'
+renderedNewline       = charEncoding '\n'
+renderedDash          = charEncoding '-'
+renderedSlash         = charEncoding '/'
+renderedDoubleQuote   = charEncoding '\"'
+renderedNothing       = stringEncoding ""
 
 -- | Global reference sets key and time signatures.
 renderedGlobalKey :: Builder
@@ -95,9 +95,9 @@ renderPitchClass pc = renderPitchName pc <> renderAccidental pc
 -- | Map e.g. Octave 1 to "''" and Octave -2 to ',,".
 renderOctave :: Octave -> Builder
 renderOctave (Octave octave)
-  | octave >= 0    = stringEncoding $ replicate octaves quoteChar
+  | octave >= 0    = mconcat $ replicate octaves renderedQuote
   | octave == (-1) = stringEncoding ""
-  | otherwise      = stringEncoding $ replicate octaves commaChar
+  | otherwise      = mconcat $ replicate octaves renderedComma
   where
     octaves = abs $ octave + 1
 
@@ -172,8 +172,8 @@ dynamicValues :: [String]
 dynamicValues = ["", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff"]
 
 -- | Match of enum values to list above.
-renderDynamic :: Dyanmic -> Builder
-renderDynamic =  stringEncoding $ dynamicValues !! fromEnum
+renderDynamic :: Dynamic -> Builder
+renderDynamic dynamic =  stringEncoding $ dynamicValues !! fromEnum dynamic
 
 -- | NoBalance | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
@@ -181,54 +181,49 @@ balanceValues = ["", "\\markup {left}", "\\markup {center-left}", "\\markup {cen
 
 -- | Match of enum values to list above.
 renderBalance :: Balance -> Builder
-renderBalance = stringEncoding $ balanceValues !! fromEnum
+renderBalance balance = stringEncoding $ balanceValues !! fromEnum balance
 
 renderPan :: Pan -> Builder
 renderPan (Pan pan) = stringEncoding "\\markup {pan " <> intDec pan <> stringEncoding " }"
 
 renderTempo :: Tempo -> Builder
-renderTempo (Tempo (Rhythm rhythm) bpm) = stringEncoding "\\tempo " <> intDec numer <> stringEncoding " = " ++ intDec bpm 
+renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\tempo " <> integerDec numer <> stringEncoding " = " <> integerDec bpm' 
   where
-    numer = numerator rhythm
+    numer = numerator unit'
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
 --   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the
 --   perspective of the key signature, the issue of tonic has no bearing!  So actually, the bare count of
---   sharps or flats suffices.  Assuming a major key then if there are sharps, the tonic can be a half step
---   above the final sharp, or if there are flats, then the fifth above the final flat.  And if there are
---   no flats or sharps then it's just C.  Computing with the list of fifths is actually easier, so for
---   sharps, go instead for the natural minor tonic, where one sharp is E, or two fifths below.  Note this
---   will look a little screwy in the Lilypond output, but so long as the count of flats and sharps is right
---   it shouldn't matter.  So what I need is a way to say, e.g. for sharps, what's the pitch represented
+--   sharps or flats suffices.  What I need is a way to say, e.g. for sharps, what's the pitch represented
 --   by the count of sharps less two?  And for flats, what's the pitch for the count of flats plus one?
 renderKeySignature :: KeySignature -> Builder
-renderKeySignature (KeySignature accidentals) =
-  stringEncoding "\\key " <> renderedPitchName tonicPitch <> renderedSpace <> stringEncoding mode <> renderedSpace
+renderKeySignature (KeySignature accidentals') =
+  stringEncoding "\\key " <> renderPitchName tonicPitch <> renderedSpace <> stringEncoding mode <> renderedSpace
   where
     cIndex        = cycleOfFifthsIdx C
-    cIndexOffset  = if accidentals == 0 then 0 else if accidentals > 0 then accidentals - 2 else accidentals + 1
+    cIndexOffset  = if accidentals' == 0 then 0 else if accidentals' > 0 then accidentals' - 2 else accidentals' + 1
     tonicPitch    = cycleOfFifths !! (cIndex + cIndexOffset)
-    mode          = if accidentals >= 0 then "minor" else "major"
+    mode          = if accidentals' >= 0 then "minor" else "major"
 
 -- | Lilypond time signature is just e.g. "\time 2/4"
 renderTimeSignature :: TimeSignature -> Builder
 renderTimeSignature (TimeSignature num den) =
-  stringEncoding "\\time" <> renderedSpace <> intDec num <> charEncoding "/" <> intDec den <> renderedSpace
+  stringEncoding "\\time" <> renderedSpace <> integerDec num <> renderedSlash <> integerDec den <> renderedSpace
 
 -- | Lilypond has "." for staccato, "^" for marcato, and slurs for legato, so I suppose "-" is really tenuto
 --   e.g. with shorthand notation "-^" for marcato, "--" for tenuto, and "-." for staccato.  There's also
 --   "-'" for staccatissimo, so why not?  And similarly for portato, "-_".
-articulationStrings :: [String]
-articulationStrings = ["", "--", "-_", "-^", "-.", "-'"]
+articulationValues :: [String]
+articulationValues = ["", "--", "-_", "-^", "-.", "-'"]
 
 -- | Map Articulation enums NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo
 --   to Lilypond strings.
 renderArticulation :: Articulation -> Builder
-renderArticulation = stringEncoding $ articulationValues !! fromEnum
+renderArticulation articulation = stringEncoding $ articulationValues !! fromEnum articulation
 
--- | TBD:  spit out simple quoted text for now
-renderText :: Text -> Builder
-renderText = charEncoding "-" <> stringEncoding
+-- | Render text below notes e.g. -"foo".  To go above, ^"foo"
+renderText :: String -> Builder
+renderText text = renderedDash <> renderedQuote <> stringEncoding text <> renderedQuote
 
 -- | Combine a rendered pitch with a list of rendered rhythms into
 --   a rendered note, annotating with ties where there are multiple
@@ -238,6 +233,12 @@ renderNoteForRhythms _ [] = mempty
 renderNoteForRhythms renderedPitch [renderedRhythm] = renderedPitch <> renderedRhythm
 renderNoteForRhythms renderedPitch (renderedRhythm:renderedRhythms) =
   renderedPitch <> renderedRhythm <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms renderedPitch renderedRhythms]
+
+renderNoteForRhythms' :: Builder -> Builder -> [Builder] -> Builder
+renderNoteForRhythms' _ _ [] = mempty
+renderNoteForRhythms' renderedPitch renderedControls [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedControls 
+renderNoteForRhythms' renderedPitch renderedControls (renderedRhythm:renderedRhythms) =
+  renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms' renderedPitch renderedNothing renderedRhythms]
 
 -- | Supply accent glyph along with pitch and rhythm.
 --   Rendered pitch is first, then accent, then rhythm.
@@ -273,7 +274,6 @@ renderNote (PercussionNote rhythm) =
 renderNote (AccentedPercussionNote rhythm accent) =
   renderAccentedNoteForRhythms (renderPitch dummyPercussionPitch) (renderAccent accent) (renderRhythm rhythm)
 
-
 renderControl :: Control' -> Builder
 renderControl (DynamicControl' dynamic)             = renderDynamic       dynamic
 renderControl (BalanceControl' balance)             = renderBalance       balance
@@ -284,22 +284,29 @@ renderControl (TimeSignatureControl' timeSignature) = renderTimeSignature timeSi
 renderControl (ArticulationControl' articulation)   = renderArticulation  articulation
 renderControl (TextControl' text)                   = renderText          text
 renderControl (AccentControl' accent)               = renderAccent        accent
+renderControl (InstrumentControl' instrument)       = renderInstrument    instrument
 
 renderControls :: [Control'] -> Builder
-renderControls controls = mconcat $ map renderControl controls
+renderControls [] = mempty
+renderControls [control] = renderControl control
+renderControls (control:controls) = renderControl control <> mconcat [renderedSpace <> renderControls controls]
 
 renderNote' :: Note' -> Builder
 renderNote' (Note' pitch rhythm controls) =
-  renderNoteForRhythms (renderPitch pitch) (renderControls controls) (renderRhythm rhythm)
+  renderNoteForRhythms' (renderPitch pitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
 renderNote' (Rest' rhythm controls) =
-  renderRestForRhythms (renderControls controls) (renderRhythm rhythm)
+  renderNoteForRhythms' renderedRest (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
 renderNote' (PercussionNote' rhythm controls) =
-  renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderControls controls) (renderRhythm rhythm) 
+  renderNoteForRhythms' (renderPitch dummyPercussionPitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm) 
 
 -- | Spaces separate notes in a rendered list of notes.
 renderNotes :: [Note] -> Builder
 renderNotes [] = mempty
 renderNotes (note:notes) = renderNote note <> mconcat [ renderedSpace <> renderNote note' | note' <- notes]
+
+renderNotes' :: [Note'] -> Builder
+renderNotes' [] = mempty
+renderNotes' (note:notes) = renderNote' note <> mconcat [ renderedSpace <> renderNote' note' | note' <- notes]
 
 -- | An instrument expects to be in a Staff or Voice context.
 renderInstrument :: Instrument -> Builder
@@ -322,9 +329,25 @@ renderVoice (Voice instrument notes _) =
   <> renderedClose
   <> renderedNewline
 
+renderVoice' :: Voice' -> Builder
+renderVoice' (Voice' instrument notes) =
+  renderedVoicePrefix
+  <> renderedOpen
+  <> renderInstrument instrument
+  <> renderedSpace
+  <> renderedGlobalKey
+  <> renderedSpace
+  <> renderNotes' notes
+  <> renderedClose
+  <> renderedNewline
+
 renderVoices :: [Voice] -> Builder
 renderVoices [] = mempty
 renderVoices (voice:voices) = renderVoice voice <> mconcat [renderVoices voices]
+
+renderVoices' :: [Voice'] -> Builder
+renderVoices' [] = mempty
+renderVoices' (voice:voices) = renderVoice' voice <> mconcat [renderVoices' voices]
 
 -- | Every Lilypond file should start with a version number.
 renderedVersion :: Builder
@@ -340,7 +363,7 @@ renderedHeader title composer =
   <> stringEncoding title
   <> stringEncoding " composer = \""
   <> stringEncoding composer
-  <> charEncoding '\"'
+  <> renderedQuote
   <> renderedClose
   <> renderedNewline
   
@@ -355,10 +378,28 @@ renderScore (Score title voices) =
   <> stringEncoding ">>\n\\layout { }\n\\midi { }\n"
   <> renderedClose
   <> renderedNewline
+  
+renderScore' :: Score' -> Builder
+renderScore' (Score' title voices) =
+  renderedVersion
+  <> renderedHeader title ""
+  <> renderedGlobalValues
+  <> renderedAccentValues
+  <> stringEncoding "\\score {\n\\new StaffGroup << \n"
+  <> renderVoices' voices
+  <> stringEncoding ">>\n\\layout { }\n\\midi { }\n"
+  <> renderedClose
+  <> renderedNewline
 
 scoreToLilypondByteString :: Score -> L.ByteString
 scoreToLilypondByteString = toLazyByteString . renderScore
 
+scoreToLilypondByteString' :: Score' -> L.ByteString
+scoreToLilypondByteString' = toLazyByteString . renderScore'
+
 scoreToLilypondFile :: Score -> IO ()
 scoreToLilypondFile score@(Score title _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString score
-  
+
+scoreToLilypondFile' :: Score' -> IO ()
+scoreToLilypondFile' score@(Score' title _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString' score
+

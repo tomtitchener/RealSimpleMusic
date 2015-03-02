@@ -109,10 +109,12 @@ balanceToBalance RightBalance    = 127
 
 -- | Articulation -> sustenuto value
 articulationToSustenuto :: Num a => Articulation -> a
-articulationToSustenuto NoArticulation = 64
-articulationToSustenuto Legato         = 127
-articulationToSustenuto Marcato        = 64
-articulationToSustenuto Staccato       = 0
+articulationToSustenuto Tenuto         =  96
+articulationToSustenuto Portato        =  80
+articulationToSustenuto NoArticulation =  64
+articulationToSustenuto Marcato        =  32
+articulationToSustenuto Staccato       =  16
+articulationToSustenuto Staccatissimo  =   0
 
 pitchToMidi :: Pitch -> Int
 pitchToMidi (Pitch pitchClass oct) =
@@ -212,12 +214,12 @@ genMidiPanControlEvent chan pan
 --   is 500,000 or defltTempo, so that'd be for a quarter that
 --   gets 120.
 genMidiTempoMetaEvent :: Tempo -> Event.T
-genMidiTempoMetaEvent (Tempo rhythm bpm) =
+genMidiTempoMetaEvent (Tempo (Rhythm rhythm) beats) =
   (Event.MetaEvent . Meta.SetTempo) $ Meta.toTempo microsPerRhythm
   where
     microsPerMinute   = 60000000
-    rhythmsPerQuarter = (denominator rhythm) / 4
-    microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMInute) / bpm
+    rhythmsPerQuarter = (denominator rhythm) % 4
+    microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
@@ -264,19 +266,33 @@ foldControl :: ChannelMsg.Channel -> [Event.T] -> Control' -> [Event.T]
 foldControl channel events (DynamicControl'       dynamic)       = (genMidiDynamicControlEvent    channel dynamic)      :events
 foldControl channel events (BalanceControl'       balance)       = (genMidiBalanceControlEvent    channel balance)      :events
 foldControl channel events (PanControl'           pan)           = (genMidiPanControlEvent        channel pan)          :events
-foldControl channel events (TempoControl'         tempo)         = (genMidiTempoMetaEvent         tempo)                :events
-foldControl channel events (KeySignatureControl'  keySignature)  = (genMidiKeySignatureMetaEvent  keySignature)         :events
-foldControl channel events (TimeSignatureControl' timeSignature) = (genMidiTimeSignatureMetaEvent timeSignature)        :events
+foldControl _       events (TempoControl'         tempo)         = (genMidiTempoMetaEvent         tempo)                :events
+foldControl _       events (KeySignatureControl'  keySignature)  = (genMidiKeySignatureMetaEvent  keySignature)         :events
+foldControl _       events (TimeSignatureControl' timeSignature) = (genMidiTimeSignatureMetaEvent timeSignature)        :events
 foldControl channel events (ArticulationControl'  articulation)  = (genMidiSustenutoControlEvent  channel articulation) :events
 foldControl channel events (InstrumentControl'    instrument)    = (genMidiInstrumentControlEvent channel instrument)   :events
-foldControl channel events (TextControl'          text)          = (genMidiTextMetaEvent          text)                 :events
-foldControl channel events (AccentControl'        _)             =                                                       events
+foldControl _       events (TextControl'          text)          = (genMidiTextMetaEvent          text)                 :events
+foldControl _       events (AccentControl'        _)             =                                                       events
+
+accentFromControl :: Control' -> Accent
+accentFromControl control =
+  case control of
+    DynamicControl' _       -> error $ "accentFromControl expected Accent, got Dynamic"
+    BalanceControl' _       -> error $ "accentFromControl expected Accent, got Balance"
+    PanControl' _           -> error $ "accentFromControl expected Accent, got Pan"
+    TempoControl' _         -> error $ "accentFromControl expected Accent, got Tempo"
+    KeySignatureControl' _  -> error $ "accentFromControl expected Accent, got KeySignature"
+    TimeSignatureControl' _ -> error $ "accentFromControl expected Accent, got TimeSignature"
+    ArticulationControl' _  -> error $ "accentFromControl expected Accent, got Articulation"
+    TextControl' _          -> error $ "accentFromControl expected Accent, got Text"
+    InstrumentControl' _    -> error $ "accentFromControl expected Accent, got Instrument"
+    AccentControl' accent   -> accent
 
 lookupAccent :: (Set.Set Control') -> Accent
 lookupAccent controls =
-  case lookupIndex (AccentControl' Normal) controls of
+  case Set.lookupIndex (AccentControl' Normal) controls of
    Nothing -> Normal
-   Just ix -> elemAt ix controls
+   Just ix -> accentFromControl $ Set.elemAt ix controls
 
 genMidiNoteEvents' :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> (Set.Set Control') -> [(Duration, Event.T)]
 genMidiNoteEvents' delay channel pitch duration controls
@@ -286,25 +302,23 @@ genMidiNoteEvents' delay channel pitch duration controls
   | maxBound < duration = error $ "genMidiNoteEvents duration " ++ show duration ++ " is greater than minimum value " ++ show (maxBound::Duration)
   | otherwise           = zip durations events
   where
-    accent        = lookupAccent controls
-    onEvent       = genMidiNoteOn  channel pitch accent
-    offEvent      = genMidiNoteOff channel pitch accent
-    controlEvents = Set.foldl (foldControl channel) [] controls
-    events        = (Set.toList controlEvents) ++ [onEvent, offEvent]
-    durations     = [delay] ++ replicate (Set.size controlEvents) (Dur 0) ++ [duration]
+    accent          = lookupAccent controls
+    onEvent         = genMidiNoteOn  channel pitch accent
+    offEvent        = genMidiNoteOff channel pitch accent
+    controlEvents   = Set.foldl (foldControl channel) [] controls
+    events          = controlEvents ++ [onEvent, offEvent]
+    durations       = [delay] ++ replicate (length controlEvents) (Dur 0) ++ [duration]
 
 genMidiControlEvents' :: ChannelMsg.Channel -> (Set.Set Control') -> [(Duration, Event.T)]
-genMidiControlEvents' channel controls
-  zip [(Dur 0)..] (Set.toList events)
-  where
-    events = Set.foldl (foldControl channel) [] controls
+genMidiControlEvents' channel controls =
+  zip (replicate (Set.size controls) (Dur 0)) $ Set.foldl (foldControl channel) [] controls
 
 midiNoteToEvents' :: ChannelMsg.Channel -> MidiNote' -> State (Duration, [(Duration, Event.T)]) Duration
 midiNoteToEvents' ch (MidiNote' pitch rhythm controls) =
   do (rest, events) <- get
-     put (Dur 0, events gen ++ genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) controls
+     put (Dur 0, events ++ genMidiNoteEvents' rest ch pitch (rhythmToDuration rhythm) controls)
      return (Dur 0)
-midiNoteToEvents ch (MidiRest' rhythm controls) =  
+midiNoteToEvents' ch (MidiRest' rhythm controls) =  
   do (rest, events) <- get
      put (dur + rest, events ++ genMidiControlEvents' ch controls)
      return $ dur + rest
@@ -369,7 +383,7 @@ noteToMidiNote' _ (Note' pitch rhythm controls) =
   MidiNote' (VoiceMsg.toPitch (pitchToMidi pitch)) rhythm controls
 noteToMidiNote' _ (Rest' rhythm controls) =
   MidiRest' rhythm controls
-noteToMidiNote' (Instrument instr) (PercussionNote rhythm controls) =
+noteToMidiNote' (Instrument instr) (PercussionNote' rhythm controls) =
   MidiNote' (GeneralMidi.drumToKey (stringToDrum instr)) rhythm controls
 
 isMidiPercussion :: String -> Bool
@@ -388,7 +402,7 @@ isMidiPercussionVoices :: [Voice] -> Bool
 isMidiPercussionVoices = any isMidiPercussionVoice
 
 isMidiPercussionVoices' :: [Voice'] -> Bool
-isMidiPercussionVoices' = any isMidiPercussionVoice 
+isMidiPercussionVoices' = any isMidiPercussionVoice'
 
 isMidiInstrument :: Instrument -> Bool
 isMidiInstrument (Instrument instrName) =
@@ -515,7 +529,7 @@ mapVoicessToPercussionChannelss' voicess =
   zipWith voiceAndLenToChans (map head voicess) (map length voicess)
   where
     voiceAndLenToChans voice len =
-      replicate len $ if isMidiPercussionVoice voice then GeneralMidi.drumChannel else zeroChannel
+      replicate len $ if isMidiPercussionVoice' voice then GeneralMidi.drumChannel else zeroChannel
     zeroChannel =
       ChannelMsg.toChannel 0
     
@@ -555,7 +569,7 @@ scoreToMidiFiles (Score title voices)
 scoreToMidiFiles' :: Score' -> IO ()
 scoreToMidiFiles' (Score' title voices) 
   | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
-  | otherwise                     = zipWithM_ (titleVoicesAndChannelsToMidiFiles title) voicess channelss
+  | otherwise                     = zipWithM_ (titleVoicesAndChannelsToMidiFiles' title) voicess channelss
   where
     notMidiInstruments = voicesToNotMidiInstruments' voices
     voicess            = collectVoicesByInstrumentWithPercussionLast' voices

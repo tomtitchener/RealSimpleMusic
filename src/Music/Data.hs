@@ -45,7 +45,7 @@ instance Bounded Pan where
     maxBound = 127
     
 -- | Tempo, beats per minute
-data Tempo = Tempo { val :: Rhythm, bpm :: Int } 
+data Tempo = Tempo { unit :: Rhythm, bpm :: Integer }  deriving (Show, Ord, Eq)
 
 -- | Key Signature, negative for count flats, positive for count sharps
 newtype KeySignature = KeySignature { accidentals :: Int } deriving (Bounded, Enum, Show, Ord, Eq)

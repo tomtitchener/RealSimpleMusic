@@ -34,9 +34,9 @@ commonCanonToScore' title ixNotess scales rhythms octaves instruments repetition
   Score' title voices
   where
     lenScale  = length $ ascendingScale $ head scales
-    notess    = zipWith indexedNotesToNotes scales ixNotess
+    notess    = zipWith indexedNotesToNotes' scales ixNotess
     intervals = map ((* lenScale) . getOctave) octaves
-    xpNotes   = zipWith3 (\scale interval notes -> map (transposeNote scale interval) notes) scales intervals notess
+    xpNotes   = zipWith3 (\scale interval notes -> map (transposeNote' scale interval) notes) scales intervals notess
     tunes     = map (concat . replicate repetitions) xpNotes
     incr      = getPan (maxBound::Pan) `div` (length instruments)
     pans      = map (\i -> PanControl' (Pan (incr * i))) [0,1..]
@@ -68,7 +68,7 @@ scalesCanonToCanon scalesCanon =
   where
     countVoices = length $ scInstruments scalesCanon
     
-scalesCanonToCanon' :: ScalesCanon' -> Canon
+scalesCanonToCanon' :: ScalesCanon' -> Canon'
 scalesCanonToCanon' scalesCanon =
   Canon' {
   cTitle'         = scTitle' scalesCanon
@@ -86,7 +86,7 @@ scalesCanonToCanon' scalesCanon =
 scalesCanonToScore :: ScalesCanon -> Score
 scalesCanonToScore scalesCanon = canonToScore $ scalesCanonToCanon scalesCanon
 
-scalesCanonToScore' :: ScalesCanon -> Score'
+scalesCanonToScore' :: ScalesCanon' -> Score'
 scalesCanonToScore' scalesCanon = canonToScore' $ scalesCanonToCanon' scalesCanon
 
 -- | To convert simple canon to a scales canon, replicate scales, octaves, and instruments.
