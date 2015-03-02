@@ -4,7 +4,8 @@
 
 module Music.Data where
 
-import Data.Ratio
+import           Data.Ratio
+import qualified Data.Set      as Set
 
 -- | Pitch classes with two accidentals enharmonic equivalents
 data PitchClass = Bs|C|Dff|Bss|Cs|Df|Css|D|Eff|Ds|Ef|Fff|Dss|E|Ff|Es|F|Gff|Ess|Fs|Gf|Fss|G|Aff|Gs|Af|Gss|A|Bff|As|Bf|Cff|Ass|B| Cf deriving (Bounded, Enum, Show, Ord, Eq) 
@@ -44,7 +45,7 @@ instance Bounded Pan where
     maxBound = 127
     
 -- | Tempo, beats per minute
-newtype Tempo = Tempo { getTempo :: Int } deriving (Bounded, Enum, Show, Ord, Eq)
+data Tempo = Tempo { val :: Rhythm, bpm :: Int } 
 
 -- | Key Signature, negative for count flats, positive for count sharps
 newtype KeySignature = KeySignature { accidentals :: Int } deriving (Bounded, Enum, Show, Ord, Eq)
@@ -63,7 +64,7 @@ instance Eq TimeSignature where
   (==) x y = toRatio x == toRatio y
 
 -- | Articulation
-data Articulation = NoArticulation | Legato | Marcato | Staccato deriving (Bounded, Enum, Show, Ord, Eq)
+data Articulation = NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Instruments.
 newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord, Eq)
@@ -109,9 +110,9 @@ data Note = Note Pitch Rhythm
           | PercussionNote Rhythm
           | AccentedPercussionNote Rhythm Accent deriving (Eq, Show)
                                                           
-data Note' = Note' Pitch Rhythm [Control']
-           | Rest' Rhythm [Control']
-           | PercussionNote' Rhythm [Control'] deriving (Eq, Show)
+data Note' = Note' Pitch Rhythm (Set.Set Control')
+           | Rest' Rhythm (Set.Set Control')
+           | PercussionNote' Rhythm (Set.Set Control') deriving (Eq, Show)
 
 -- | An indexed note follows the shape of a note but with
 --   an indexed pitch replacing Pitch.
@@ -121,6 +122,11 @@ data IndexedNote =
   | IndexedRest Rhythm
   | IndexedPercussionNote Rhythm
   | IndexedAccentedPercussionNote Rhythm Accent deriving (Eq, Show)
+
+data IndexedNote' =
+    IndexedNote' IndexedPitch Rhythm (Set.Set Control')
+  | IndexedRest' Rhythm (Set.Set Control')
+  | IndexedPercussionNote' Rhythm (Set.Set Control') deriving (Eq, Show)
 
 -- | Intervals may be negative or positive and are computed as steps in a Scale
 type Interval = Int
@@ -139,6 +145,13 @@ data Voice = Voice { voiceInstrument :: Instrument
                    , voiceControls :: [[Control]]
                    } deriving (Show)
 
+-- | Voice has instrument, list of notes, and
+--   list of list of controls organized by control,
+--   e.g. one list for sequence of dynamics, tempos, etc.
+data Voice' = Voice' { voiceInstrument' :: Instrument
+                     , voiceNotes' :: [Note']
+                     } deriving (Show)
+
 -- | Synonym for String
 type Title = String
 
@@ -147,3 +160,7 @@ type Title = String
 data Score = Score { scoreTitle :: Title
                    , scoreVoices :: [Voice]
                    } deriving (Show)
+
+data Score' = Score' { scoreTitle' :: Title
+                     , scoreVoices' :: [Voice']
+                     } deriving (Show)

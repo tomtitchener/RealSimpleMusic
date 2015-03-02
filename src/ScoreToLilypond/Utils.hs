@@ -2,6 +2,7 @@
 module ScoreToLilypond.Utils where
 
 import           Music.Data
+import           Music.Utils
 import qualified Data.ByteString.Lazy               as L
 import           Data.ByteString.Builder
 import           Data.List
@@ -148,8 +149,8 @@ accentKeys = ["\\softest", "\\verysoft", "\\soft", "", "\\hard", "\\veryhard", "
 softestString, verysoftString, softString, hardString, veryhardString, hardestString :: String
 softestString  = "\\markup {\\musicglyph #\"scripts.dmarcato\"}"
 verysoftString = "\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
-softString     = "\"<\""
-hardString     = "\">\""
+softString     = "\\markup {<}"
+hardString     = "\\markup {>}"
 veryhardString = "\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
 hardestString  = "\\markup {\\musicglyph #\"scripts.umarcato\"}"
 
@@ -164,7 +165,70 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 
 -- | Interpreting accents requires the emitting the list accent of symbols above.
 renderAccent :: Accent -> Builder
-renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent 
+renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
+
+-- | Match strings to enum: NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo 
+dynamicValues :: [String]
+dynamicValues = ["", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff"]
+
+-- | Match of enum values to list above.
+renderDynamic :: Dyanmic -> Builder
+renderDynamic =  stringEncoding $ dynamicValues !! fromEnum
+
+-- | NoBalance | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
+balanceValues :: [String]
+balanceValues = ["", "\\markup {left}", "\\markup {center-left}", "\\markup {center}", "\\markup {center-right}", "\\markup {right}"] 
+
+-- | Match of enum values to list above.
+renderBalance :: Balance -> Builder
+renderBalance = stringEncoding $ balanceValues !! fromEnum
+
+renderPan :: Pan -> Builder
+renderPan (Pan pan) = stringEncoding "\\markup {pan " <> intDec pan <> stringEncoding " }"
+
+renderTempo :: Tempo -> Builder
+renderTempo (Tempo (Rhythm rhythm) bpm) = stringEncoding "\\tempo " <> intDec numer <> stringEncoding " = " ++ intDec bpm 
+  where
+    numer = numerator rhythm
+
+-- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
+--   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the
+--   perspective of the key signature, the issue of tonic has no bearing!  So actually, the bare count of
+--   sharps or flats suffices.  Assuming a major key then if there are sharps, the tonic can be a half step
+--   above the final sharp, or if there are flats, then the fifth above the final flat.  And if there are
+--   no flats or sharps then it's just C.  Computing with the list of fifths is actually easier, so for
+--   sharps, go instead for the natural minor tonic, where one sharp is E, or two fifths below.  Note this
+--   will look a little screwy in the Lilypond output, but so long as the count of flats and sharps is right
+--   it shouldn't matter.  So what I need is a way to say, e.g. for sharps, what's the pitch represented
+--   by the count of sharps less two?  And for flats, what's the pitch for the count of flats plus one?
+renderKeySignature :: KeySignature -> Builder
+renderKeySignature (KeySignature accidentals) =
+  stringEncoding "\\key " <> renderedPitchName tonicPitch <> renderedSpace <> stringEncoding mode <> renderedSpace
+  where
+    cIndex        = cycleOfFifthsIdx C
+    cIndexOffset  = if accidentals == 0 then 0 else if accidentals > 0 then accidentals - 2 else accidentals + 1
+    tonicPitch    = cycleOfFifths !! (cIndex + cIndexOffset)
+    mode          = if accidentals >= 0 then "minor" else "major"
+
+-- | Lilypond time signature is just e.g. "\time 2/4"
+renderTimeSignature :: TimeSignature -> Builder
+renderTimeSignature (TimeSignature num den) =
+  stringEncoding "\\time" <> renderedSpace <> intDec num <> charEncoding "/" <> intDec den <> renderedSpace
+
+-- | Lilypond has "." for staccato, "^" for marcato, and slurs for legato, so I suppose "-" is really tenuto
+--   e.g. with shorthand notation "-^" for marcato, "--" for tenuto, and "-." for staccato.  There's also
+--   "-'" for staccatissimo, so why not?  And similarly for portato, "-_".
+articulationStrings :: [String]
+articulationStrings = ["", "--", "-_", "-^", "-.", "-'"]
+
+-- | Map Articulation enums NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo
+--   to Lilypond strings.
+renderArticulation :: Articulation -> Builder
+renderArticulation = stringEncoding $ articulationValues !! fromEnum
+
+-- | TBD:  spit out simple quoted text for now
+renderText :: Text -> Builder
+renderText = charEncoding "-" <> stringEncoding
 
 -- | Combine a rendered pitch with a list of rendered rhythms into
 --   a rendered note, annotating with ties where there are multiple
@@ -207,7 +271,30 @@ renderNote (Rest rhythm) =
 renderNote (PercussionNote rhythm) =
   renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderRhythm rhythm) 
 renderNote (AccentedPercussionNote rhythm accent) =
-  renderAccentedNoteForRhythms (renderPitch dummyPercussionPitch) (renderAccent accent) (renderRhythm rhythm) 
+  renderAccentedNoteForRhythms (renderPitch dummyPercussionPitch) (renderAccent accent) (renderRhythm rhythm)
+
+
+renderControl :: Control' -> Builder
+renderControl (DynamicControl' dynamic)             = renderDynamic       dynamic
+renderControl (BalanceControl' balance)             = renderBalance       balance
+renderControl (PanControl' pan)                     = renderPan           pan
+renderControl (TempoControl' tempo)                 = renderTempo         tempo
+renderControl (KeySignatureControl' keySignature)   = renderKeySignature  keySignature
+renderControl (TimeSignatureControl' timeSignature) = renderTimeSignature timeSignature
+renderControl (ArticulationControl' articulation)   = renderArticulation  articulation
+renderControl (TextControl' text)                   = renderText          text
+renderControl (AccentControl' accent)               = renderAccent        accent
+
+renderControls :: [Control'] -> Builder
+renderControls controls = mconcat $ map renderControl controls
+
+renderNote' :: Note' -> Builder
+renderNote' (Note' pitch rhythm controls) =
+  renderNoteForRhythms (renderPitch pitch) (renderControls controls) (renderRhythm rhythm)
+renderNote' (Rest' rhythm controls) =
+  renderRestForRhythms (renderControls controls) (renderRhythm rhythm)
+renderNote' (PercussionNote' rhythm controls) =
+  renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderControls controls) (renderRhythm rhythm) 
 
 -- | Spaces separate notes in a rendered list of notes.
 renderNotes :: [Note] -> Builder
@@ -222,30 +309,6 @@ renderInstrument (Instrument instrumentName) =
 -- | Start each voice with a block that enables automatic ties across bar lines.
 renderedVoicePrefix :: Builder
 renderedVoicePrefix = stringEncoding "\\new Voice \\with \n{\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}\n"
-
--- | A voice depends on global, score, and accent contexts.
---   TBD:  [[Controls]]  Each of these should be processed alongside notes!
---   Therre are two problems: 1) map the various controls to Lilypond text:
---   DynamicControl, BalanceControl, PanControl, TempoControl, KeySignatureControl,
---   TimeSignatureControl, ArticulationControl, TextControl, InstrumentControl
---   2) add the Lilypond text at the right rhythmic point in the list of notes
---   for the voice.  To solve the second problem, each of the lists in the
---   controlss and the notes must be iterated across simultaneously so that
---   the control text comes at the right point in the score.
---   For articulations, see Section A.13 in the reference.
---   Dynamics and Articulations are attached to individual notes, raising a
---   question about the way I keep them strictly separate in my Music type
---   definitions.  It'd certainly render more simply if my notes each had
---   attached an optionally empty list of controls.  For some controls, it
---   just doesn't make much sense to have the control abstracted from a note!
---   And maybe for simplicity I just convert and have all controls associate
---   with a note.  For continuously varying behavior like a crescendo across
---   a sustained note there's already an annotation. At most I might be losing
---   some degree of control from the Midi rendering, e.g. continuously varying
---   the pan setting across a sustained note.  It all sort of falls out nicely
---   the way things are, thanks to the Midi merge behavior.  And I'm going to
---   have to rework my rendering code with integrated controls e.g. turning
---   into zero delay Midi events that come before a note on event.  
 
 renderVoice :: Voice -> Builder
 renderVoice (Voice instrument notes _) =

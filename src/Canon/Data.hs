@@ -20,6 +20,17 @@ data SimpleCanon =
   ,sRepetitions :: Int
   } deriving (Show)
 
+data SimpleCanon' =
+  SimpleCanon'
+  {sTitle'       :: Title
+  ,sIxNotes'     :: [IndexedNote']
+  ,sScale'       :: Scale
+  ,sDistance'    :: Rhythm
+  ,sInstrument'  :: Instrument
+  ,sCountVoices' :: Int
+  ,sRepetitions' :: Int
+  } deriving (Show)
+
 -- | Additionally parameterize by lists of scales and octaves.
 data ScalesCanon =
   ScalesCanon
@@ -32,6 +43,17 @@ data ScalesCanon =
   ,scRepetitions :: Int
   } deriving (Show)
 
+data ScalesCanon' =
+  ScalesCanon'
+  {scTitle'       :: Title
+  ,scIxNotes'     :: [IndexedNote']
+  ,scScales'      :: [Scale]
+  ,scDistance'    :: Rhythm
+  ,scOctaves'     :: [Octave]
+  ,scInstruments' :: [Instrument]
+  ,scRepetitions' :: Int
+  } deriving (Show)
+
 -- | Additionally parameterize by imitative distance.
 data Canon =
   Canon
@@ -42,4 +64,15 @@ data Canon =
   ,cOctaves     :: [Octave]
   ,cInstruments :: [Instrument]
   ,cRepetitions :: Int
+  } deriving (Show)
+             
+data Canon' =
+  Canon'
+  {cTitle'       :: Title
+  ,cIxNotess'    :: [[IndexedNote']]
+  ,cScales'      :: [Scale]
+  ,cDistances'   :: [Rhythm]
+  ,cOctaves'     :: [Octave]
+  ,cInstruments' :: [Instrument]
+  ,cRepetitions' :: Int
   } deriving (Show)

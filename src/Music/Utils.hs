@@ -229,6 +229,12 @@ noteToRhythm (Rest rhythm)                     = rhythm
 noteToRhythm (PercussionNote rhythm)           = rhythm
 noteToRhythm (AccentedPercussionNote rhythm _) = rhythm
 
+-- | Parse rhythm common to all Notes.
+noteToRhythm' :: Note' -> Rhythm
+noteToRhythm' (Note' _ rhythm _)         = rhythm
+noteToRhythm' (Rest' rhythm _)           = rhythm
+noteToRhythm' (PercussionNote' rhythm _) = rhythm
+
 -- | Given a scale, an interval, and a Note,
 --   answer the new Note with with transposed Pitch
 transposeNote :: Scale -> Interval -> Note -> Note
@@ -242,12 +248,28 @@ transposeNote _ _ (PercussionNote rhythm) =
   PercussionNote rhythm
 transposeNote _ _ (AccentedPercussionNote rhythm accent) =
   AccentedPercussionNote rhythm accent
-    
+
+-- | Given a scale, an interval, and a Note,
+--   answer the new Note with with transposed Pitch
+transposeNote' :: Scale -> Interval -> Note' -> Note'
+transposeNote' scale interval (Note' pitch rhythm controls) =
+  Note' (transposePitch scale interval pitch) rhythm controls
+transposeNote' _ _ rest@(Rest' _ _) =
+  rest
+transposeNote' _ _ note@(PercussionNote' _ _) =
+  note
+  
 -- | Given a scale, an interval, and a list of Notes, answer
 --   a new list of Notes with all the Pitches transposed 
 transposeNotes :: Scale -> Interval -> [Note] -> [Note]
 transposeNotes scale interval notes =
   map (transposeNote scale interval) notes
+
+-- | Given a scale, an interval, and a list of Notes, answer
+--   a new list of Notes with all the Pitches transposed 
+transposeNotes' :: Scale -> Interval -> [Note'] -> [Note']
+transposeNotes' scale interval notes =
+  map (transposeNote' scale interval) notes
 
 -- Given the ascending part of a scale, an index for a pitch in that scale,
 -- and an octave relative to the tonic of that scale, answer the absolute 
@@ -282,5 +304,16 @@ indexedNoteToNote _ (IndexedPercussionNote rhythm) =
 indexedNoteToNote _ (IndexedAccentedPercussionNote rhythm accent) =
   AccentedPercussionNote rhythm accent
 
+indexedNoteToNote' :: Scale -> IndexedNote' -> Note'
+indexedNoteToNote' scale (IndexedNote' ixPitch rhythm controls) =
+  Note' (ixPitchToPitch ixPitch scale) rhythm controls
+indexedNoteToNote' _ (IndexedRest' rhythm controls) =
+  Rest' rhythm controls
+indexedNoteToNote' _ (IndexedPercussionNote' rhythm controls) =
+  PercussionNote' rhythm controls
+
 indexedNotesToNotes :: Scale -> [IndexedNote] -> [Note]
 indexedNotesToNotes scale = map (indexedNoteToNote scale)
+
+indexedNotesToNotes' :: Scale -> [IndexedNote'] -> [Note']
+indexedNotesToNotes' scale = map (indexedNoteToNote' scale)
