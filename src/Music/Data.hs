@@ -72,7 +72,7 @@ newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord,
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
--- | Controls
+-- | Controls : TBD start/end cresc, start/end decresc
 data Control =
   DynamicControl Dynamic
   | BalanceControl Balance

@@ -36,6 +36,7 @@ module RealSimpleMusic (
    ,  Instrument(..)
    ,  Control(..)
    ,  Note(..)
+   ,  addControlToNote
    ,  IndexedNote(..)
    ,  indexedNoteToNote
    ,  indexedNotesToNotes

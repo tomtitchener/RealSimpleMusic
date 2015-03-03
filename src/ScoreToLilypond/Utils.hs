@@ -24,7 +24,7 @@ charEncoding :: Char -> Builder
 charEncoding = char7
 
 -- | Rendered character constants 
-renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedNothing :: Builder
+renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedNothing, renderedDoubleBar :: Builder
 renderedQuote         = charEncoding '\''
 renderedComma         = charEncoding ','
 renderedSpace         = charEncoding ' '
@@ -37,7 +37,9 @@ renderedNewline       = charEncoding '\n'
 renderedDash          = charEncoding '-'
 renderedSlash         = charEncoding '/'
 renderedDoubleQuote   = charEncoding '\"'
+renderedAsterisk      = charEncoding '*'
 renderedNothing       = stringEncoding ""
+renderedDoubleBar     = stringEncoding "\\bar \"|.\""
 
 -- | Global reference sets key and time signatures.
 renderedGlobalKey :: Builder
@@ -118,7 +120,7 @@ renderPitch (Pitch pitchClass octave) =
 renderRhythm :: Rhythm -> [Builder]
 renderRhythm (Rhythm rhythm)
   | num == 0              = [] 
-  | num > 1 && denom == 1 = replicate num $ intDec denom 
+  | num > 1 && denom == 1 = [intDec denom <> renderedAsterisk <> intDec num]  -- replicate num $ intDec denom 
   | num == 1              = [intDec denom]
   | num == 3              = [intDec (denom `div` 2) <> renderedDot]
   | otherwise             = intDec remdenom : renderRhythm (Rhythm (rhythm - remainder))
@@ -137,22 +139,22 @@ renderRhythm (Rhythm rhythm)
 --   accentKeys always works so long as fromEnum maxBound::Accent is the length
 --   of accentKeys - 1, see testAccentNames.    
 --    
---   softest  = "\\markup {\\musicglyph #\"scripts.dmarcato\"}"
---   verysoft = "\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
---   soft     = "<"
---   hard     = ">"
---   veryhard = "\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
---   hardest  = "\\markup {\\musicglyph #\"scripts.umarcato\"}
+--   softest  = "^\\markup {\\musicglyph #\"scripts.dmarcato\"}"
+--   verysoft = "^\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
+--   soft     = "^\\markup {<}"
+--   hard     = "^\\markup {>}"
+--   veryhard = "^\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
+--   hardest  = "^\\markup {\\musicglyph #\"scripts.umarcato\"}
 accentKeys :: [String]
 accentKeys = ["\\softest", "\\verysoft", "\\soft", "", "\\hard", "\\veryhard", "\\hardest"]
 
 softestString, verysoftString, softString, hardString, veryhardString, hardestString :: String
-softestString  = "\\markup {\\musicglyph #\"scripts.dmarcato\"}"
-verysoftString = "\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
-softString     = "\\markup {<}"
-hardString     = "\\markup {>}"
-veryhardString = "\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
-hardestString  = "\\markup {\\musicglyph #\"scripts.umarcato\"}"
+softestString  = "^\\markup {\\musicglyph #\"scripts.dmarcato\"}"
+verysoftString = "^\\markup {\\musicglyph #\"scripts.upedaltoe\"}"
+softString     = "^\\markup {<}"
+hardString     = "^\\markup {>}"
+veryhardString = "^\\markup {\\musicglyph #\"scripts.dpedaltoe\"}"
+hardestString  = "^\\markup {\\musicglyph #\"scripts.umarcato\"}"
 
 accentValues :: [String]
 accentValues = [softestString, verysoftString, softString, hardString, veryhardString, hardestString]
@@ -177,14 +179,14 @@ renderDynamic dynamic =  stringEncoding $ dynamicValues !! fromEnum dynamic
 
 -- | NoBalance | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
-balanceValues = ["", "\\markup {left}", "\\markup {center-left}", "\\markup {center}", "\\markup {center-right}", "\\markup {right}"] 
+balanceValues = ["", "_\\markup {left}", "_\\markup {center-left}", "_\\markup {center}", "_\\markup {center-right}", "_\\markup {right}"] 
 
 -- | Match of enum values to list above.
 renderBalance :: Balance -> Builder
 renderBalance balance = stringEncoding $ balanceValues !! fromEnum balance
 
 renderPan :: Pan -> Builder
-renderPan (Pan pan) = stringEncoding "\\markup {pan " <> intDec pan <> stringEncoding " }"
+renderPan (Pan pan) = stringEncoding "_\\markup {pan "<> intDec pan <> renderedClose
 
 renderTempo :: Tempo -> Builder
 renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\tempo " <> integerDec numer <> stringEncoding " = " <> integerDec bpm' 
@@ -290,6 +292,8 @@ renderVoice (Voice instrument notes) =
   <> renderedGlobalKey
   <> renderedSpace
   <> renderNotes notes
+  <> renderedSpace
+  <> renderedDoubleBar
   <> renderedClose
   <> renderedNewline
 

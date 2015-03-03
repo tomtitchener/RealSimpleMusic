@@ -4,12 +4,9 @@ import           Data.ByteString.Builder
 import           Data.List (sort)
 import           Data.Ratio
 import qualified Data.Set as Set
-  
-import           Test.HUnit
--- import Test.QuickCheck
-
 import           RealSimpleMusic
 import           ScoreToLilypond.Utils
+import           Test.HUnit
 
 allPitchClasses :: [PitchClass]
 allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]

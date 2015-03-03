@@ -3,6 +3,7 @@ module Music.Utils where
 
 import           Data.List
 import           Data.Maybe
+import qualified Data.Set as Set
 import qualified Data.Vector as DV
 import           Music.Data
 
@@ -226,6 +227,12 @@ noteToRhythm :: Note -> Rhythm
 noteToRhythm (Note _ rhythm _)         = rhythm
 noteToRhythm (Rest rhythm _)           = rhythm
 noteToRhythm (PercussionNote rhythm _) = rhythm
+
+-- | Insert control common to all Notes
+addControlToNote :: Note -> Control -> Note
+addControlToNote (Note pitch rhythm controls)     control = Note pitch rhythm (Set.insert control controls)
+addControlToNote (Rest rhythm controls)           control = Rest rhythm (Set.insert control controls)
+addControlToNote (PercussionNote rhythm controls) control = PercussionNote rhythm (Set.insert control controls)
 
 -- | Given a scale, an interval, and a Note,
 --   answer the new Note with with transposed Pitch
