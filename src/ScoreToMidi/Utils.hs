@@ -80,7 +80,6 @@ pitchClassToOffset Cf  = 11
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => Dynamic -> a
-dynamicToVolume NoDynamic  = 50
 dynamicToVolume Pianissimo = 10
 dynamicToVolume Piano      = 30
 dynamicToVolume MezzoPiano = 50
@@ -100,7 +99,6 @@ accentToVelocity Hardest  = fromIntegral (VoiceMsg.fromVelocity VoiceMsg.normalV
 
 -- | Balance enum -> Balance value
 balanceToBalance :: Num a => Balance -> a
-balanceToBalance NoBalance       = 64
 balanceToBalance LeftBalance     = 1
 balanceToBalance MidLeftBalance  = 32
 balanceToBalance CenterBalance   = 64
@@ -203,6 +201,7 @@ genMidiTextMetaEvent :: String -> Event.T
 genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
 foldControl :: ChannelMsg.Channel -> [Event.T] -> Control -> [Event.T]
+foldControl _       events (SwellControl         _)             =                                                       events -- TBD
 foldControl channel events (DynamicControl       dynamic)       = (genMidiDynamicControlEvent    channel dynamic)      :events
 foldControl channel events (BalanceControl       balance)       = (genMidiBalanceControlEvent    channel balance)      :events
 foldControl channel events (PanControl           pan)           = (genMidiPanControlEvent        channel pan)          :events
@@ -217,6 +216,7 @@ foldControl _       events (AccentControl        _)             =               
 accentFromControl :: Control -> Accent
 accentFromControl control =
   case control of
+    SwellControl _         -> error $ "accentFromControl expected Accent, got Swell"
     DynamicControl _       -> error $ "accentFromControl expected Accent, got Dynamic"
     BalanceControl _       -> error $ "accentFromControl expected Accent, got Balance"
     PanControl _           -> error $ "accentFromControl expected Accent, got Pan"

@@ -169,17 +169,25 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 renderAccent :: Accent -> Builder
 renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 
--- | Match strings to enum: NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo 
+-- | Match strings to enum: Crescendo, EndCrescendo, Decrescendo, EndDecrescendo
+swellValues :: [String]
+swellValues = ["\\<", "\\!", "\\>", "\\!"]
+
+-- | Match of enum values to list above.
+renderSwell :: Swell -> Builder
+renderSwell swell =  stringEncoding $ swellValues !! fromEnum swell
+
+-- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo 
 dynamicValues :: [String]
-dynamicValues = ["", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff"]
+dynamicValues = ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff"]
 
 -- | Match of enum values to list above.
 renderDynamic :: Dynamic -> Builder
 renderDynamic dynamic =  stringEncoding $ dynamicValues !! fromEnum dynamic
 
--- | NoBalance | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
+-- | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
-balanceValues = ["", "_\\markup {left}", "_\\markup {center-left}", "_\\markup {center}", "_\\markup {center-right}", "_\\markup {right}"] 
+balanceValues = ["_\\markup {left}", "_\\markup {center-left}", "_\\markup {center}", "_\\markup {center-right}", "_\\markup {right}"] 
 
 -- | Match of enum values to list above.
 renderBalance :: Balance -> Builder
@@ -238,6 +246,7 @@ renderNoteForRhythms renderedPitch renderedControls (renderedRhythm:renderedRhyt
 
 -- | Emit Lilypond text corresponding to Music Control enum.
 renderControl :: Control -> Builder
+renderControl (SwellControl swell)                 = renderSwell         swell
 renderControl (DynamicControl dynamic)             = renderDynamic       dynamic
 renderControl (BalanceControl balance)             = renderBalance       balance
 renderControl (PanControl pan)                     = renderPan           pan

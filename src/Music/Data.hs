@@ -32,10 +32,13 @@ data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 
 -- | Dynamic
-data Dynamic = NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo deriving (Bounded, Enum, Show, Ord, Eq)
+data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo deriving (Bounded, Enum, Show, Ord, Eq)
+
+-- | Crescendo/Decrescendo, e.g. "Swell"
+data Swell = Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Balance
-data Balance = NoBalance | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
+data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Pan
 newtype Pan = Pan { getPan :: Int } deriving (Read, Show, Ord, Eq, Num)
@@ -72,9 +75,10 @@ newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord,
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
--- | Controls : TBD start/end cresc, start/end decresc
+-- | Controls
 data Control =
-  DynamicControl Dynamic
+  SwellControl Swell
+  | DynamicControl Dynamic
   | BalanceControl Balance
   | PanControl Pan
   | TempoControl Tempo
@@ -83,7 +87,8 @@ data Control =
   | ArticulationControl Articulation
   | TextControl String
   | InstrumentControl Instrument
-  | AccentControl Accent deriving (Ord, Eq, Show)
+  | AccentControl Accent
+  deriving (Ord, Eq, Show)
                                   
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
 --   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
