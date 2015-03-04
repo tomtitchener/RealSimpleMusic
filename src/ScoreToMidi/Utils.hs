@@ -169,6 +169,12 @@ genMidiPanControlEvent chan pan
   | maxBound < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum " ++ show (maxBound::Pan)
   | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama (getPan pan))
 
+-- | Midi Channel Prefix tells system what channel to associate with
+--   meta events before an event with a channel appears.  Customary
+--   to use channel 1 at the start of a file.
+genMidiPrefixMetaEvent :: ChannelMsg.Channel -> Event.T
+genMidiPrefixMetaEvent = (Event.MetaEvent . Meta.MIDIPrefix)
+
 -- | Microseconds per quarter note, default 120 beats per minute is
 --   500,000 or defltTempo, so that'd be for a quarter that gets 120.
 genMidiTempoMetaEvent :: Tempo -> Event.T
@@ -183,9 +189,11 @@ genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
   (Event.MetaEvent . Meta.KeySig) $ MidiKeySignature.Cons MidiKeySignature.Major (MidiKeySignature.Accidentals countAccidentals)
 
+-- | Numerator is what you'd expect.  Denominator is interpreted
+--   0 -> whole, 1 -> half, 2 -> quarter, 3 -> eighth, etc.
 genMidiTimeSignatureMetaEvent :: TimeSignature -> Event.T
 genMidiTimeSignatureMetaEvent (TimeSignature num denom) =
-  Event.MetaEvent $ Meta.TimeSig (fromIntegral num) (fromIntegral denom) 0 0 -- metronome, n32notes
+  Event.MetaEvent $ Meta.TimeSig (fromIntegral num) ((fromIntegral denom) `div` 2) 0 0 -- metronome, n32notes
   
 genMidiSustenutoControlEvent :: ChannelMsg.Channel -> Articulation -> Event.T    
 genMidiSustenutoControlEvent chan articulation =
@@ -330,20 +338,25 @@ voiceAndChannelToMidiVoice (Voice instr notes) channel =
 --   for Sound.MIDI.File.Save.toByteString.
 midiVoiceToMidiFile :: EventList.T Event.ElapsedTime Event.T -> MidiVoice -> MidiFile.T
 midiVoiceToMidiFile metaEvents midiVoice =
-  MidiFile.Cons MidiFile.Mixed standardTicks $ [metaEvents] ++ [voiceEventList]
+  MidiFile.Cons MidiFile.Mixed standardTicks $ [EventList.merge metaEvents voiceEventList]
   where
     voiceEventList = midiVoiceToEventList midiVoice
+
+-- The first track of a Format 1 file is special, and is also known as the 'Tempo Map'.
+-- It should contain all meta-events of the types Time Signature, and Set Tempo.
+-- The meta-events Sequence/Track Name, Sequence Number, Marker, and SMTPE Offset
+-- should also be on the first track of a Format 1 file.
 
 -- | Generate meta events for start of file.
 scoreToMetaEvents :: Score -> EventList.T Event.ElapsedTime Event.T
 scoreToMetaEvents (Score _ _ tempo timeSignature keySignature _) =
---eventLists
   foldl1 EventList.merge eventLists
   where
+    midiPrefixEventPair    = (Dur 0, genMidiPrefixMetaEvent (ChannelMsg.toChannel 0))
     tempoEventPair         = (Dur 0, genMidiTempoMetaEvent tempo)
     timeSignatureEventPair = (Dur 0, genMidiTimeSignatureMetaEvent timeSignature)
     keySignatureEventPair  = (Dur 0, genMidiKeySignatureMetaEvent keySignature)
-    eventLists             = map (EventList.fromPairList . map durEventToNumEvent) [[tempoEventPair], [timeSignatureEventPair], [keySignatureEventPair]]
+    eventLists             = map (EventList.fromPairList . map durEventToNumEvent) [[midiPrefixEventPair], [tempoEventPair], [timeSignatureEventPair], [keySignatureEventPair]]
     
 -- | Given title, voice, and part number, generate
 --   title, convert voice to create midi file byte
@@ -453,7 +466,7 @@ scoreVoicessAndChannelssToByteString score voicess channelss
     midiVoices      = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
     voiceEventLists = map midiVoiceToEventList midiVoices
     metaEvents      = scoreToMetaEvents score 
-    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks $ [foldl1 EventList.merge voiceEventLists] ++ [metaEvents]
+    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks $ [EventList.merge metaEvents (foldl1 EventList.merge voiceEventLists)] 
 
 scoreVoicessAndChannelssToOneMidiFile :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
 scoreVoicessAndChannelssToOneMidiFile score@(Score title _ _ _ _ _) voicess channelss =
