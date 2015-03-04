@@ -135,5 +135,9 @@ type Title = String
 --   TBD:  time and key signatures, composer, date.
 data Score =
   Score { scoreTitle :: Title
+        , scoreComposer :: String
+        , scoreTempo :: Tempo
+        , scoreTimeSignature :: TimeSignature
+        , scoreKeySignature :: KeySignature
         , scoreVoices :: [Voice]
         } deriving (Show)

@@ -281,8 +281,8 @@ midiVoiceToEventList (MidiVoice (Instrument instrName) channel notes)
   | otherwise           = progAndNoteEvents
   where
     instr             = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
-    noteEventss       = map (\ns -> snd $ execState (traverse (midiNoteToEvents channel) ns) (Dur 0, [])) [notes]
-    noteEventLists    = map (EventList.fromPairList . map durEventToNumEvent) noteEventss
+    noteEvents        = map (\ns -> snd $ execState (traverse (midiNoteToEvents channel) ns) (Dur 0, [])) [notes]
+    noteEventLists    = map (EventList.fromPairList . map durEventToNumEvent) noteEvents
     progAndNoteEvents = EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) (foldl1 EventList.merge noteEventLists)
 
 -- | rhythmToDuration(Rhythm(1%4)) == 512%1 * 1%4 == 512%4 == 128 ticks per quarter note
@@ -328,26 +328,38 @@ voiceAndChannelToMidiVoice (Voice instr notes) channel =
 -- | Given a MidiVoice, convert instrument, channel, notes, and
 --   controls to midi, then assemble MidiFile.T in preparation
 --   for Sound.MIDI.File.Save.toByteString.
-midiVoiceToMidiFile :: MidiVoice -> MidiFile.T
-midiVoiceToMidiFile midiVoice =
-  MidiFile.Cons MidiFile.Mixed standardTicks [voiceEventList]
+midiVoiceToMidiFile :: EventList.T Event.ElapsedTime Event.T -> MidiVoice -> MidiFile.T
+midiVoiceToMidiFile metaEvents midiVoice =
+  MidiFile.Cons MidiFile.Mixed standardTicks $ [metaEvents] ++ [voiceEventList]
   where
     voiceEventList = midiVoiceToEventList midiVoice
+
+-- | Generate meta events for start of file.
+scoreToMetaEvents :: Score -> EventList.T Event.ElapsedTime Event.T
+scoreToMetaEvents (Score _ _ tempo timeSignature keySignature _) =
+--eventLists
+  foldl1 EventList.merge eventLists
+  where
+    tempoEventPair         = (Dur 0, genMidiTempoMetaEvent tempo)
+    timeSignatureEventPair = (Dur 0, genMidiTimeSignatureMetaEvent timeSignature)
+    keySignatureEventPair  = (Dur 0, genMidiKeySignatureMetaEvent keySignature)
+    eventLists             = map (EventList.fromPairList . map durEventToNumEvent) [[tempoEventPair], [timeSignatureEventPair], [keySignatureEventPair]]
     
 -- | Given title, voice, and part number, generate
 --   title, convert voice to create midi file byte
 --   string and write file.
-titleAndMidiVoiceToMidiFile :: Title -> MidiVoice -> Int -> IO ()
-titleAndMidiVoiceToMidiFile title voice@(MidiVoice (Instrument instr) _ _) part =
+scoreAndMidiVoiceToMidiFile :: Score -> MidiVoice -> Int -> IO ()
+scoreAndMidiVoiceToMidiFile score@(Score title _ _ _ _ _) voice@(MidiVoice (Instrument instr) _ _) part =
   LazyByteString.writeFile fileName $ SaveFile.toByteString midiFile
   where
     fileName = title ++ "-" ++ instr ++ "-" ++ show part ++ ".mid"
-    midiFile = midiVoiceToMidiFile voice
+    metaEvents = scoreToMetaEvents score 
+    midiFile   = midiVoiceToMidiFile metaEvents voice
 
 -- | Given title and list of voices, create midi file per voice.
-titleVoicesAndChannelsToMidiFiles :: Title -> [Voice] -> [ChannelMsg.Channel] -> IO ()
-titleVoicesAndChannelsToMidiFiles title voices channels =
-  zipWithM_ (titleAndMidiVoiceToMidiFile title) midiVoices [1..]
+scoreVoicesAndChannelsToMidiFiles :: Score -> [Voice] -> [ChannelMsg.Channel] -> IO ()
+scoreVoicesAndChannelsToMidiFiles score voices channels =
+  zipWithM_ (scoreAndMidiVoiceToMidiFile score) midiVoices [1..]
   where
     midiVoices = zipWith voiceAndChannelToMidiVoice voices channels
       
@@ -411,9 +423,9 @@ voicesToNotMidiInstruments voices =
 --   Midi files, one per voice, with name e.ag.
 --   "<title>-<instrument>-1.mid".
 scoreToMidiFiles :: Score -> IO ()
-scoreToMidiFiles (Score title voices) 
+scoreToMidiFiles score@(Score _ _ _ _ _ voices) 
   | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
-  | otherwise                     = zipWithM_ (titleVoicesAndChannelsToMidiFiles title) voicess channelss
+  | otherwise                     = zipWithM_ (scoreVoicesAndChannelsToMidiFiles score) voicess channelss
   where
     notMidiInstruments = voicesToNotMidiInstruments voices
     voicess            = collectVoicesByInstrumentWithPercussionLast voices
@@ -429,25 +441,26 @@ scoreToMidiFiles (Score title voices)
 --   track count constraints.  But files must
 --   be assembled one-by-one into editor like
 --   Logic or GarageBand.
-titleVoicessAndChannelssToByteString :: String -> [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
-titleVoicessAndChannelssToByteString _ voicess channelss
-  | null voicess                       = error "titleVoicessAndChannelssToOneMidiFile empty voicess"
-  | null channelss                     = error "titleVoicessAndChannelssToOneMidiFile empty channelss"
-  | length voicess /= length channelss = error $ "titleVoicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
-  | null midiVoices                    = error "titleVoicessAndChannelssToOneMidiFile empty midiVoicess"
-  | null voiceEventLists               = error "titleVoicessAndChannelssToOneMidiFile empty voiceEventLists"
+scoreVoicessAndChannelssToByteString :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
+scoreVoicessAndChannelssToByteString score voicess channelss
+  | length voicess /= length channelss = error $ "scoreVoicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
+  | null channelss                     = error "scoreVoicessAndChannelssToOneMidiFile empty channelss"
+  | null midiVoices                    = error "scoreVoicessAndChannelssToOneMidiFile empty midiVoicess"
+  | null voiceEventLists               = error "scoreVoicessAndChannelssToOneMidiFile empty voiceEventLists"
+  | null voicess                       = error "scoreVoicessAndChannelssToOneMidiFile empty voicess"
   | otherwise                          = SaveFile.toByteString midiFile
   where
     midiVoices      = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
     voiceEventLists = map midiVoiceToEventList midiVoices
-    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks [foldl1 EventList.merge voiceEventLists]
+    metaEvents      = scoreToMetaEvents score 
+    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks $ [foldl1 EventList.merge voiceEventLists] ++ [metaEvents]
 
-titleVoicessAndChannelssToOneMidiFile :: Title -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
-titleVoicessAndChannelssToOneMidiFile title voicess channelss =
+scoreVoicessAndChannelssToOneMidiFile :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
+scoreVoicessAndChannelssToOneMidiFile score@(Score title _ _ _ _ _) voicess channelss =
   LazyByteString.writeFile fileName byteStream
   where
     fileName   = title ++ ".mid"
-    byteStream = titleVoicessAndChannelssToByteString title voicess channelss
+    byteStream = scoreVoicessAndChannelssToByteString score voicess channelss
 
 -- | For each Voice in [[Voice]] (given that Instrument is the same),
 --   for non-percussion voices, allocate the next Midi channel, else
@@ -492,11 +505,11 @@ mapVoicessToChannelss voicess
     countAllVoices = sum $ map length voicess
       
 -- | Refactor
-convertScore :: (String -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
-convertScore convert (Score title voices) 
+convertScore :: (Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
+convertScore convert score@(Score _ _ _ _ _ voices) 
   | countVoices > maxMidiTrack      = error $ "convertScore, count of voices: " ++ show countVoices ++ " exceeds count of Midi channels: " ++ show maxMidiTrack
   | not (null notMidiInstruments)   = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
-  | otherwise                       = convert title voicess channelss
+  | otherwise                       = convert score voicess channelss
   where
     notMidiInstruments = voicesToNotMidiInstruments voices
     voicess            = collectVoicesByInstrumentWithPercussionLast voices
@@ -518,11 +531,11 @@ convertScore convert (Score title voices)
 --   of 1 percussion track and 15 non-percussion
 --   tracks.
 scoreToMidiFile :: Score -> IO ()
-scoreToMidiFile = convertScore titleVoicessAndChannelssToOneMidiFile
+scoreToMidiFile = convertScore scoreVoicessAndChannelssToOneMidiFile
 
 -- | Short-circuit write to MidiFile with output to byte string for test.
 scoreToByteString :: Score -> LazyByteString.ByteString
-scoreToByteString = convertScore titleVoicessAndChannelssToByteString
+scoreToByteString = convertScore scoreVoicessAndChannelssToByteString
 
 {--
 bash$ cabal repl

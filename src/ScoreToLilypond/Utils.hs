@@ -197,9 +197,9 @@ renderPan :: Pan -> Builder
 renderPan (Pan pan) = stringEncoding "_\\markup {pan "<> intDec pan <> renderedClose
 
 renderTempo :: Tempo -> Builder
-renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\tempo " <> integerDec numer <> stringEncoding " = " <> integerDec bpm' 
+renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\tempo " <> integerDec denom <> stringEncoding " = " <> integerDec bpm' 
   where
-    numer = numerator unit'
+    denom = denominator unit'
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
 --   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the
@@ -208,12 +208,10 @@ renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\tempo " <> integerDe
 --   by the count of sharps less two?  And for flats, what's the pitch for the count of flats plus one?
 renderKeySignature :: KeySignature -> Builder
 renderKeySignature (KeySignature accidentals') =
-  stringEncoding "\\key " <> renderPitchName tonicPitch <> renderedSpace <> stringEncoding mode <> renderedSpace
+  stringEncoding "\\key " <> renderPitchName tonicPitch <> renderedSpace <> stringEncoding "\\major" <> renderedSpace
   where
     cIndex        = cycleOfFifthsIdx C
-    cIndexOffset  = if accidentals' == 0 then 0 else if accidentals' > 0 then accidentals' - 2 else accidentals' + 1
-    tonicPitch    = cycleOfFifths !! (cIndex + cIndexOffset)
-    mode          = if accidentals' >= 0 then "minor" else "major"
+    tonicPitch    = cycleOfFifths !! (cIndex + accidentals')
 
 -- | Lilypond time signature is just e.g. "\time 2/4"
 renderTimeSignature :: TimeSignature -> Builder
@@ -315,25 +313,33 @@ renderVoices (voice:voices) = renderVoice voice <> mconcat [renderVoices voices]
 renderedVersion :: Builder
 renderedVersion = stringEncoding "\\version \"2.18.2\"\n"
 
--- | TBD: add time and key signatures to Score, then renderers for each.
-renderedGlobalValues :: Builder
-renderedGlobalValues = stringEncoding "global = {\\time 4/4 \\key c \\major}\n"
+-- | Global section contains tempo, time, and key signatures.
+renderedGlobalValues :: Tempo -> TimeSignature -> KeySignature -> Builder
+renderedGlobalValues tempo timeSignature keySignature =
+  stringEncoding "global = {"
+  <> renderTempo tempo
+  <> renderedSpace
+  <> renderTimeSignature timeSignature
+  <> renderedSpace
+  <> renderKeySignature keySignature
+  <> renderedClose
+  <> renderedNewline
 
 renderedHeader :: String -> String -> Builder
 renderedHeader title composer =
-  stringEncoding "\\header {title = "
+  stringEncoding "\\header {title = \""
   <> stringEncoding title
-  <> stringEncoding " composer = \""
+  <> stringEncoding "\" composer = \""
   <> stringEncoding composer
   <> renderedDoubleQuote
   <> renderedClose
   <> renderedNewline
   
 renderScore :: Score -> Builder
-renderScore (Score title voices) =
+renderScore (Score title composer tempo timeSignature keySignature voices) =
   renderedVersion
-  <> renderedHeader title ""
-  <> renderedGlobalValues
+  <> renderedHeader title composer
+  <> renderedGlobalValues tempo timeSignature keySignature
   <> renderedAccentValues
   <> stringEncoding "\\score {\n\\new StaffGroup << \n"
   <> renderVoices voices
@@ -345,5 +351,5 @@ scoreToLilypondByteString :: Score -> L.ByteString
 scoreToLilypondByteString = toLazyByteString . renderScore
 
 scoreToLilypondFile :: Score -> IO ()
-scoreToLilypondFile score@(Score title _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString score
+scoreToLilypondFile score@(Score title _ _ _ _ _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString score
 

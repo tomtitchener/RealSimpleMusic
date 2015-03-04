@@ -30,6 +30,7 @@ module RealSimpleMusic (
    ,  Pan(..)
    ,  Tempo(..)
    ,  KeySignature(..)
+   ,  TimeSignature(..)
    ,  Articulation(..)
    ,  Accent(..)
    ,  Rhythm(..)

@@ -4,6 +4,7 @@ module Canon.Utils where
 
 import           Canon.Data
 import           Data.List ()
+import           Data.Ratio
 import qualified Data.Set as Set
 import           RealSimpleMusic
 
@@ -17,7 +18,7 @@ import           RealSimpleMusic
 --   rest or note of all voices uniformly.
 commonCanonToScore ::  Title -> [[IndexedNote]] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
 commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions =
-  Score title voices
+  Score title "folk" (Tempo (Rhythm (1%4)) 60) (TimeSignature 4 4) (KeySignature (-1))  voices
   where
     lenScale   = length $ ascendingScale $ head scales
     notess     = zipWith indexedNotesToNotes scales ixNotess
