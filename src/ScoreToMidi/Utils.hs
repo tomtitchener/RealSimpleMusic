@@ -173,7 +173,7 @@ genMidiPanControlEvent chan pan
 --   meta events before an event with a channel appears.  Customary
 --   to use channel 1 at the start of a file.
 genMidiPrefixMetaEvent :: ChannelMsg.Channel -> Event.T
-genMidiPrefixMetaEvent = (Event.MetaEvent . Meta.MIDIPrefix)
+genMidiPrefixMetaEvent = Event.MetaEvent . Meta.MIDIPrefix
 
 -- | Microseconds per quarter note, default 120 beats per minute is
 --   500,000 or defltTempo, so that'd be for a quarter that gets 120.
@@ -182,7 +182,7 @@ genMidiTempoMetaEvent (Tempo (Rhythm rhythm) beats) =
   (Event.MetaEvent . Meta.SetTempo) $ Meta.toTempo microsPerRhythm
   where
     microsPerMinute   = 60000000
-    rhythmsPerQuarter = (denominator rhythm) % 4
+    rhythmsPerQuarter = denominator rhythm % 4
     microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
@@ -193,7 +193,7 @@ genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
 --   0 -> whole, 1 -> half, 2 -> quarter, 3 -> eighth, etc.
 genMidiTimeSignatureMetaEvent :: TimeSignature -> Event.T
 genMidiTimeSignatureMetaEvent (TimeSignature num denom) =
-  Event.MetaEvent $ Meta.TimeSig (fromIntegral num) ((fromIntegral denom) `div` 2) 0 0 -- metronome, n32notes
+  Event.MetaEvent $ Meta.TimeSig (fromIntegral num) (fromIntegral denom `div` 2) 0 0 -- metronome, n32notes
   
 genMidiSustenutoControlEvent :: ChannelMsg.Channel -> Articulation -> Event.T    
 genMidiSustenutoControlEvent chan articulation =
@@ -211,9 +211,9 @@ genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 -- Reserve from Int range beyond [0..126] values to designate begin and end crescendo and decrescendo.
 startCrescendo, stopCrescendo, startDecrescendo, stopDecrescendo :: Int
 startCrescendo   = (maxBound::Int) - 1
-stopCrescendo    = (maxBound::Int)
+stopCrescendo    = maxBound::Int
 startDecrescendo = (minBound::Int) + 1
-stopDecrescendo  = (minBound::Int)
+stopDecrescendo  = minBound::Int
 
 -- Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 genMidiSwellControlEvent :: ChannelMsg.Channel -> Swell -> Event.T
@@ -223,34 +223,34 @@ genMidiSwellControlEvent chan Decrescendo    = genEvent chan (VoiceMsg.Control V
 genMidiSwellControlEvent chan EndDecrescendo = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume stopDecrescendo)
 
 foldControl :: ChannelMsg.Channel -> [Event.T] -> Control -> [Event.T]
-foldControl channel events (SwellControl         swell)         = (genMidiSwellControlEvent      channel swell)        :events
-foldControl channel events (DynamicControl       dynamic)       = (genMidiDynamicControlEvent    channel dynamic)      :events
-foldControl channel events (BalanceControl       balance)       = (genMidiBalanceControlEvent    channel balance)      :events
-foldControl channel events (PanControl           pan)           = (genMidiPanControlEvent        channel pan)          :events
-foldControl _       events (TempoControl         tempo)         = (genMidiTempoMetaEvent         tempo)                :events
-foldControl _       events (KeySignatureControl  keySignature)  = (genMidiKeySignatureMetaEvent  keySignature)         :events
-foldControl _       events (TimeSignatureControl timeSignature) = (genMidiTimeSignatureMetaEvent timeSignature)        :events
-foldControl channel events (ArticulationControl  articulation)  = (genMidiSustenutoControlEvent  channel articulation) :events
-foldControl channel events (InstrumentControl    instrument)    = (genMidiInstrumentControlEvent channel instrument)   :events
-foldControl _       events (TextControl          text)          = (genMidiTextMetaEvent          text)                 :events
+foldControl channel events (SwellControl         swell)         = genMidiSwellControlEvent      channel swell        :events
+foldControl channel events (DynamicControl       dynamic)       = genMidiDynamicControlEvent    channel dynamic      :events
+foldControl channel events (BalanceControl       balance)       = genMidiBalanceControlEvent    channel balance      :events
+foldControl channel events (PanControl           pan)           = genMidiPanControlEvent        channel pan          :events
+foldControl _       events (TempoControl         tempo)         = genMidiTempoMetaEvent         tempo                :events
+foldControl _       events (KeySignatureControl  keySignature)  = genMidiKeySignatureMetaEvent  keySignature         :events
+foldControl _       events (TimeSignatureControl timeSignature) = genMidiTimeSignatureMetaEvent timeSignature        :events
+foldControl channel events (ArticulationControl  articulation)  = genMidiSustenutoControlEvent  channel articulation :events
+foldControl channel events (InstrumentControl    instrument)    = genMidiInstrumentControlEvent channel instrument   :events
+foldControl _       events (TextControl          text)          = genMidiTextMetaEvent          text                 :events
 foldControl _       events (AccentControl        _)             =                                                       events
 
 accentFromControl :: Control -> Accent
 accentFromControl control =
   case control of
-    SwellControl _         -> error $ "accentFromControl expected Accent, got Swell"
-    DynamicControl _       -> error $ "accentFromControl expected Accent, got Dynamic"
-    BalanceControl _       -> error $ "accentFromControl expected Accent, got Balance"
-    PanControl _           -> error $ "accentFromControl expected Accent, got Pan"
-    TempoControl _         -> error $ "accentFromControl expected Accent, got Tempo"
-    KeySignatureControl _  -> error $ "accentFromControl expected Accent, got KeySignature"
-    TimeSignatureControl _ -> error $ "accentFromControl expected Accent, got TimeSignature"
-    ArticulationControl _  -> error $ "accentFromControl expected Accent, got Articulation"
-    TextControl _          -> error $ "accentFromControl expected Accent, got Text"
-    InstrumentControl _    -> error $ "accentFromControl expected Accent, got Instrument"
+    SwellControl _         -> error "accentFromControl expected Accent, got Swell"
+    DynamicControl _       -> error "accentFromControl expected Accent, got Dynamic"
+    BalanceControl _       -> error "accentFromControl expected Accent, got Balance"
+    PanControl _           -> error "accentFromControl expected Accent, got Pan"
+    TempoControl _         -> error "accentFromControl expected Accent, got Tempo"
+    KeySignatureControl _  -> error "accentFromControl expected Accent, got KeySignature"
+    TimeSignatureControl _ -> error "accentFromControl expected Accent, got TimeSignature"
+    ArticulationControl _  -> error "accentFromControl expected Accent, got Articulation"
+    TextControl _          -> error "accentFromControl expected Accent, got Text"
+    InstrumentControl _    -> error "accentFromControl expected Accent, got Instrument"
     AccentControl accent   -> accent
 
-lookupAccent :: (Set.Set Control) -> Accent
+lookupAccent :: Set.Set Control -> Accent
 lookupAccent controls =
   case Set.lookupIndex (AccentControl Normal) controls of
    Nothing -> Normal
@@ -259,7 +259,7 @@ lookupAccent controls =
 -- | Create two element list, each with pair containing duration and Sound event
 --   where first element contains delay and note on (e.g. for preceding rest)
 --   and second contains duration and note off (e.g. for length of note).
-genMidiNoteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> (Set.Set Control) -> [(Duration, Event.T)]
+genMidiNoteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Set.Set Control -> [(Duration, Event.T)]
 genMidiNoteEvents delay channel pitch duration controls
   | minBound > delay    = error $ "genMidiNoteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
   | maxBound < delay    = error $ "genMidiNoteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
@@ -274,7 +274,7 @@ genMidiNoteEvents delay channel pitch duration controls
     events          = controlEvents ++ [onEvent, offEvent]
     durations       = [delay] ++ replicate (length controlEvents) (Dur 0) ++ [duration]
 
-genMidiControlEvents :: ChannelMsg.Channel -> (Set.Set Control) -> [(Duration, Event.T)]
+genMidiControlEvents :: ChannelMsg.Channel -> Set.Set Control -> [(Duration, Event.T)]
 genMidiControlEvents channel controls =
   zip (replicate (Set.size controls) (Dur 0)) $ Set.foldl (foldControl channel) [] controls
 
@@ -336,6 +336,7 @@ genMidiControlEvents channel controls =
 -- PanDown, and StopPanDown to Pan, and add Accelerando, StopAccelerando, Deaccelerando, and
 -- StopDeaccelerando to Tempo.  The second two fixes are going to be trouble because they're
 -- both currently just bounded scalar values.
+{--
 midiNoteToEvents :: ChannelMsg.Channel -> MidiNote -> State (Duration, [(Duration, Event.T)]) Duration
 midiNoteToEvents ch (MidiNote pitch rhythm controls) =
   do (rest, events) <- get
@@ -347,23 +348,35 @@ midiNoteToEvents ch (MidiRest rhythm controls) =
      return $ dur + rest
   where
     dur = rhythmToDuration rhythm
-    
+--}
+
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
 durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
 --durEventToNumEvent (dur, event) = (fmap (,) durationFromInteger) dur event
 
+midiNoteToEvents :: ChannelMsg.Channel -> MidiNote -> State (Duration, EventList.T Event.ElapsedTime Event.T) Duration
+midiNoteToEvents ch (MidiNote pitch rhythm controls) =
+  do (rest, events) <- get
+     put (Dur 0, EventList.append events ((EventList.fromPairList . map durEventToNumEvent) (genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) controls)))
+     return (Dur 0)
+midiNoteToEvents ch (MidiRest rhythm controls) =  
+  do (rest, events) <- get
+     put (dur + rest, EventList.append events ((EventList.fromPairList . map durEventToNumEvent) (genMidiControlEvents ch controls)))
+     return $ dur + rest
+  where
+    dur = rhythmToDuration rhythm
+    
 -- | Traverse notes accumulating and emiting rests, converting to Midi
 --   traverse controls converting to Midi,
 --   convert results to single event list merged in time.
 midiVoiceToEventList :: MidiVoice -> EventList.T Event.ElapsedTime Event.T
 midiVoiceToEventList (MidiVoice (Instrument instrName) channel notes)
-  | null noteEventLists = EventList.empty
-  | otherwise           = progAndNoteEvents
+  | EventList.empty == noteEvents = EventList.empty
+  | otherwise                     = progAndNoteEvents
   where
     instr             = Data.Maybe.fromJust $ GeneralMidi.instrumentNameToProgram instrName
-    noteEvents        = map (\ns -> snd $ execState (traverse (midiNoteToEvents channel) ns) (Dur 0, [])) [notes]
-    noteEventLists    = map (EventList.fromPairList . map durEventToNumEvent) noteEvents
-    progAndNoteEvents = EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) (foldl1 EventList.merge noteEventLists)
+    noteEvents        = snd $ execState (traverse (midiNoteToEvents channel) notes) (Dur 0, EventList.empty)
+    progAndNoteEvents = EventList.cons 0 (genEvent channel (VoiceMsg.ProgramChange instr)) noteEvents
 
 -- | rhythmToDuration(Rhythm(1%4)) == 512%1 * 1%4 == 512%4 == 128 ticks per quarter note
 standardTicks :: MidiFile.Division
@@ -410,7 +423,7 @@ voiceAndChannelToMidiVoice (Voice instr notes) channel =
 --   for Sound.MIDI.File.Save.toByteString.
 midiVoiceToMidiFile :: EventList.T Event.ElapsedTime Event.T -> MidiVoice -> MidiFile.T
 midiVoiceToMidiFile metaEvents midiVoice =
-  MidiFile.Cons MidiFile.Mixed standardTicks $ [EventList.merge metaEvents voiceEventList]
+  MidiFile.Cons MidiFile.Mixed standardTicks [EventList.merge metaEvents voiceEventList]
   where
     voiceEventList = midiVoiceToEventList midiVoice
 
@@ -538,7 +551,7 @@ scoreVoicessAndChannelssToByteString score voicess channelss
     midiVoices      = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
     voiceEventLists = map midiVoiceToEventList midiVoices
     metaEvents      = scoreToMetaEvents score 
-    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks $ [EventList.merge metaEvents (foldl1 EventList.merge voiceEventLists)] 
+    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks [EventList.merge metaEvents (foldl1 EventList.merge voiceEventLists)] 
 
 scoreVoicessAndChannelssToOneMidiFile :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
 scoreVoicessAndChannelssToOneMidiFile score@(Score title _ _ _ _ _) voicess channelss =

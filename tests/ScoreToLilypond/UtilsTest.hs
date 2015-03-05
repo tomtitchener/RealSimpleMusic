@@ -25,7 +25,7 @@ testAccidentalNames =
 
 testAccentNames :: Assertion
 testAccentNames = 
-  fromEnum (maxBound::Accent) @=? (length accentValues)
+  fromEnum (maxBound::Accent) @=? length accentValues
 
 testRenderPitchOctaves :: Assertion
 testRenderPitchOctaves =
@@ -37,15 +37,15 @@ testRenderPitchAccidentals =
 
 testRenderRhythmBase :: Assertion
 testRenderRhythmBase =
-  (map . map) (toLazyByteString . stringEncoding) [["1"], ["2"], ["4"], ["8"], ["16"], ["32"], ["64"]] @=? (map . map) toLazyByteString (map (renderRhythm . Rhythm) [1%1, 1%2, 1%4, 1%8, 1%16, 1%32, 1%64])
+  (map . map) (toLazyByteString . stringEncoding) [["1"], ["2"], ["4"], ["8"], ["16"], ["32"], ["64"]] @=? map (map toLazyByteString . renderRhythm . Rhythm) [1%1, 1%2, 1%4, 1%8, 1%16, 1%32, 1%64]
 
 testRenderRhythmDots :: Assertion
 testRenderRhythmDots =
-  (map . map) (toLazyByteString . stringEncoding) [["1."], ["2."], ["4."], ["8."], ["16."], ["32."], ["64."]] @=? (map . map) toLazyByteString (map (renderRhythm . Rhythm) [3%2, 3%4, 3%8, 3%16, 3%32, 3%64, 3%128])
+  (map . map) (toLazyByteString . stringEncoding) [["1."], ["2."], ["4."], ["8."], ["16."], ["32."], ["64."]] @=? map (map toLazyByteString . renderRhythm . Rhythm) [3%2, 3%4, 3%8, 3%16, 3%32, 3%64, 3%128]
 
 testRenderRhythmTies :: Assertion
 testRenderRhythmTies =
-  (map . map) (toLazyByteString . stringEncoding) [["1", "4"], ["1", "2."], ["1", "1", "4"], ["2", "8"], ["2."]] @=? (map . map) toLazyByteString (map (renderRhythm . Rhythm) [5%4, 7%4, 9%4, 5%8, 6%8])
+  (map . map) (toLazyByteString . stringEncoding) [["1", "4"], ["1", "2."], ["1", "1", "4"], ["2", "8"], ["2."]] @=? map (map toLazyByteString . renderRhythm . Rhythm) [5%4, 7%4, 9%4, 5%8, 6%8]
 
 testRenderNote :: Assertion
 testRenderNote =

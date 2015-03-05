@@ -25,14 +25,14 @@ commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions
     intervals  = map ((* lenScale) . getOctave) octaves
     xpNotes    = zipWith3 (\scale interval notes -> map (transposeNote scale interval) notes) scales intervals notess
     tunes      = map (concat . replicate repetitions) xpNotes
-    incr       = getPan (maxBound::Pan) `div` (length instruments)
+    incr       = getPan (maxBound::Pan) `div` length instruments
     pans       = map (\i -> PanControl (Pan (incr * i))) [0,1..]
     durs       = scanl (+) (getRhythm (head rhythms)) $ map getRhythm (tail rhythms)
-    rests      = map (\dur -> (Rest (Rhythm dur) Set.empty)) durs
+    rests      = map (\dur -> Rest (Rhythm dur) Set.empty) durs
     tunes'     = head tunes : zipWith (:) rests (tail tunes) -- leading rests
     tunes''    = reverse $ head rtunes : zipWith (\r t -> t ++ [r]) rests (tail rtunes) where rtunes = reverse tunes' -- trailing rests
     tunes'''   = zipWith (\tune pan -> addControlToNote (head tune) pan : tail tune) tunes'' pans -- pans
-    voices     = zipWith (\instrument tune -> Voice instrument tune) instruments tunes'''
+    voices     = zipWith Voice instruments tunes'''
 
 -- | Converting most general Canon to Score is just a call to most general conversion function.
 canonToScore :: Canon -> Score

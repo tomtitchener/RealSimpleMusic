@@ -160,7 +160,7 @@ accentValues :: [String]
 accentValues = [softestString, verysoftString, softString, hardString, veryhardString, hardestString]
 
 renderAccentKeyValue :: String -> String -> Builder
-renderAccentKeyValue key val = stringEncoding $ (filter (/= '\\') key) ++ " = " ++ val ++ "\n"
+renderAccentKeyValue key val = stringEncoding $ filter (/= '\\') key ++ " = " ++ val ++ "\n"
 
 renderedAccentValues :: Builder
 renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") accentKeys) accentValues
