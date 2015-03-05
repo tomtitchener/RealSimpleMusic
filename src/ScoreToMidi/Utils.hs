@@ -208,8 +208,22 @@ genMidiInstrumentControlEvent chan (Instrument instrName) =
 genMidiTextMetaEvent :: String -> Event.T
 genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
+-- Reserve from Int range beyond [0..126] values to designate begin and end crescendo and decrescendo.
+startCrescendo, stopCrescendo, startDecrescendo, stopDecrescendo :: Int
+startCrescendo   = (maxBound::Int) - 1
+stopCrescendo    = (maxBound::Int)
+startDecrescendo = (minBound::Int) + 1
+stopDecrescendo  = (minBound::Int)
+
+-- Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
+genMidiSwellControlEvent :: ChannelMsg.Channel -> Swell -> Event.T
+genMidiSwellControlEvent chan Crescendo      = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume startCrescendo)
+genMidiSwellControlEvent chan EndCrescendo   = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume stopCrescendo)
+genMidiSwellControlEvent chan Decrescendo    = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume startDecrescendo)
+genMidiSwellControlEvent chan EndDecrescendo = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume stopDecrescendo)
+
 foldControl :: ChannelMsg.Channel -> [Event.T] -> Control -> [Event.T]
-foldControl _       events (SwellControl         _)             =                                                       events -- TBD
+foldControl channel events (SwellControl         swell)         = (genMidiSwellControlEvent      channel swell)        :events
 foldControl channel events (DynamicControl       dynamic)       = (genMidiDynamicControlEvent    channel dynamic)      :events
 foldControl channel events (BalanceControl       balance)       = (genMidiBalanceControlEvent    channel balance)      :events
 foldControl channel events (PanControl           pan)           = (genMidiPanControlEvent        channel pan)          :events
@@ -264,6 +278,64 @@ genMidiControlEvents :: ChannelMsg.Channel -> (Set.Set Control) -> [(Duration, E
 genMidiControlEvents channel controls =
   zip (replicate (Set.size controls) (Dur 0)) $ Set.foldl (foldControl channel) [] controls
 
+-- TBD: replace Duration which is current rest as result with record with fields to manage 
+-- continously varying controls like dynamic and pan:  current dynamic, current pan, buffer
+-- of [(Duration, Event.T)] for events between the start of e.g. crescendo/decrescendo until
+-- the close, e.g. a new Dynamic control or end crescendo/end decrescendo.  For end demarcations
+-- there'll have to be a default range corresponding to one interval, p -> mp, mp -> f, etc.
+-- To start, just latch current value for continously-varying controls rest, pan, dynamic, and 
+-- ignore swell controls (recognize by special values).  Going to mean testing Event.T against
+-- values, which documentation says you can do, e.g. event == mainVolume and then fromController
+-- to get controller value, I guess.  So I'll be interested in event == mainVolume && fromController
+-- event == one of startCrescendo or startDecrescendo.  Note I'll need a state, as in accumulating
+-- events for crescendo, although I guess that can be indicated by a non-empty buffer of events
+-- for a crescendo replay.  For consistency, I should verify no start decrescendo when buffering
+-- for a crescendo and vice versa.  And consider overlap of continously varying controls, like
+-- simultanous sweep (pan) and swell (dynamic).  Maybe what I need is to merge event lists again?
+-- If I'm buffering simultaneously and the unit of time resolution is the same and one control 
+-- terminates then can I flush intermediate results?  No, because I don't know what the unit of
+-- control per event is going to be until I encounter the stop event!  Instead, when I hit e.g.
+-- the end of a crescendo and I've simultaneously started a pan, then I need to hold onto the
+-- overlapping crescendo events and emit them when the pan concludes.  Note one set of delays
+-- collapses in this case.  Note that e.g. with accelerando etc., tempo can also be a continuously
+-- changing control.  So there could be three overlapping transitions.  Furthermore, you have to
+-- allow for a new transition starting before the old one concludes.  So the buffers for each
+-- of the controls that can continuously vary have to be a lists of lists.  Once I see a start
+-- event, I accumulate following events in the buffer until I see the close event.  Other start
+-- events accumulate following events additionally.  There has to be a flag to indicate the
+-- buffering state for a given control.  On termination via a close event, first a check has
+-- to be made to see if there are any overlapping controls.  If there are none, then it's safe
+-- to emit the buffered events interspersed with incremental adjustments to the control.  The
+-- duration, including rests, of the buffered span serves as the span over which to generate
+-- incremental increments for the control.  Maybe this is the place to do the merge, e.g. if
+-- I just create two arrays, one with incremental updates, one with buffered updates, and
+-- merge them together.  Do the types work?  It may not work because time here is Duration
+-- and needs to be converted afterward via the composition of fromPairList and durEventToNumEvent.
+-- So for merge to work here, type in list has to be EventList.T Event.ElapsedTime Event.T, or
+-- result of merge with nothing.  How do those types work absent buffering?  The State result
+-- can just be append of existing value with fromPairList of singleton list converted to the
+-- right time type.  Or even just Eventlist.T as constructor of converted time and Event.T.
+-- Effect is that answer from snd of execState of midiNoteToEvents is already to go.  This
+-- seems like an effect first stage to the conversion.  Next would be to buffer a single
+-- continuous control at a time.  Note State spans "answer" and "state" and what I have to
+-- start is a Pair Duration [(Duration,Event.T)] for state and Duration as answer, in this
+-- case, it'd be left-over rest duration waiting for a note (which goes entirely ignored
+-- because in Midi-land it doesn't signify).  Anyway, I run execState, which pulls the State
+-- from the result and then I extract the second element of the pair.  To start, I can keep
+-- the Pair but have the second element be EventList.T Event.ElapsedTime Event.T.  But when
+-- I do the buffering, say just for dynamic controls, then I need more than just two values,
+-- Duration and EventList.T Event.ElapsedTime Event.T.  I need those and additionally I need
+-- that pair-list [(Duration, Event.T)].  Or do I?  I could keep appending in my buffer,
+-- seeing as merge takes that as an input, and it looks like I can call duration for a
+-- EventList.T Event.ElapsedTime Event.T so I know the span to generate the [(Duration, Event.T)]
+-- from which I'll get the EventList.T Event.ElapsedTime Event.T as second argument for the
+-- call to merge.  And that'll be what I append to yeild the result.  All I need to do is
+-- generate the [(Duration, Event.T)] with incremental values for each to fill the span.
+-- TBD: simplify controls by collapsing continuous and discrete enum vals, e.g. push Crescendo,
+-- EndCrescendo, Decrescendo, EndDecrescendo out of Swell and into Dynamic, add PanUp, StopPanUp
+-- PanDown, and StopPanDown to Pan, and add Accelerando, StopAccelerando, Deaccelerando, and
+-- StopDeaccelerando to Tempo.  The second two fixes are going to be trouble because they're
+-- both currently just bounded scalar values.
 midiNoteToEvents :: ChannelMsg.Channel -> MidiNote -> State (Duration, [(Duration, Event.T)]) Duration
 midiNoteToEvents ch (MidiNote pitch rhythm controls) =
   do (rest, events) <- get
