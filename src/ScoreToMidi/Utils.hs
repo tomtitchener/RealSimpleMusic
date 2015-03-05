@@ -78,14 +78,25 @@ pitchClassToOffset Ass = 11
 pitchClassToOffset B   = 11
 pitchClassToOffset Cf  = 11
 
+-- Reserve from Int range beyond [0..126] values to designate begin and end crescendo and decrescendo.
+startCrescendo, stopCrescendo, startDecrescendo, stopDecrescendo :: Num a => a
+startCrescendo   = 128
+stopCrescendo    = 129
+startDecrescendo = (-1)
+stopDecrescendo  = (-2)
+
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => Dynamic -> a
-dynamicToVolume Pianissimo = 10
-dynamicToVolume Piano      = 30
-dynamicToVolume MezzoPiano = 50
-dynamicToVolume MezzoForte = 80
-dynamicToVolume Forte      = 100
-dynamicToVolume Fortissimo = 120
+dynamicToVolume Pianissimo     = 10
+dynamicToVolume Piano          = 30
+dynamicToVolume MezzoPiano     = 50
+dynamicToVolume MezzoForte     = 80
+dynamicToVolume Forte          = 100
+dynamicToVolume Fortissimo     = 120
+dynamicToVolume Crescendo      = startCrescendo
+dynamicToVolume EndCrescendo   = stopCrescendo
+dynamicToVolume Decrescendo    = startDecrescendo
+dynamicToVolume EndDecrescendo = stopDecrescendo
 
 -- | VoiceMsg.normalVelocity => Velocity {fromVelocity = 64}
 accentToVelocity :: Num a => Accent -> a
@@ -162,18 +173,31 @@ genMidiDynamicControlEvent chan dynamic =
 genMidiBalanceControlEvent :: ChannelMsg.Channel -> Balance -> Event.T
 genMidiBalanceControlEvent chan balance =
   genEvent chan (VoiceMsg.Control VoiceMsg.panorama $ balanceToBalance balance)
+
+panUp, panDown :: Int
+panUp   = maxBound::Int
+panDown = minBound::Int
   
 genMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
-genMidiPanControlEvent chan pan
-  | minBound > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum " ++ show (minBound::Pan)
-  | maxBound < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum " ++ show (maxBound::Pan)
-  | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama (getPan pan))
+genMidiPanControlEvent chan (Pan pan)
+  | 0 > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum 0"
+  | 127 < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum 127"
+  | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
+genMidiPanControlEvent chan PanUp =
+  genEvent chan (VoiceMsg.Control VoiceMsg.panorama panUp)
+genMidiPanControlEvent chan PanDown =
+  genEvent chan (VoiceMsg.Control VoiceMsg.panorama panDown)
 
 -- | Midi Channel Prefix tells system what channel to associate with
 --   meta events before an event with a channel appears.  Customary
 --   to use channel 1 at the start of a file.
 genMidiPrefixMetaEvent :: ChannelMsg.Channel -> Event.T
 genMidiPrefixMetaEvent = Event.MetaEvent . Meta.MIDIPrefix
+
+-- | Tempo values designating continous controls.
+startAccelerando, startRitardando :: Int
+startAccelerando    = maxBound::Int
+startRitardando     = minBound::Int
 
 -- | Microseconds per quarter note, default 120 beats per minute is
 --   500,000 or defltTempo, so that'd be for a quarter that gets 120.
@@ -184,6 +208,10 @@ genMidiTempoMetaEvent (Tempo (Rhythm rhythm) beats) =
     microsPerMinute   = 60000000
     rhythmsPerQuarter = denominator rhythm % 4
     microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
+genMidiTempoMetaEvent Accelerando =
+  (Event.MetaEvent . Meta.SetTempo) $ Meta.toTempo startAccelerando
+genMidiTempoMetaEvent Ritardando =
+  (Event.MetaEvent . Meta.SetTempo) $ Meta.toTempo startRitardando
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
@@ -208,22 +236,7 @@ genMidiInstrumentControlEvent chan (Instrument instrName) =
 genMidiTextMetaEvent :: String -> Event.T
 genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
--- Reserve from Int range beyond [0..126] values to designate begin and end crescendo and decrescendo.
-startCrescendo, stopCrescendo, startDecrescendo, stopDecrescendo :: Int
-startCrescendo   = (maxBound::Int) - 1
-stopCrescendo    = maxBound::Int
-startDecrescendo = (minBound::Int) + 1
-stopDecrescendo  = minBound::Int
-
--- Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
-genMidiSwellControlEvent :: ChannelMsg.Channel -> Swell -> Event.T
-genMidiSwellControlEvent chan Crescendo      = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume startCrescendo)
-genMidiSwellControlEvent chan EndCrescendo   = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume stopCrescendo)
-genMidiSwellControlEvent chan Decrescendo    = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume startDecrescendo)
-genMidiSwellControlEvent chan EndDecrescendo = genEvent chan (VoiceMsg.Control VoiceMsg.mainVolume stopDecrescendo)
-
 foldControl :: ChannelMsg.Channel -> [Event.T] -> Control -> [Event.T]
-foldControl channel events (SwellControl         swell)         = genMidiSwellControlEvent      channel swell        :events
 foldControl channel events (DynamicControl       dynamic)       = genMidiDynamicControlEvent    channel dynamic      :events
 foldControl channel events (BalanceControl       balance)       = genMidiBalanceControlEvent    channel balance      :events
 foldControl channel events (PanControl           pan)           = genMidiPanControlEvent        channel pan          :events
@@ -238,7 +251,6 @@ foldControl _       events (AccentControl        _)             =               
 accentFromControl :: Control -> Accent
 accentFromControl control =
   case control of
-    SwellControl _         -> error "accentFromControl expected Accent, got Swell"
     DynamicControl _       -> error "accentFromControl expected Accent, got Dynamic"
     BalanceControl _       -> error "accentFromControl expected Accent, got Balance"
     PanControl _           -> error "accentFromControl expected Accent, got Pan"
@@ -331,24 +343,6 @@ genMidiControlEvents channel controls =
 -- from which I'll get the EventList.T Event.ElapsedTime Event.T as second argument for the
 -- call to merge.  And that'll be what I append to yeild the result.  All I need to do is
 -- generate the [(Duration, Event.T)] with incremental values for each to fill the span.
--- TBD: simplify controls by collapsing continuous and discrete enum vals, e.g. push Crescendo,
--- EndCrescendo, Decrescendo, EndDecrescendo out of Swell and into Dynamic, add PanUp, StopPanUp
--- PanDown, and StopPanDown to Pan, and add Accelerando, StopAccelerando, Deaccelerando, and
--- StopDeaccelerando to Tempo.  The second two fixes are going to be trouble because they're
--- both currently just bounded scalar values.
-{--
-midiNoteToEvents :: ChannelMsg.Channel -> MidiNote -> State (Duration, [(Duration, Event.T)]) Duration
-midiNoteToEvents ch (MidiNote pitch rhythm controls) =
-  do (rest, events) <- get
-     put (Dur 0, events ++ genMidiNoteEvents rest ch pitch (rhythmToDuration rhythm) controls)
-     return (Dur 0)
-midiNoteToEvents ch (MidiRest rhythm controls) =  
-  do (rest, events) <- get
-     put (dur + rest, events ++ genMidiControlEvents ch controls)
-     return $ dur + rest
-  where
-    dur = rhythmToDuration rhythm
---}
 
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
 durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)

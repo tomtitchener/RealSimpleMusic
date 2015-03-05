@@ -169,17 +169,9 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 renderAccent :: Accent -> Builder
 renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 
--- | Match strings to enum: Crescendo, EndCrescendo, Decrescendo, EndDecrescendo
-swellValues :: [String]
-swellValues = ["\\<", "\\!", "\\>", "\\!"]
-
--- | Match of enum values to list above.
-renderSwell :: Swell -> Builder
-renderSwell swell =  stringEncoding $ swellValues !! fromEnum swell
-
 -- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo 
 dynamicValues :: [String]
-dynamicValues = ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff"]
+dynamicValues = ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
 
 -- | Match of enum values to list above.
 renderDynamic :: Dynamic -> Builder
@@ -194,12 +186,17 @@ renderBalance :: Balance -> Builder
 renderBalance balance = stringEncoding $ balanceValues !! fromEnum balance
 
 renderPan :: Pan -> Builder
-renderPan (Pan pan) = stringEncoding "_\\markup {pan "<> intDec pan <> renderedClose
+renderPan (Pan pan) = stringEncoding "_\\stopTextSpan\\markup {pan " <> intDec pan <> renderedClose
+renderPan PanUp     = stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan"
+renderPan PanDown   = stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan"
+
 
 renderTempo :: Tempo -> Builder
-renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\tempo " <> integerDec denom <> stringEncoding " = " <> integerDec bpm' 
+renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\stopTextSpan\\tempo " <> integerDec denom <> stringEncoding " = " <> integerDec bpm' 
   where
     denom = denominator unit'
+renderTempo Accelerando = stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan"
+renderTempo Ritardando = stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan"
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
 --   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the
@@ -244,7 +241,6 @@ renderNoteForRhythms renderedPitch renderedControls (renderedRhythm:renderedRhyt
 
 -- | Emit Lilypond text corresponding to Music Control enum.
 renderControl :: Control -> Builder
-renderControl (SwellControl swell)                 = renderSwell         swell
 renderControl (DynamicControl dynamic)             = renderDynamic       dynamic
 renderControl (BalanceControl balance)             = renderBalance       balance
 renderControl (PanControl pan)                     = renderPan           pan

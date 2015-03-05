@@ -25,7 +25,7 @@ commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions
     intervals  = map ((* lenScale) . getOctave) octaves
     xpNotes    = zipWith3 (\scale interval notes -> map (transposeNote scale interval) notes) scales intervals notess
     tunes      = map (concat . replicate repetitions) xpNotes
-    incr       = getPan (maxBound::Pan) `div` length instruments
+    incr       = 127 `div` length instruments
     pans       = map (\i -> PanControl (Pan (incr * i))) [0,1..]
     durs       = scanl (+) (getRhythm (head rhythms)) $ map getRhythm (tail rhythms)
     rests      = map (\dur -> Rest (Rhythm dur) Set.empty) durs

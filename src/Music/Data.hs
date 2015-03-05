@@ -31,31 +31,29 @@ data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 -- | Indexed pitch requires index into a Scale and Octave
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 
--- | Dynamic
-data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo deriving (Bounded, Enum, Show, Ord, Eq)
+-- | Dynamic (may be continuous)
+data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
--- | Crescendo/Decrescendo, e.g. "Swell"
-data Swell = Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
-
--- | Balance
+-- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 
--- | Pan
-newtype Pan = Pan { getPan :: Int } deriving (Read, Show, Ord, Eq, Num)
+-- | Pan (may be continuous)
+data Pan =
+  Pan { getPan :: Int }
+  | PanUp
+  | PanDown deriving (Read, Show, Ord, Eq)
 
-instance Bounded Pan where
-    minBound = 0
-    maxBound = 127
-    
 -- | Tempo, beats per minute
-data Tempo = Tempo { unit :: Rhythm, bpm :: Integer }  deriving (Show, Ord, Eq)
+data Tempo =
+  Tempo { unit :: Rhythm, bpm :: Integer }
+  | Accelerando
+  | Ritardando deriving (Show, Ord, Eq)
 
 -- | Key Signature, negative for count flats, positive for count sharps
-newtype KeySignature = KeySignature { accidentals :: Int } deriving (Bounded, Enum, Show, Ord, Eq)
+newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, Eq)
 
 -- | Time Signature, numerator and denominator
-data TimeSignature = TimeSignature { timeSigNum   :: Integer
-                                   , timeSigDenom :: Integer } deriving (Show)
+data TimeSignature = TimeSignature { timeSigNum   :: Integer , timeSigDenom :: Integer } deriving (Show)
 
 toRatio :: TimeSignature -> Rational
 toRatio ts = timeSigNum ts % timeSigDenom ts
@@ -77,8 +75,7 @@ data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest der
 
 -- | Controls
 data Control =
-  SwellControl Swell
-  | DynamicControl Dynamic
+  DynamicControl Dynamic
   | BalanceControl Balance
   | PanControl Pan
   | TempoControl Tempo
