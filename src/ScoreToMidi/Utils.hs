@@ -94,11 +94,11 @@ dynamicToVolume EndDecrescendo = error "dynamicToVolume EndDecrescendo"
 
 incrDynamic :: Dynamic -> Dynamic
 incrDynamic Fortissimo = error "incrDynamic Fortissimo is already the max"
-incrDynamic dyn = (toEnum ((fromEnum dyn) + 1))::Dynamic
+incrDynamic dyn = toEnum (fromEnum dyn + 1)::Dynamic
 
 decrDynamic :: Dynamic -> Dynamic
 decrDynamic Pianissimo = error "decrDynamic Pianissimo is already the min"
-decrDynamic dyn = (toEnum ((fromEnum dyn) - 1))::Dynamic
+decrDynamic dyn = toEnum (fromEnum dyn - 1)::Dynamic
 
 -- | VoiceMsg.normalVelocity => Velocity {fromVelocity = 64}
 accentToVelocity :: Num a => Accent -> a
@@ -403,7 +403,7 @@ synthesizeDecrescendoVolumeSpan dyn newDyn
 
 synthesizeDurationSpan :: Duration -> Int -> Duration -> [Integer]
 synthesizeDurationSpan rest cnt total =
-  delay:(take cnt [durIncr,2*durIncr..])
+  delay:take cnt [durIncr,2*durIncr..]
   where
     delay = getDur rest
     durIncr = getDur total `div` toInteger cnt
@@ -455,12 +455,12 @@ updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp
     ctrlsDyn           = Set.filter equalExplicitDynamic controls
     ctrlsCresc         = Set.filter (== DynamicControl Crescendo) controls
     ctrlsDecresc       = Set.filter (== DynamicControl Decrescendo) controls
-    target             = if (Set.null ctrlsDyn) then incrDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
+    target             = if Set.null ctrlsDyn then incrDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
     crescendoEvents    = genMidiContinuousDynamicEvents synthesizeCrescendoVolumeSpan chan rest len dynamic target
     appendedEvents     = EventList.append events crescendoEvents
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len events)
   | not (Set.null ctrlsDecresc)                           = error $ "updateDynamicControlContext overlapping decrescendos for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsDyn) && not (Set.null ctrlsCresc)  = MidiControlContext ControlBufferingDown dynamic rest (len + (rhythmToDuration rhythm)) events
+  | not (Set.null ctrlsDyn) && not (Set.null ctrlsCresc)  = MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm) events
   | otherwise                                             = MidiControlContext ControlBufferingNone target  (Dur 0) (Dur 0) appendedEvents
   where
     rhythm             = midiNoteToRhythm midiNote  
@@ -468,7 +468,7 @@ updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDo
     ctrlsDyn           = Set.filter equalExplicitDynamic controls
     ctrlsCresc         = Set.filter (== DynamicControl Crescendo) controls
     ctrlsDecresc       = Set.filter (== DynamicControl Decrescendo) controls
-    target             = if (Set.null ctrlsDyn) then decrDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
+    target             = if Set.null ctrlsDyn then decrDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
     decrescendoEvents  = genMidiContinuousDynamicEvents synthesizeDecrescendoVolumeSpan chan rest len dynamic target
     appendedEvents     = EventList.append events decrescendoEvents
 
