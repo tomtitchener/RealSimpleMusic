@@ -426,6 +426,12 @@ type MidiTempoControlContext   = MidiControlContext Tempo
 startDynamicControlContext :: MidiDynamicControlContext
 startDynamicControlContext = MidiControlContext ControlBufferingNone MezzoForte (Dur 0) (Dur 0) EventList.empty
 
+startTempoControlContext :: MidiTempoControlContext
+startTempoControlContext = MidiControlContext ControlBufferingNone (Tempo (Rhythm (4%4)) 120) (Dur 0) (Dur 0) EventList.empty
+
+startPanControlContext :: MidiPanControlContext
+startPanControlContext = MidiControlContext ControlBufferingNone (Pan 64) (Dur 0) (Dur 0) EventList.empty
+
 genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> [Int]) -> ChannelMsg.Channel -> Duration -> Duration -> Dynamic -> Dynamic -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousDynamicEvents synth ch rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthDynamicEventPairs
@@ -478,6 +484,60 @@ midiNoteToContinuousDynamicEvents ch midiNote =
      put $ updateDynamicControlContext ch midiNote ctrlCtxt
      return (Dur 0)
 
+{--
+genMidiContinuousTempoEvents :: (Tempo -> Tempo -> [Int]) -> ChannelMsg.Channel -> Duration -> Duration -> Tempo -> Tempo -> EventList.T Event.ElapsedTime Event.T
+genMidiContinuousTempoEvents synth ch rest dur start stop  =
+  EventList.fromPairList $ map durEventToNumEvent synthTempoEventPairs
+  where
+    synthTempoSpan       = synth start stop
+    synthDurSpan         = synthesizeDurationSpan rest (length synthTempoSpan) dur
+    synthTempoEventPairs = zipWith (\dur' tempo -> (Dur dur', genMidiTempoEvent ch tempo)) synthDurSpan synthTempoSpan
+
+updateTempoControlContext :: ChannelMsg.Channel -> MidiNote -> MidiTempoControlContext -> MidiTempoControlContext
+updateTempoControlContext _ midiNote (MidiControlContext ControlBufferingNone tempo rest len events)
+  | Set.null ctrlsCresc       && Set.null ctrlsDecresc       = MidiControlContext ControlBufferingNone tempo (rest + rhythmToDuration rhythm) len events
+  | not (Set.null ctrlsCresc) && Set.null ctrlsDecresc       = MidiControlContext ControlBufferingUp   tempo rest (len + rhythmToDuration rhythm) events
+  | Set.null ctrlsCresc       && not (Set.null ctrlsDecresc) = MidiControlContext ControlBufferingDown tempo rest (len + rhythmToDuration rhythm) events
+  | otherwise                                                = error $ "updateTempoControlContext note with both cresc and decresc controls " ++ show controls
+  where
+    rhythm        = midiNoteToRhythm midiNote  
+    controls      = midiNoteToControls midiNote  
+    ctrlsCresc    = Set.filter (== TempoControl Accelerando) controls
+    ctrlsDecresc  = Set.filter (== TempoControl Ritardando) controls
+updateTempoControlContext chan midiNote (MidiControlContext ControlBufferingUp tempo rest len events) 
+  | not (Set.null ctrlsCresc)                               = error $ "updateTempoControlContext overlapping accelerandos for MidiNote " ++ show midiNote
+  | not (Set.null ctrlsDyn) && not (Set.null ctrlsDecresc)  = MidiControlContext ControlBufferingUp   tempo rest (len + rhythmToDuration rhythm) events
+  | otherwise                                               = MidiControlContext ControlBufferingNone target  (Dur 0) (Dur 0) appendedEvents
+  where
+    rhythm             = midiNoteToRhythm midiNote  
+    controls           = midiNoteToControls midiNote  
+    ctrlsDyn           = Set.filter equalExplicitTempo controls
+    ctrlsCresc         = Set.filter (== TempoControl Accelerando) controls
+    ctrlsDecresc       = Set.filter (== TempoControl Ritardando) controls
+    target             = if Set.null ctrlsDyn then incrTempo tempo else tempoFromControl $ Set.elemAt 0 ctrlsDyn
+    accelerandoEvents    = genMidiContinuousTempoEvents synthesizeAccelerandoVolumeSpan chan rest len tempo target
+    appendedEvents     = EventList.append events accelerandoEvents
+updateTempoControlContext chan midiNote (MidiControlContext ControlBufferingDown tempo rest len events)
+  | not (Set.null ctrlsDecresc)                           = error $ "updateTempoControlContext overlapping ritardandos for MidiNote " ++ show midiNote
+  | not (Set.null ctrlsDyn) && not (Set.null ctrlsCresc)  = MidiControlContext ControlBufferingDown tempo rest (len + rhythmToDuration rhythm) events
+  | otherwise                                             = MidiControlContext ControlBufferingNone target  (Dur 0) (Dur 0) appendedEvents
+  where
+    rhythm             = midiNoteToRhythm midiNote  
+    controls           = midiNoteToControls midiNote  
+    ctrlsDyn           = Set.filter equalExplicitTempo controls
+    ctrlsCresc         = Set.filter (== TempoControl Accelerando) controls
+    ctrlsDecresc       = Set.filter (== TempoControl Ritardando) controls
+    target             = if Set.null ctrlsDyn then decrTempo tempo else tempoFromControl $ Set.elemAt 0 ctrlsDyn
+    ritardandoEvents  = genMidiContinuousTempoEvents synthesizeRitardandoVolumeSpan chan rest len tempo target
+    appendedEvents     = EventList.append events ritardandoEvents
+
+midiNoteToContinuousTempoEvents :: ChannelMsg.Channel -> MidiNote -> State MidiTempoControlContext Duration
+midiNoteToContinuousTempoEvents ch midiNote =
+  do ctrlCtxt <- get
+     put $ updateTempoControlContext ch midiNote ctrlCtxt
+     return (Dur 0)
+--}
+     
 -- | Traverse notes accumulating and emiting rests, converting to Midi
 --   traverse controls converting to Midi,
 --   convert results to single event list merged in time.
