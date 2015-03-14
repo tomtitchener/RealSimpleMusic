@@ -229,7 +229,7 @@ noteToRhythm (Rest rhythm _)           = rhythm
 noteToRhythm (PercussionNote rhythm _) = rhythm
 
 -- | Insert control common to all Notes
-addControlToNote :: Note -> Control -> Note
+addControlToNote :: Note -> VoiceControl -> Note
 addControlToNote (Note pitch rhythm controls)     control = Note pitch rhythm (Set.insert control controls)
 addControlToNote (Rest rhythm controls)           control = Rest rhythm (Set.insert control controls)
 addControlToNote (PercussionNote rhythm controls) control = PercussionNote rhythm (Set.insert control controls)

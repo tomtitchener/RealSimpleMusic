@@ -57,10 +57,19 @@ eMin  = naturalMinorScale E
 cMin  = naturalMinorScale C
 afMin = naturalMinorScale Af
 
+keySignature :: KeySignature
+keySignature = KeySignature (-1) -- F Major, one flat.
+
+timeSignature :: TimeSignature
+timeSignature = TimeSignature 4 4
+
+tempo :: Tempo
+tempo = Tempo (Rhythm (1%4)) 60
+
 -- Simple Canon
 createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon
 createFJSimpleCanon instrName voices dur =
-  SimpleCanon title ixNotes cMaj distance instr voices repetitions  
+  SimpleCanon title keySignature timeSignature tempo ixNotes cMaj distance instr voices repetitions  
   where
     title = "Frere Jacques Simple"
     ixNotes = fjIxNotes
@@ -94,7 +103,7 @@ testSimpleCanon =
 -- Scales Canon
 createFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> ScalesCanon
 createFJScalesCanon instruments scales octaves dur =
-  ScalesCanon title ixNotes scales distance octaves instruments repetitions  
+  ScalesCanon title keySignature timeSignature tempo ixNotes scales distance octaves instruments repetitions  
   where
     title = "Frere Jacques Scales"
     ixNotes = fjIxNotes
@@ -128,7 +137,7 @@ testScalesCanon =
 -- Canon
 createFJCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> Canon
 createFJCanon instruments scales octaves durs =
-  Canon title ixNotess scales distances octaves instruments repetitions  
+  Canon title keySignature timeSignature tempo ixNotess scales distances octaves instruments repetitions  
   where
     title = "Frere Jacques Canon"
     ixNotess = replicate (length instruments) fjIxNotes

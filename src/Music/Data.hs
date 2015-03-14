@@ -45,7 +45,7 @@ data Pan =
 
 -- | Tempo, beats per minute
 data Tempo =
-  Tempo { unit :: Rhythm, bpm :: Integer }
+  Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
   | Accelerando
   | Ritardando deriving (Show, Ord, Eq)
 
@@ -73,15 +73,19 @@ newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord,
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
--- | Controls
-data Control =
+-- | ScoreControls
+data ScoreControl =
+  TempoControl Tempo
+  | KeySignatureControl KeySignature
+  | TimeSignatureControl TimeSignature
+  deriving (Ord, Eq, Show)
+           
+-- | VoiceControls
+data VoiceControl =
   DynamicControl Dynamic
   | BalanceControl Balance
   | PanControl Pan
-  | TempoControl Tempo
-  | KeySignatureControl KeySignature
-  | TimeSignatureControl TimeSignature
-  | ArticulationControl Articulation
+  | ArticulationControl Articulation   -- Mapping to Midi Sostenuto doesn't make sense.  Simlaute by shortening dur?
   | TextControl String
   | InstrumentControl Instrument
   | AccentControl Accent
@@ -97,16 +101,16 @@ newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num)
 --   a rhythm, or an accented percussion note with rhythm
 --   and accent.
 data Note =
-  Note Pitch Rhythm (Set.Set Control)
-  | Rest Rhythm (Set.Set Control)
-  | PercussionNote Rhythm (Set.Set Control) deriving (Eq, Show)
+  Note Pitch Rhythm (Set.Set VoiceControl)
+  | Rest Rhythm (Set.Set VoiceControl)
+  | PercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show)
 
 -- | An indexed note follows the shape of a note but with
 --   an indexed pitch replacing Pitch.
 data IndexedNote =
-  IndexedNote IndexedPitch Rhythm (Set.Set Control)
-  | IndexedRest Rhythm (Set.Set Control)
-  | IndexedPercussionNote Rhythm (Set.Set Control) deriving (Eq, Show)
+  IndexedNote IndexedPitch Rhythm (Set.Set VoiceControl)
+  | IndexedRest Rhythm (Set.Set VoiceControl)
+  | IndexedPercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show)
 
 -- | Intervals may be negative or positive and are computed as steps in a Scale
 type Interval = Int
@@ -129,12 +133,9 @@ data Voice =
 type Title = String
 
 -- | Title and List of voices make up a score.
---   TBD:  time and key signatures, composer, date.
 data Score =
   Score { scoreTitle :: Title
         , scoreComposer :: String
-        , scoreTempo :: Tempo
-        , scoreTimeSignature :: TimeSignature
-        , scoreKeySignature :: KeySignature
-        , scoreVoices :: [Voice]
+        , scoreControls :: [(ScoreControl,Rhythm)]
+        , scoreVoices   :: [Voice]
         } deriving (Show)

@@ -35,7 +35,8 @@ module RealSimpleMusic (
    ,  Accent(..)
    ,  Rhythm(..)
    ,  Instrument(..)
-   ,  Control(..)
+   ,  ScoreControl(..)
+   ,  VoiceControl(..)
    ,  Note(..)
    ,  addControlToNote
    ,  IndexedNote(..)

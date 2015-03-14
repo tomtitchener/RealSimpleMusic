@@ -47,29 +47,32 @@ testRenderRhythmTies :: Assertion
 testRenderRhythmTies =
   (map . map) (toLazyByteString . stringEncoding) [["1", "4"], ["1", "2."], ["1", "1", "4"], ["2", "8"], ["2."]] @=? map (map toLazyByteString . renderRhythm . Rhythm) [5%4, 7%4, 9%4, 5%8, 6%8]
 
+renderNote' :: Note -> Builder
+renderNote' note = renderedNote where (_, _, renderedNote) = renderNote (False, False) note
+
 testRenderNote :: Assertion
 testRenderNote =
-  (toLazyByteString . stringEncoding) "c'64"  @=? (toLazyByteString . renderNote) (Note (Pitch C (Octave 0)) (Rhythm (1%64)) Set.empty)
+  (toLazyByteString . stringEncoding) "c'64"  @=? (toLazyByteString . renderNote') (Note (Pitch C (Octave 0)) (Rhythm (1%64)) Set.empty)
   
 testRenderAccentedNote :: Assertion
 testRenderAccentedNote =
-  (toLazyByteString . stringEncoding) "d'32\\verysoft"  @=? (toLazyByteString . renderNote) (Note (Pitch D (Octave 0)) (Rhythm (1%32)) (Set.singleton (AccentControl VerySoft)))
+  (toLazyByteString . stringEncoding) "d'32\\verysoft"  @=? (toLazyByteString . renderNote') (Note (Pitch D (Octave 0)) (Rhythm (1%32)) (Set.singleton (AccentControl VerySoft)))
 
 testRenderRest :: Assertion
 testRenderRest =
-  (toLazyByteString . stringEncoding) "r64"  @=? (toLazyByteString . renderNote) (Rest (Rhythm (1%64)) Set.empty)
+  (toLazyByteString . stringEncoding) "r64"  @=? (toLazyByteString . renderNote') (Rest (Rhythm (1%64)) Set.empty)
   
 testRenderPercussionNote :: Assertion
 testRenderPercussionNote =
-  (toLazyByteString . stringEncoding) "c64"  @=? (toLazyByteString . renderNote) (PercussionNote (Rhythm (1%64)) Set.empty)
+  (toLazyByteString . stringEncoding) "c64"  @=? (toLazyByteString . renderNote') (PercussionNote (Rhythm (1%64)) Set.empty)
   
 testRenderAccentedPercussionNote :: Assertion
 testRenderAccentedPercussionNote =
-  (toLazyByteString . stringEncoding) "c32\\hard"  @=? (toLazyByteString . renderNote) (PercussionNote (Rhythm (1%32)) (Set.singleton (AccentControl Hard)))
+  (toLazyByteString . stringEncoding) "c32\\hard"  @=? (toLazyByteString . renderNote') (PercussionNote (Rhythm (1%32)) (Set.singleton (AccentControl Hard)))
 
 testRenderTiedNote :: Assertion
 testRenderTiedNote =
-  (toLazyByteString . stringEncoding) "c'1~ c'4" @=? (toLazyByteString . renderNote) (Note (Pitch C (Octave 0)) (Rhythm (5%4)) Set.empty)
+  (toLazyByteString . stringEncoding) "c'1~ c'4" @=? (toLazyByteString . renderNote') (Note (Pitch C (Octave 0)) (Rhythm (5%4)) Set.empty)
 
 testRenderNotes :: Assertion
 testRenderNotes =

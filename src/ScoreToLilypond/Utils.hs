@@ -1,6 +1,8 @@
 
 module ScoreToLilypond.Utils where
 
+import           Control.Monad()
+import           Control.Monad.State
 import           Data.ByteString.Builder
 import qualified Data.ByteString.Lazy as L
 import           Data.List
@@ -8,6 +10,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Ratio
 import qualified Data.Set as Set
+import           Data.Traversable
 import           Music.Data
 import           Music.Utils
 
@@ -24,7 +27,7 @@ charEncoding :: Char -> Builder
 charEncoding = char7
 
 -- | Rendered character constants 
-renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedNothing, renderedDoubleBar :: Builder
+renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedNothing, renderedDoubleBar, renderedStopTextSpan :: Builder
 renderedQuote         = charEncoding '\''
 renderedComma         = charEncoding ','
 renderedSpace         = charEncoding ' '
@@ -40,6 +43,7 @@ renderedDoubleQuote   = charEncoding '\"'
 renderedAsterisk      = charEncoding '*'
 renderedNothing       = stringEncoding ""
 renderedDoubleBar     = stringEncoding "\\bar \"|.\""
+renderedStopTextSpan  = stringEncoding "\\stopTextSpan"
 
 -- | Global reference sets key and time signatures.
 renderedGlobalKey :: Builder
@@ -169,14 +173,20 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 renderAccent :: Accent -> Builder
 renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 
--- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo 
-dynamicValues :: [String]
-dynamicValues = ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
+-- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo
+renderedDynamicValues :: [Builder]
+renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
 
--- | Match of enum values to list above.
-renderDynamic :: Dynamic -> Builder
-renderDynamic dynamic =  stringEncoding $ dynamicValues !! fromEnum dynamic
-
+-- | Match of enum values to list above.  First Bool is flag to tell if
+--   continuous dynamic control (cresc, decresc) is engaged.  Second is
+--   for continuous pan control and gets passed through unchanged.
+renderDynamic :: (Bool, Bool, Dynamic) -> (Bool, Bool, Builder)
+renderDynamic (c, p, dynamic) =
+  (c', p, if c then renderedStopTextSpan <> renderedDynamic else renderedDynamic)
+  where
+    renderedDynamic = renderedDynamicValues !! fromEnum dynamic
+    c' = dynamic == Crescendo || dynamic == Decrescendo
+    
 -- | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
 balanceValues = ["_\\markup {left}", "_\\markup {center-left}", "_\\markup {center}", "_\\markup {center-right}", "_\\markup {right}"] 
@@ -185,18 +195,28 @@ balanceValues = ["_\\markup {left}", "_\\markup {center-left}", "_\\markup {cent
 renderBalance :: Balance -> Builder
 renderBalance balance = stringEncoding $ balanceValues !! fromEnum balance
 
-renderPan :: Pan -> Builder
-renderPan (Pan pan) = stringEncoding "_\\stopTextSpan\\markup {pan " <> intDec pan <> renderedClose
-renderPan PanUp     = stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan"
-renderPan PanDown   = stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan"
+-- | Pan is markup below staff.
+renderPanValue :: Int -> Builder
+renderPanValue val = stringEncoding "_\\markup" <> renderedOpen <> stringEncoding "pan " <> intDec val <> renderedClose
 
+-- | First Bool is flag to tell if continuous dynamic control (cresc, decresc) is engaged,
+--   gets passed through unchanged.  Second is for continuous pan control.
+renderPan :: (Bool, Bool, Pan) -> (Bool, Bool, Builder)
+renderPan (c, p, Pan pan) = if c then (False, p, renderedStopTextSpan <> renderPanValue pan) else (c, p, renderPanValue pan)
+renderPan (_, p, PanUp)   = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
+renderPan (_, p, PanDown) = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
 
-renderTempo :: Tempo -> Builder
-renderTempo (Tempo (Rhythm unit') bpm') = stringEncoding "\\stopTextSpan\\tempo " <> integerDec denom <> stringEncoding " = " <> integerDec bpm' 
+renderTempo' :: Rhythm -> Integer -> Builder
+renderTempo' (Rhythm rhythm) bpm =
+  stringEncoding "\\tempo " <> integerDec denom <> stringEncoding " = " <> integerDec bpm
   where
-    denom = denominator unit'
-renderTempo Accelerando = stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan"
-renderTempo Ritardando = stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan"
+    denom = denominator rhythm
+
+-- | Bool is flag saing if contnous tempo control is engaged.
+renderTempo :: (Bool, Tempo) -> (Bool, Builder)
+renderTempo (_, Accelerando)       = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan")
+renderTempo (_, Ritardando)        = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan")
+renderTempo (s, Tempo rhythm bpm) = (False, if s then renderedStopTextSpan <> renderedTempo else renderedTempo) where renderedTempo = renderTempo' rhythm bpm
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
 --   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the
@@ -239,42 +259,84 @@ renderNoteForRhythms renderedPitch renderedControls [renderedRhythm] = renderedP
 renderNoteForRhythms renderedPitch renderedControls (renderedRhythm:renderedRhythms) =
   renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms renderedPitch renderedNothing renderedRhythms]
 
--- | Emit Lilypond text corresponding to Music Control enum.
-renderControl :: Control -> Builder
-renderControl (DynamicControl dynamic)             = renderDynamic       dynamic
-renderControl (BalanceControl balance)             = renderBalance       balance
-renderControl (PanControl pan)                     = renderPan           pan
-renderControl (TempoControl tempo)                 = renderTempo         tempo
-renderControl (KeySignatureControl keySignature)   = renderKeySignature  keySignature
-renderControl (TimeSignatureControl timeSignature) = renderTimeSignature timeSignature
-renderControl (ArticulationControl articulation)   = renderArticulation  articulation
-renderControl (TextControl text)                   = renderText          text
-renderControl (AccentControl accent)               = renderAccent        accent
-renderControl (InstrumentControl instrument)       = renderInstrument    instrument
+-- | Emit Lilypond text corresponding to VoiceControl enum.
+renderVoiceControl :: (Bool, Bool, VoiceControl) -> (Bool, Bool, Builder)
+renderVoiceControl (c, p, DynamicControl dynamic)             = renderDynamic (c, p, dynamic)
+renderVoiceControl (c, p, BalanceControl balance)             = (c, p, renderBalance balance)
+renderVoiceControl (c, p, PanControl pan)                     = renderPan (c, p, pan)
+renderVoiceControl (c, p, ArticulationControl articulation)   = (c, p, renderArticulation articulation)
+renderVoiceControl (c, p, TextControl text)                   = (c, p, renderText text)
+renderVoiceControl (c, p, AccentControl accent)               = (c, p, renderAccent accent)
+renderVoiceControl (c, p, InstrumentControl instrument)       = (c, p, renderInstrument instrument)
 
 -- | Emit a list list of space-separated controls.
-renderControls :: [Control] -> Builder
-renderControls [] = mempty
-renderControls [control] = renderControl control
-renderControls (control:controls) = renderControl control <> mconcat [renderedSpace <> renderControls controls]
+renderVoiceControls' :: VoiceControl -> State (Bool, Bool) Builder
+renderVoiceControls' control =
+  do (c, p) <- get
+     let (c', p', b) = renderVoiceControl (c, p, control)
+     put (c', p')
+     return b
+    
+renderVoiceControls :: (Bool, Bool) -> [VoiceControl] -> (Bool, Bool, Builder)
+renderVoiceControls (c, p) controls =
+  (c', p', mconcat bs)
+  where
+    (bs, (c', p')) = runState (traverse renderVoiceControls' controls) (c, p)
+
+renderScoreControl :: (Bool, ScoreControl) -> (Bool, Builder)
+renderScoreControl (s, TempoControl tempo)                 = renderTempo (s, tempo)
+renderScoreControl (s, KeySignatureControl keySignature)   = (s, renderKeySignature  keySignature)
+renderScoreControl (s, TimeSignatureControl timeSignature) = (s, renderTimeSignature timeSignature)
+
+-- Bool in first Pair element is flag to say if accel, ritard are active so we
+-- know to end text span when they stop.
+renderScoreControls' :: ScoreControl -> State Bool Builder
+renderScoreControls' control =
+  do s <- get
+     let (s', b) = renderScoreControl (s, control)
+     put s'
+     return b
+
+renderScoreControls :: Bool -> [ScoreControl] -> Builder
+renderScoreControls s controls = mconcat $ evalState (traverse renderScoreControls' controls) s
 
 -- | Pitch doesn't matter when written to a percussion staff
 dummyPercussionPitch :: Pitch
 dummyPercussionPitch = Pitch C $ Octave (-1)
 
 -- | Render Note instances.
-renderNote :: Note -> Builder
-renderNote (Note pitch rhythm controls) =
-  renderNoteForRhythms (renderPitch pitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
-renderNote (Rest rhythm controls) =
-  renderNoteForRhythms renderedRest (renderControls (Set.toAscList controls)) (renderRhythm rhythm)
-renderNote (PercussionNote rhythm controls) =
-  renderNoteForRhythms (renderPitch dummyPercussionPitch) (renderControls (Set.toAscList controls)) (renderRhythm rhythm) 
+renderNote :: (Bool, Bool) -> Note -> (Bool, Bool, Builder)
+renderNote (c, p) (Note pitch rhythm controls) =
+  (c', p', renderedNote)
+  where
+    (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
+    renderedPitch  = renderPitch pitch
+    renderedRhythms = renderRhythm rhythm
+    renderedNote = renderNoteForRhythms renderedPitch renderedVoiceControls renderedRhythms
+renderNote (c, p) (Rest rhythm controls) =
+  (c', p', renderedNote)
+  where
+    (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
+    renderedRhythms = renderRhythm rhythm
+    renderedNote = renderNoteForRhythms renderedRest renderedVoiceControls renderedRhythms
+renderNote (c, p) (PercussionNote rhythm controls) =
+  (c', p', renderedNote)
+  where
+    (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
+    renderedPitch = renderPitch dummyPercussionPitch
+    renderedRhythms = renderRhythm rhythm
+    renderedNote = renderNoteForRhythms renderedPitch renderedVoiceControls renderedRhythms
 
 -- | Spaces separate notes in a rendered list of notes.
+renderNotes' :: Note -> State (Bool, Bool) Builder 
+renderNotes' note =
+  do (c, p) <- get
+     let (c', p', b) = renderNote (c, p) note
+     put (c', p')
+     return b
+    
 renderNotes :: [Note] -> Builder
-renderNotes [] = mempty
-renderNotes (note:notes) = renderNote note <> mconcat [ renderedSpace <> renderNote note' | note' <- notes]
+renderNotes notes = mconcat $ intersperse renderedSpace $ evalState (traverse renderNotes' notes) (False, False)
 
 -- | An instrument expects to be in a Staff or Voice context.
 renderInstrument :: Instrument -> Builder
@@ -310,14 +372,10 @@ renderedVersion :: Builder
 renderedVersion = stringEncoding "\\version \"2.18.2\"\n"
 
 -- | Global section contains tempo, time, and key signatures.
-renderedGlobalValues :: Tempo -> TimeSignature -> KeySignature -> Builder
-renderedGlobalValues tempo timeSignature keySignature =
+renderedGlobalValues :: [(ScoreControl,Rhythm)] -> Builder
+renderedGlobalValues controls =
   stringEncoding "global = {"
-  <> renderTempo tempo
-  <> renderedSpace
-  <> renderTimeSignature timeSignature
-  <> renderedSpace
-  <> renderKeySignature keySignature
+  <> renderScoreControls False (map fst controls) -- tbd: rhythms
   <> renderedClose
   <> renderedNewline
 
@@ -332,10 +390,10 @@ renderedHeader title composer =
   <> renderedNewline
   
 renderScore :: Score -> Builder
-renderScore (Score title composer tempo timeSignature keySignature voices) =
+renderScore (Score title composer controls voices) =
   renderedVersion
   <> renderedHeader title composer
-  <> renderedGlobalValues tempo timeSignature keySignature
+  <> renderedGlobalValues controls
   <> renderedAccentValues
   <> stringEncoding "\\score {\n\\new StaffGroup << \n"
   <> renderVoices voices
@@ -347,5 +405,5 @@ scoreToLilypondByteString :: Score -> L.ByteString
 scoreToLilypondByteString = toLazyByteString . renderScore
 
 scoreToLilypondFile :: Score -> IO ()
-scoreToLilypondFile score@(Score title _ _ _ _ _) = L.writeFile (title ++ ".ly") $ scoreToLilypondByteString score
+scoreToLilypondFile score = L.writeFile (scoreTitle score ++ ".ly") $ scoreToLilypondByteString score
 

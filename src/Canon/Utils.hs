@@ -10,15 +10,9 @@ import           RealSimpleMusic
 
 -- | Generalized converter for all Canon types to Score.
 --   Assumes:  lengths of ascending and descending notes of Scale are the same.
---   TBD: get pan settings associated with non-empty values.
---   Generally, eliminate crutch of zero-duration rest.
---   Means adding initial rests only to tail of tunes,
---   adding ending rests only to all tunes except the last.
---   Once that's built, then insert pan control to first
---   rest or note of all voices uniformly.
-commonCanonToScore ::  Title -> [[IndexedNote]] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
-commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions =
-  Score title "folk" (Tempo (Rhythm (1%4)) 60) (TimeSignature 4 4) (KeySignature (-1))  voices
+commonCanonToScore ::  Title -> KeySignature -> TimeSignature -> Tempo -> [[IndexedNote]] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
+commonCanonToScore title keySignature timeSignature tempo ixNotess scales rhythms octaves instruments repetitions =
+  Score title "folk" [(TempoControl tempo, Rhythm (0%1)), (TimeSignatureControl timeSignature, Rhythm (0%1)), (KeySignatureControl keySignature, Rhythm (0%1))] voices
   where
     lenScale   = length $ ascendingScale $ head scales
     notess     = zipWith indexedNotesToNotes scales ixNotess
@@ -36,20 +30,23 @@ commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions
 
 -- | Converting most general Canon to Score is just a call to most general conversion function.
 canonToScore :: Canon -> Score
-canonToScore (Canon title ixNotess scales rhythms octaves instruments repetitions) =
-  commonCanonToScore title ixNotess scales rhythms octaves instruments repetitions
+canonToScore (Canon title key time tempo ixNotess scales rhythms octaves instruments repetitions) =
+  commonCanonToScore title key time tempo ixNotess scales rhythms octaves instruments repetitions
 
 -- | To convert scales canon to a canon, replicate notes and imitative distances.
 scalesCanonToCanon :: ScalesCanon -> Canon
 scalesCanonToCanon scalesCanon =
   Canon {
-  cTitle         = scTitle scalesCanon
-  ,cIxNotess     = replicate countVoices $ scIxNotes scalesCanon
-  ,cScales       = scScales scalesCanon
-  ,cDistances    = replicate countVoices $ scDistance scalesCanon
-  ,cOctaves      = scOctaves scalesCanon
-  ,cInstruments  = scInstruments scalesCanon
-  ,cRepetitions  = scRepetitions scalesCanon
+  cTitle          = scTitle scalesCanon
+  ,cKeySignature  = scKeySignature scalesCanon
+  ,cTimeSignature = scTimeSignature scalesCanon
+  ,cTempo         = scTempo scalesCanon           
+  ,cIxNotess      = replicate countVoices $ scIxNotes scalesCanon
+  ,cScales        = scScales scalesCanon
+  ,cDistances     = replicate countVoices $ scDistance scalesCanon
+  ,cOctaves       = scOctaves scalesCanon
+  ,cInstruments   = scInstruments scalesCanon
+  ,cRepetitions   = scRepetitions scalesCanon
   } 
   where
     countVoices = length $ scInstruments scalesCanon
@@ -62,13 +59,16 @@ scalesCanonToScore scalesCanon = canonToScore $ scalesCanonToCanon scalesCanon
 simpleCanonToScalesCanon :: SimpleCanon -> ScalesCanon
 simpleCanonToScalesCanon simpleCanon =
   ScalesCanon {
-  scTitle        = sTitle simpleCanon
-  ,scIxNotes     = sIxNotes simpleCanon
-  ,scScales      = replicate countVoices $ sScale simpleCanon
-  ,scDistance    = sDistance simpleCanon
-  ,scOctaves     = replicate countVoices (Octave 0)
-  ,scInstruments = replicate countVoices $ sInstrument simpleCanon
-  ,scRepetitions = sRepetitions simpleCanon
+  scTitle          = sTitle simpleCanon
+  ,scKeySignature  = sKeySignature simpleCanon                   
+  ,scTimeSignature = sTimeSignature simpleCanon                   
+  ,scTempo         = sTempo simpleCanon                   
+  ,scIxNotes       = sIxNotes simpleCanon
+  ,scScales        = replicate countVoices $ sScale simpleCanon
+  ,scDistance      = sDistance simpleCanon
+  ,scOctaves       = replicate countVoices (Octave 0)
+  ,scInstruments   = replicate countVoices $ sInstrument simpleCanon
+  ,scRepetitions   = sRepetitions simpleCanon
   } 
   where
     countVoices = sCountVoices simpleCanon
