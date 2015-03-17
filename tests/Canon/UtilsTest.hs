@@ -168,3 +168,9 @@ testCanon =
   where
     generatedCanonByteString = writeFJCanonToByteString [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [2%1, 1%4, 1%8]
 
+
+{--
+scoreToLilypondFile $ simpleCanonToScore $ createFJSimpleCanon "Acoustic Grand Piano" 4 (2%1)
+scoreToLilypondFile $ scalesCanonToScore $ createFJScalesCanon [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] (2%1)
+scoreToLilypondFile $ canonToScore $ createFJCanon [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [2%1, 1%4, 1%8]
+--}

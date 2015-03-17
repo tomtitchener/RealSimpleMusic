@@ -5,10 +5,33 @@
 module Music.Data where
 
 import           Data.Ratio
+import           Data.List
+import           Data.Maybe
 import qualified Data.Set      as Set
 
 -- | Pitch classes with two accidentals enharmonic equivalents
-data PitchClass = Bs|C|Dff|Bss|Cs|Df|Css|D|Eff|Ds|Ef|Fff|Dss|E|Ff|Es|F|Gff|Ess|Fs|Gf|Fss|G|Aff|Gs|Af|Gss|A|Bff|As|Bf|Cff|Ass|B| Cf deriving (Bounded, Enum, Show, Ord, Eq) 
+data PitchClass = Bs|C|Dff|Bss|Cs|Df|Css|D|Eff|Ds|Ef|Fff|Dss|E|Ff|Es|F|Gff|Ess|Fs|Gf|Fss|G|Aff|Gs|Af|Gss|A|Bff|As|Bf|Cff|Ass|B| Cf deriving (Bounded, Enum, Show, Eq, Ord)
+
+-- | List of list of enharmonically equivalent pitch classes.
+enhChromPitchClasses :: [[PitchClass]]
+enhChromPitchClasses = [[Bs, C, Dff], [Bss, Cs, Df], [Css, D, Eff], [Ds, Ef, Fff], [Dss, E, Ff], [Es, F, Gff], [Ess, Fs, Gf], [Fss, G, Aff], [Gs, Af], [Gss, A, Bff], [As, Bf, Cff], [Ass, B, Cf]]
+
+-- | Find index in list of enharmonically equivalent pitch classes.
+pitchClass2EnhEquivIdx :: PitchClass -> [[PitchClass]] -> Int
+pitchClass2EnhEquivIdx pc pcs =
+  fromMaybe
+    (error $ "pitchClass2Index no match for PitchClass " ++ show pc ++ " in " ++ show pcs)
+    (findIndex (elem pc) pcs)
+
+-- | Test pitch classes are enharmonically equivalent.
+equivPitchClasses :: PitchClass -> PitchClass -> Bool
+equivPitchClasses pc1 pc2 =
+  pitchClass2EnhEquivIdx pc1 enhChromPitchClasses == pitchClass2EnhEquivIdx pc2 enhChromPitchClasses
+
+{--
+instance Ord PitchClass where
+  pc1 `compare` pc2 = pitchClass2EnhEquivIdx pc1 enhChromPitchClasses `compare` pitchClass2EnhEquivIdx pc2 enhChromPitchClasses 
+--}
 
 -- | Scale is two lists of pitch classes
 data Scale = Scale { ascendingScale  :: [PitchClass]
@@ -27,6 +50,12 @@ instance Bounded Octave where
 
 -- | Pitch requires PitchClass and Octave.
 data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
+
+instance Ord Pitch where
+  (Pitch pc1 (Octave oct1)) `compare` (Pitch pc2 (Octave oct2)) = if oct1 == oct2 then pc1Idx `compare` pc2Idx else oct1 `compare` oct2
+    where
+      pc1Idx = pitchClass2EnhEquivIdx pc1 enhChromPitchClasses
+      pc2Idx = pitchClass2EnhEquivIdx pc2 enhChromPitchClasses    
 
 -- | Indexed pitch requires index into a Scale and Octave
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)

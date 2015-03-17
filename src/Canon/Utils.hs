@@ -21,10 +21,14 @@ commonCanonToScore title keySignature timeSignature tempo ixNotess scales rhythm
     tunes      = map (concat . replicate repetitions) xpNotes
     incr       = 127 `div` length instruments
     pans       = map (\i -> PanControl (Pan (incr * i))) [0,1..]
-    durs       = scanl (+) (getRhythm (head rhythms)) $ map getRhythm (tail rhythms)
-    rests      = map (\dur -> Rest (Rhythm dur) Set.empty) durs
-    tunes'     = head tunes : zipWith (:) rests (tail tunes) -- leading rests
-    tunes''    = reverse $ head rtunes : zipWith (\r t -> t ++ [r]) rests (tail rtunes) where rtunes = reverse tunes' -- trailing rests
+    durs       = map getRhythm rhythms                   -- [2%1, 1%4, 1%8]
+    leadDurs   = scanl (+) (head durs) (tail durs)       -- [2%1, 9%4, 19%8]
+    leadRests  = map (\dur -> Rest (Rhythm dur) Set.empty) leadDurs
+    revDurs    = reverse durs                            -- [1%8, 1%4, 2%1]
+    tailDurs   = scanl (+) (head revDurs) (tail revDurs) -- [1%8, 3%8, 19%8]
+    tailRests  = map (\dur -> Rest (Rhythm dur) Set.empty) tailDurs
+    tunes'     = head tunes : zipWith (:) leadRests (tail tunes)
+    tunes''    = reverse $ head rtunes : zipWith (\r t -> t ++ [r]) tailRests (tail rtunes) where rtunes = reverse tunes' -- trailing rests
     tunes'''   = zipWith (\tune pan -> addControlToNote (head tune) pan : tail tune) tunes'' pans -- pans
     voices     = zipWith Voice instruments tunes'''
 

@@ -27,15 +27,6 @@ rotateTo x xs =
   case elemIndex x xs of
     Nothing -> error $ "rotateTo element " ++ show x ++ " is not in list " ++ show xs
     Just i  -> rotate i xs
-
-enhChromPitchClasses :: [[PitchClass]]
-enhChromPitchClasses = [[Bs, C, Dff], [Bss, Cs, Df], [Css, D, Eff], [Ds, Ef, Fff], [Dss, E, Ff], [Es, F, Gff], [Ess, Fs, Gf], [Fss, G, Aff], [Gs, Af], [Gss, A, Bff], [As, Bf, Cff], [Ass, B, Cf]]
-
-pitchClass2EnhEquivIdx :: PitchClass -> [[PitchClass]] -> Int
-pitchClass2EnhEquivIdx pc pcs =
-  fromMaybe
-    (error $ "pitchClass2Index no match for PitchClass " ++ show pc ++ " in " ++ show pcs)
-    (findIndex (elem pc) pcs)
     
 -- | Cycle extending through a count of two flats and sharps.
 cycleOfFifths :: [PitchClass]

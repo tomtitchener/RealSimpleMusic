@@ -13,15 +13,15 @@ allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]
 
 testEquivPitchClassValues :: Assertion
 testEquivPitchClassValues =
- allPitchClasses @=? (sort . concat) equivPitchClasses
+ allPitchClasses @=? (sort . concat) equivPitchClassNames
 
 testPitchNames :: Assertion
 testPitchNames =
-   length pitchNames @=? length equivPitchClasses
+   length pitchNames @=? length equivPitchClassNames
 
 testAccidentalNames :: Assertion
 testAccidentalNames =
-  replicate (length equivPitchClasses) (length accidentalNames) @=? map length equivPitchClasses
+  replicate (length equivPitchClassNames) (length accidentalNames) @=? map length equivPitchClassNames
 
 testAccentNames :: Assertion
 testAccentNames = 

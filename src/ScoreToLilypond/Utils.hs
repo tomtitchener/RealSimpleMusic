@@ -27,7 +27,7 @@ charEncoding :: Char -> Builder
 charEncoding = char7
 
 -- | Rendered character constants 
-renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedNothing, renderedDoubleBar, renderedStopTextSpan :: Builder
+renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedNothing, renderedDoubleBar, renderedStopTextSpan, renderedClef, renderedBass, renderedTreble :: Builder
 renderedQuote         = charEncoding '\''
 renderedComma         = charEncoding ','
 renderedSpace         = charEncoding ' '
@@ -44,6 +44,9 @@ renderedAsterisk      = charEncoding '*'
 renderedNothing       = stringEncoding ""
 renderedDoubleBar     = stringEncoding "\\bar \"|.\""
 renderedStopTextSpan  = stringEncoding "\\stopTextSpan"
+renderedClef         = stringEncoding "\\clef"
+renderedTreble        = stringEncoding "treble"
+renderedBass          = stringEncoding "bass"
 
 -- | Global reference sets key and time signatures.
 renderedGlobalKey :: Builder
@@ -51,28 +54,28 @@ renderedGlobalKey = stringEncoding "\\global"
 
 -- | Unique PitchClass by pitch and accidental, aggregated by name for all accidentals
 --   to map to separate encoding for Lilypond pitch and accidentals.
-equivPitchClasses :: [[PitchClass]]
-equivPitchClasses = [[Cff, Cf, C, Cs, Css], [Dff, Df, D, Ds, Dss], [Eff, Ef, E, Es, Ess], [Fff, Ff, F, Fs, Fss], [Gff, Gf, G, Gs, Gss], [Aff, Af, A, As, Ass], [Bff, Bf, B, Bs, Bss]]
+equivPitchClassNames :: [[PitchClass]]
+equivPitchClassNames = [[Cff, Cf, C, Cs, Css], [Dff, Df, D, Ds, Dss], [Eff, Ef, E, Es, Ess], [Fff, Ff, F, Fs, Fss], [Gff, Gf, G, Gs, Gss], [Aff, Af, A, As, Ass], [Bff, Bf, B, Bs, Bss]]
 
 -- | Lilypond pitch names are lower-case
 pitchNames :: [String]
 pitchNames = ["c", "d", "e", "f", "g", "a", "b"]
 
--- | Find index in equivPitchClasses for PitchClass.
---   Should never fail so long as equivPitchClasses
+-- | Find index in equivPitchClassNames for PitchClass.
+--   Should never fail so long as equivPitchClassNames
 --   contains all instances of PitchClass (verified
 --   by testEquivPitchClasses).
 findEquivPitchClassIndex :: PitchClass -> Int
 findEquivPitchClassIndex pc =
   fromMaybe
-    (error $ "findEquivPitchClassIndex no match for pitch class " ++ show pc ++ " in " ++ show equivPitchClasses)
-    (findIndex (elem pc) equivPitchClasses)
+    (error $ "findEquivPitchClassIndex no match for pitch class " ++ show pc ++ " in " ++ show equivPitchClassNames)
+    (findIndex (elem pc) equivPitchClassNames)
 
 -- | Map from e.g. Cff to "c".
 renderPitchName :: PitchClass -> Builder
 renderPitchName pc = stringEncoding $ pitchNames !! findEquivPitchClassIndex pc
 
--- | Accidental strings to match order of accidentals in equivPitchClasses elements,
+-- | Accidental strings to match order of accidentals in equivPitchClassNames elements,
 --   e.g. [Eff, Ef, E, Es, Ess] -> ["eses", "es", "", "is", "isis"].  
 --   Lilypond accidental names are in Dutch
 accidentalNames :: [String]
@@ -80,7 +83,7 @@ accidentalNames = ["eses", "es", "", "is", "isis"];
 
 -- | Map from e.g. Cff to "eses".
 --   The elemIndex should never fail so long as the count of
---   all lists in equivPitchClasses is the same as the count
+--   all lists in equivPitchClassNames is the same as the count
 --   of elements in accidentalNames (verified by testAccidentalNames).
 findEquivPitchClassAccidentalIndex :: PitchClass -> Int
 findEquivPitchClassAccidentalIndex pc =
@@ -88,7 +91,7 @@ findEquivPitchClassAccidentalIndex pc =
     (error $ "findEquivPitchClassAccidentalIndex no match for pitch class " ++ show pc ++ " in " ++ show pcs)
     (elemIndex pc pcs)
   where
-    pcs = equivPitchClasses !! findEquivPitchClassIndex pc
+    pcs = equivPitchClassNames !! findEquivPitchClassIndex pc
 
 -- | Map e.g. Es to "is".
 renderAccidental :: PitchClass -> Builder
@@ -253,11 +256,11 @@ renderText text = renderedDash <> renderedQuote <> stringEncoding text <> render
 -- | Combine a rendered pitch with a list of rendered rhythms into
 --   a rendered note, annotating with ties where there are multiple
 --   rhythms.
-renderNoteForRhythms :: Builder -> Builder -> [Builder] -> Builder
-renderNoteForRhythms _ _ [] = mempty
-renderNoteForRhythms renderedPitch renderedControls [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedControls 
-renderNoteForRhythms renderedPitch renderedControls (renderedRhythm:renderedRhythms) =
-  renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie <> renderedSpace <> renderNoteForRhythms renderedPitch renderedNothing renderedRhythms]
+renderNoteForRhythms :: Builder -> Builder -> Builder -> [Builder] -> Builder
+renderNoteForRhythms _ _ _ [] = mempty
+renderNoteForRhythms _ renderedPitch renderedControls [renderedRhythm] = renderedPitch <> renderedRhythm <> renderedControls 
+renderNoteForRhythms renderedTie' renderedPitch renderedControls (renderedRhythm:renderedRhythms) =
+  renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie' <> renderedSpace <> renderNoteForRhythms renderedTie' renderedPitch renderedNothing renderedRhythms]
 
 -- | Emit Lilypond text corresponding to VoiceControl enum.
 renderVoiceControl :: (Bool, Bool, VoiceControl) -> (Bool, Bool, Builder)
@@ -312,20 +315,20 @@ renderNote (c, p) (Note pitch rhythm controls) =
     (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
     renderedPitch  = renderPitch pitch
     renderedRhythms = renderRhythm rhythm
-    renderedNote = renderNoteForRhythms renderedPitch renderedVoiceControls renderedRhythms
+    renderedNote = renderNoteForRhythms renderedTie renderedPitch renderedVoiceControls renderedRhythms
 renderNote (c, p) (Rest rhythm controls) =
   (c', p', renderedNote)
   where
     (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
     renderedRhythms = renderRhythm rhythm
-    renderedNote = renderNoteForRhythms renderedRest renderedVoiceControls renderedRhythms
+    renderedNote = renderNoteForRhythms renderedNothing renderedRest renderedVoiceControls renderedRhythms
 renderNote (c, p) (PercussionNote rhythm controls) =
   (c', p', renderedNote)
   where
     (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
     renderedPitch = renderPitch dummyPercussionPitch
     renderedRhythms = renderRhythm rhythm
-    renderedNote = renderNoteForRhythms renderedPitch renderedVoiceControls renderedRhythms
+    renderedNote = renderNoteForRhythms renderedTie renderedPitch renderedVoiceControls renderedRhythms
 
 -- | Spaces separate notes in a rendered list of notes.
 renderNotes' :: Note -> State (Bool, Bool) Builder 
@@ -337,6 +340,25 @@ renderNotes' note =
     
 renderNotes :: [Note] -> Builder
 renderNotes notes = mconcat $ intersperse renderedSpace $ evalState (traverse renderNotes' notes) (False, False)
+
+noteToPitch :: Note -> Maybe Pitch
+noteToPitch (Note pitch _ _)     = Just pitch
+noteToPitch (Rest _ _)           = Nothing
+noteToPitch (PercussionNote _ _) = Nothing
+
+mapPair :: (a -> b) -> (a, a) -> (b, b)
+mapPair f (x, y) = (f x, f y)
+
+-- Scan range of [Note] to determine "\clef treble", "\clef bass", "\clef treble_8", "\clef bass^8", "\clef treble_15", "\clef bass^15",  and etc.
+renderClef :: [Note] -> Builder
+renderClef notes
+  | treblesUp  > treblesDown = renderedClef <> renderedSpace <> renderedTreble
+  | bassesDown > bassesUp    = renderedClef <> renderedSpace <> renderedBass
+  | otherwise                = error $ "renderClef split range, trebles up " ++ show treblesUp ++ " down " ++ show treblesDown ++ " basses down " ++ show bassesDown ++ " up " ++ show bassesUp
+  where
+    pitches = catMaybes $ map noteToPitch notes
+    (treblesDown, treblesUp) = mapPair length $ partition (< Pitch F (Octave (-1))) pitches
+    (bassesDown,  bassesUp)  = mapPair length $ partition (< Pitch G (Octave 1))    pitches
 
 -- | An instrument expects to be in a Staff or Voice context.
 renderInstrument :: Instrument -> Builder
@@ -355,6 +377,8 @@ renderVoice (Voice instrument notes) =
   <> renderInstrument instrument
   <> renderedSpace
   <> renderedGlobalKey
+  <> renderedSpace
+  <> renderClef notes
   <> renderedSpace
   <> renderNotes notes
   <> renderedSpace
