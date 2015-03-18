@@ -1,6 +1,6 @@
 \version "2.18.2"
 \header {title = "Frere Jacques Scales" composer = "folk"}
-global = {\tempo 4 = 60\time 4/4 \key f \major }
+global = {\key f \major  \time 4/4  \tempo 4 = 60 }
 softest = ^\markup {\musicglyph #"scripts.dmarcato"}
 verysoft = ^\markup {\musicglyph #"scripts.upedaltoe"}
 soft = ^\markup {<}

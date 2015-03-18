@@ -271,6 +271,8 @@ renderVoiceControl (c, p, ArticulationControl articulation)   = (c, p, renderArt
 renderVoiceControl (c, p, TextControl text)                   = (c, p, renderText text)
 renderVoiceControl (c, p, AccentControl accent)               = (c, p, renderAccent accent)
 renderVoiceControl (c, p, InstrumentControl instrument)       = (c, p, renderInstrument instrument)
+renderVoiceControl (c, p, KeySignatureControl keySignature)   = (c, p, renderKeySignature keySignature)
+renderVoiceControl (c, p, TimeSignatureControl timeSignature) = (c, p, renderTimeSignature timeSignature)
 
 -- | Emit a list list of space-separated controls.
 renderVoiceControls' :: VoiceControl -> State (Bool, Bool) Builder
@@ -286,22 +288,17 @@ renderVoiceControls (c, p) controls =
   where
     (bs, (c', p')) = runState (traverse renderVoiceControls' controls) (c, p)
 
-renderScoreControl :: (Bool, ScoreControl) -> (Bool, Builder)
-renderScoreControl (s, TempoControl tempo)                 = renderTempo (s, tempo)
-renderScoreControl (s, KeySignatureControl keySignature)   = (s, renderKeySignature  keySignature)
-renderScoreControl (s, TimeSignatureControl timeSignature) = (s, renderTimeSignature timeSignature)
-
--- Bool in first Pair element is flag to say if accel, ritard are active so we
--- know to end text span when they stop.
-renderScoreControls' :: ScoreControl -> State Bool Builder
-renderScoreControls' control =
+-- | Bool in first Pair element is flag to say if accel or ritard is active so we
+--   know to end text span when they stop.
+renderTempoControls' :: (Tempo,Rhythm) -> State Bool Builder
+renderTempoControls' (tempo, _) =
   do s <- get
-     let (s', b) = renderScoreControl (s, control)
+     let (s', b) = renderTempo (s, tempo)
      put s'
      return b
-
-renderScoreControls :: Bool -> [ScoreControl] -> Builder
-renderScoreControls s controls = mconcat $ evalState (traverse renderScoreControls' controls) s
+     
+renderTempoControls :: [(Tempo,Rhythm)] -> Builder
+renderTempoControls controls = mconcat $ evalState (traverse renderTempoControls' controls) False
 
 -- | Pitch doesn't matter when written to a percussion staff
 dummyPercussionPitch :: Pitch
@@ -396,12 +393,55 @@ renderedVersion :: Builder
 renderedVersion = stringEncoding "\\version \"2.18.2\"\n"
 
 -- | Global section contains tempo, time, and key signatures.
-renderedGlobalValues :: [(ScoreControl,Rhythm)] -> Builder
-renderedGlobalValues controls =
+--   TBD: rhythms for tempo. What's a strategy for Tempo that
+--   changes over time?  Where does it get rendered?  Note that
+--   e.g. for time signature and presumably for other controls
+--   like key signature and tempo there's nothing to keep you
+--   from inserting them in the notation voice-by-voice.  It
+--   could just be they get inserted into the stream above the
+--   top voice in the score.  That's going to be a bit tricky.
+--   The easiest case would be if there's a note at that same 
+--   duration, in which case, I can just ... ugh.  ScoreControl
+--   is a unique type!  I can't just swap the ScoreControl into
+--   the Set of VoiceControls!  I'm going to need something like
+--   a special purpose "renderTopVoice" pattern that threads the
+--   (ScoreControl,Rhythm) list along with the Note list for that
+--   Voice and keeps track of the relative position in time for
+--   the two streams and squeezes the ScoreControl in somehow.
+--   Or else, maybe it's exactly the same as merging the event
+--   lists and there's a "<< ... >>" join of the Note and Control
+--   streams where a Rest in the Control stream is interepreted
+--   as a space.  Then I could have all voices merge the two and
+--   get replication e.g. of global key and time settings?  But
+--   what about overriding at the Voice?  You might want different
+--   Voices with different times and arbitrary key signatures, e.g.
+--   not just transpositions.  You could do a mash up like having
+--   the renderer be aware if there are local overrides in which case
+--   it abandons globals.  Note the single list of score controls
+--   means you have to interleave heterogenous types, e.g. tempo
+--   with key signature, as opposed to independent streams, key for
+--   rhythm x, new key for rhythm.
+--   Maybe it's best to divide the score controls into globals,
+--   e.g. the key and time for everybody to start, vs. time-varying
+--   which currently means just tempo.  Then if I want to override
+--   per-voice, I can add time and key to VoiceControls and it'll
+--   just happen.  And all I have to deal with is the sequence of
+--   (Tempo. Rhythm) pairs, which has to be global for all voices, 
+--   and which maybe I can merge with the "<< ... >>" syntax.
+
+renderedGlobalValues :: ScoreControls -> Builder
+renderedGlobalValues (ScoreControls keySignature timeSignature tempos) =
   stringEncoding "global = {"
-  <> renderScoreControls False (map fst controls) -- tbd: rhythms
+  <> renderKeySignature keySignature
+  <> renderedSpace
+  <> renderTimeSignature timeSignature
+  <> renderedSpace
+  <> renderedTempo -- just the first one, if one exists!
+  <> renderedSpace
   <> renderedClose
   <> renderedNewline
+  where
+    renderedTempo = if null tempos then renderedNothing else snd $ renderTempo (False, (fst (tempos !! 0)))
 
 renderedHeader :: String -> String -> Builder
 renderedHeader title composer =

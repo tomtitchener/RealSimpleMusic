@@ -12,25 +12,26 @@ import           RealSimpleMusic
 --   Assumes:  lengths of ascending and descending notes of Scale are the same.
 commonCanonToScore ::  Title -> KeySignature -> TimeSignature -> Tempo -> [[IndexedNote]] -> [Scale] -> [Rhythm] -> [Octave] -> [Instrument] -> Int -> Score
 commonCanonToScore title keySignature timeSignature tempo ixNotess scales rhythms octaves instruments repetitions =
-  Score title "folk" [(TempoControl tempo, Rhythm (0%1)), (TimeSignatureControl timeSignature, Rhythm (0%1)), (KeySignatureControl keySignature, Rhythm (0%1))] voices
+  Score title "folk" scoreControl voices
   where
-    lenScale   = length $ ascendingScale $ head scales
-    notess     = zipWith indexedNotesToNotes scales ixNotess
-    intervals  = map ((* lenScale) . getOctave) octaves
-    xpNotes    = zipWith3 (\scale interval notes -> map (transposeNote scale interval) notes) scales intervals notess
-    tunes      = map (concat . replicate repetitions) xpNotes
-    incr       = 127 `div` length instruments
-    pans       = map (\i -> PanControl (Pan (incr * i))) [0,1..]
-    durs       = map getRhythm rhythms                   -- [2%1, 1%4, 1%8]
-    leadDurs   = scanl (+) (head durs) (tail durs)       -- [2%1, 9%4, 19%8]
-    leadRests  = map (\dur -> Rest (Rhythm dur) Set.empty) leadDurs
-    revDurs    = reverse durs                            -- [1%8, 1%4, 2%1]
-    tailDurs   = scanl (+) (head revDurs) (tail revDurs) -- [1%8, 3%8, 19%8]
-    tailRests  = map (\dur -> Rest (Rhythm dur) Set.empty) tailDurs
-    tunes'     = head tunes : zipWith (:) leadRests (tail tunes)
-    tunes''    = reverse $ head rtunes : zipWith (\r t -> t ++ [r]) tailRests (tail rtunes) where rtunes = reverse tunes' -- trailing rests
-    tunes'''   = zipWith (\tune pan -> addControlToNote (head tune) pan : tail tune) tunes'' pans -- pans
-    voices     = zipWith Voice instruments tunes'''
+    lenScale     = length $ ascendingScale $ head scales
+    notess       = zipWith indexedNotesToNotes scales ixNotess
+    intervals    = map ((* lenScale) . getOctave) octaves
+    xpNotes      = zipWith3 (\scale interval notes -> map (transposeNote scale interval) notes) scales intervals notess
+    tunes        = map (concat . replicate repetitions) xpNotes
+    incr         = 127 `div` length instruments
+    pans         = map (\i -> PanControl (Pan (incr * i))) [0,1..]
+    durs         = map getRhythm rhythms                   -- [2%1, 1%4, 1%8]
+    leadDurs     = scanl (+) (head durs) (tail durs)       -- [2%1, 9%4, 19%8]
+    leadRests    = map (\dur -> Rest (Rhythm dur) Set.empty) leadDurs
+    revDurs      = reverse durs                            -- [1%8, 1%4, 2%1]
+    tailDurs     = scanl (+) (head revDurs) (tail revDurs) -- [1%8, 3%8, 19%8]
+    tailRests    = map (\dur -> Rest (Rhythm dur) Set.empty) tailDurs
+    tunes'       = head tunes : zipWith (:) leadRests (tail tunes)
+    tunes''      = reverse $ head rtunes : zipWith (\r t -> t ++ [r]) tailRests (tail rtunes) where rtunes = reverse tunes' -- trailing rests
+    tunes'''     = zipWith (\tune pan -> addControlToNote (head tune) pan : tail tune) tunes'' pans -- pans
+    voices       = zipWith Voice instruments tunes'''
+    scoreControl = ScoreControls keySignature timeSignature [(tempo, Rhythm (0%1))]
 
 -- | Converting most general Canon to Score is just a call to most general conversion function.
 canonToScore :: Canon -> Score

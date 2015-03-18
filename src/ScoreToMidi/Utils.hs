@@ -231,13 +231,15 @@ genMidiTextMetaEvent :: String -> Event.T
 genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
 foldControl :: ChannelMsg.Channel -> [Event.T] -> VoiceControl -> [Event.T]
-foldControl channel events (DynamicControl       dynamic)       = genMidiDynamicControlEvent    channel dynamic      :events
-foldControl channel events (BalanceControl       balance)       = genMidiBalanceControlEvent    channel balance      :events
-foldControl channel events (PanControl           pan)           = genMidiPanControlEvent        channel pan          :events
-foldControl channel events (InstrumentControl    instrument)    = genMidiInstrumentControlEvent channel instrument   :events
-foldControl _       events (TextControl          text)          = genMidiTextMetaEvent          text                 :events
-foldControl _       events (ArticulationControl  _)             =                                                     events
-foldControl _       events (AccentControl        _)             =                                                     events
+foldControl channel events (DynamicControl       dynamic)       = genMidiDynamicControlEvent    channel dynamic    : events
+foldControl channel events (BalanceControl       balance)       = genMidiBalanceControlEvent    channel balance    : events
+foldControl channel events (PanControl           pan)           = genMidiPanControlEvent        channel pan        : events
+foldControl channel events (InstrumentControl    instrument)    = genMidiInstrumentControlEvent channel instrument : events
+foldControl _       events (TextControl          text)          = genMidiTextMetaEvent          text               : events
+foldControl _       events (KeySignatureControl  keySignature)  = genMidiKeySignatureMetaEvent  keySignature       : events
+foldControl _       events (TimeSignatureControl timeSignature) = genMidiTimeSignatureMetaEvent timeSignature      : events
+foldControl _       events (ArticulationControl  _)             =                                                    events
+foldControl _       events (AccentControl        _)             =                                                    events
 
 -- | If an AccentControl exists in controls, answer Accent, else answer Normal
 lookupAccent :: Set.Set VoiceControl -> Accent
@@ -286,6 +288,8 @@ discreteControl control =
         PanUp              -> False
         PanDown            -> False
     ArticulationControl _  -> True
+    KeySignatureControl _  -> True
+    TimeSignatureControl _ -> True
     TextControl _          -> True
     InstrumentControl _    -> True
     AccentControl _        -> True
@@ -331,35 +335,18 @@ midiNoteToDiscreteEvents ch (MidiRest rhythm controls) =
      put $ rest + rhythmToDuration rhythm
      return $ (EventList.fromPairList . map durEventToNumEvent) (genMidiDiscreteControlEvents ch controls)
 
--- | Ugly.  Could find a way to do this with fromEnum assuming ordering didn't change.
 equalExplicitDynamic :: VoiceControl -> Bool
 equalExplicitDynamic (DynamicControl Pianissimo)     = True 
 equalExplicitDynamic (DynamicControl Piano)          = True 
 equalExplicitDynamic (DynamicControl MezzoPiano)     = True 
 equalExplicitDynamic (DynamicControl MezzoForte)     = True 
 equalExplicitDynamic (DynamicControl Forte)          = True 
-equalExplicitDynamic (DynamicControl Fortissimo)     = True 
-equalExplicitDynamic (DynamicControl Crescendo)      = False
-equalExplicitDynamic (DynamicControl EndCrescendo)   = False
-equalExplicitDynamic (DynamicControl Decrescendo)    = False
-equalExplicitDynamic (DynamicControl EndDecrescendo) = False
-equalExplicitDynamic (BalanceControl             _)  = False
-equalExplicitDynamic (PanControl                 _)  = False
-equalExplicitDynamic (ArticulationControl        _)  = False
-equalExplicitDynamic (TextControl                _)  = False
-equalExplicitDynamic (InstrumentControl          _)  = False
-equalExplicitDynamic (AccentControl              _)  = False
+equalExplicitDynamic (DynamicControl Fortissimo)     = True
+equalExplicitDynamic _                               = False
 
 dynamicFromControl :: VoiceControl -> Dynamic
-dynamicFromControl control =
-  case control of
-    DynamicControl dynamic -> dynamic
-    BalanceControl _       -> error "accentFromControl expected Dynamic, got Balance"
-    PanControl _           -> error "accentFromControl expected Dynamic, got Pan"
-    ArticulationControl _  -> error "accentFromControl expected Dynamic, got Articulation"
-    TextControl _          -> error "accentFromControl expected Dynamic, got Text"
-    InstrumentControl _    -> error "accentFromControl expected Dynamic, got Instrument"
-    AccentControl _        -> error "accentFromControl expected Dynamic, got Instrument"
+dynamicFromControl (DynamicControl dynamic) = dynamic
+dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
 
 synthesizeCrescendoVolumeSpan :: Dynamic -> Dynamic -> [Int]
 synthesizeCrescendoVolumeSpan dyn newDyn
@@ -451,38 +438,20 @@ midiNoteToContinuousDynamicEvents chan midiNote =
      put ctrlCtxt'
      return events
 
--- | Ugly.  Could find a way to do this with fromEnum assuming ordering didn't change.
 startPanControlContext :: MidiPanControlContext
 startPanControlContext = MidiControlContext ControlBufferingNone (Pan 64) (Dur 0) (Dur 0) 
 
 equalExplicitPan :: VoiceControl -> Bool
-equalExplicitPan (DynamicControl         _) = False
-equalExplicitPan (BalanceControl         _) = False
-equalExplicitPan (PanControl (Pan _))       = True
-equalExplicitPan (PanControl PanUp)         = False
-equalExplicitPan (PanControl PanDown)       = False
-equalExplicitPan (ArticulationControl    _) = False
-equalExplicitPan (TextControl            _) = False
-equalExplicitPan (InstrumentControl      _) = False
-equalExplicitPan (AccentControl          _) = False
+equalExplicitPan (PanControl (Pan _)) = True
+equalExplicitPan _                    = False     
 
 panFromControl :: VoiceControl -> Pan
-panFromControl control =
-  case control of
-    DynamicControl _       -> error "panFromControl expected Pan, got Dynamic"
-    BalanceControl _       -> error "panFromControl expected Pan, got Balance"
-    PanControl (Pan pan)   -> Pan pan
-    PanControl PanUp       -> error "panFromControl expected Pan, got Pan PanUp"
-    PanControl PanDown     -> error "panFromControl expected Pan, got Pan PanDown"
-    ArticulationControl _  -> error "panFromControl expected Pan, got Articulation"
-    TextControl _          -> error "panFromControl expected Pan, got Text"
-    InstrumentControl _    -> error "panFromControl expected Pan, got Instrument"
-    AccentControl _        -> error "panFromControl expected Pan, got Instrument"
+panFromControl (PanControl pan) = pan
+panFromControl control          = error $ "panFromControl expected Pan, got " ++ show control
 
 getPanVal :: Pan -> Int
 getPanVal (Pan val) = val
-getPanVal PanUp     = error "getPan called for continuous instance PanUp"
-getPanVal PanDown   = error "getPan called for continuous instance PanDown"
+getPanVal pan       = error $ "getPan called for continuous instance " ++ show pan
 
 synthesizeUpPanSpan :: Pan -> Pan -> [Pan]
 synthesizeUpPanSpan pan newPan
@@ -617,23 +586,20 @@ midiVoiceToMidiFile metaEvents midiVoice =
   where
     voiceEventList = midiVoiceToEventList midiVoice
 
--- | Convert ScoreControl to meta event.
-scoreControlToEvent :: ScoreControl -> Event.T
-scoreControlToEvent (TempoControl tempo)                 = genMidiTempoMetaEvent tempo
-scoreControlToEvent (KeySignatureControl keySignature)   = genMidiKeySignatureMetaEvent keySignature
-scoreControlToEvent (TimeSignatureControl timeSignature) = genMidiTimeSignatureMetaEvent timeSignature
-
 -- | Generate meta events for start of file.
 --   The first track of a Format 1 file is special, and is also known as the 'Tempo Map'.
 --   It should contain all meta-events of the types Time Signature, and Set Tempo.
 --   The meta-events Sequence/Track Name, Sequence Number, Marker, and SMTPE Offset
 --   should also be on the first track of a Format 1 file.
 scoreToMetaEvents :: Score -> EventList.T Event.ElapsedTime Event.T
-scoreToMetaEvents score =
-  EventList.fromPairList . map durEventToNumEvent $ midiPrefixEvent : controlEvents
+scoreToMetaEvents (Score _ _ (ScoreControls keySignature timeSignature tempos) _) =
+  EventList.fromPairList $ map durEventToNumEvent controlEvents
   where
-    midiPrefixEvent = (Dur 0, genMidiPrefixMetaEvent (ChannelMsg.toChannel 0))
-    controlEvents   = map (\(control,rhythm) -> (rhythmToDuration rhythm, scoreControlToEvent control)) $ scoreControls score
+    prefixEvent        = (Dur 0, genMidiPrefixMetaEvent (ChannelMsg.toChannel 0))
+    keySignatureEvent  = (Dur 0, genMidiKeySignatureMetaEvent keySignature)
+    timeSignatureEvent = (Dur 0, genMidiTimeSignatureMetaEvent timeSignature)
+    tempoEvents        = map (\(tempo, rhythm) -> (rhythmToDuration rhythm, genMidiTempoMetaEvent tempo)) tempos
+    controlEvents      = prefixEvent : keySignatureEvent : timeSignatureEvent : tempoEvents
     
 -- | Given title, voice, and part number, generate
 --   title, convert voice to create midi file byte

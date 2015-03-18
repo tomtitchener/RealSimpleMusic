@@ -103,21 +103,24 @@ newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord,
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
 
 -- | ScoreControls
-data ScoreControl =
-  TempoControl Tempo
-  | KeySignatureControl KeySignature
-  | TimeSignatureControl TimeSignature
-  deriving (Ord, Eq, Show)
+data ScoreControls =
+  ScoreControls {
+    scoreKeySignature    :: KeySignature
+    , scoreTimeSignature :: TimeSignature
+    , scoreTempos        :: [(Tempo, Rhythm)]
+    } deriving (Show)
            
 -- | VoiceControls
 data VoiceControl =
   DynamicControl Dynamic
   | BalanceControl Balance
   | PanControl Pan
-  | ArticulationControl Articulation   -- Mapping to Midi Sostenuto doesn't make sense.  Simlaute by shortening dur?
+  | ArticulationControl Articulation
   | TextControl String
   | InstrumentControl Instrument
   | AccentControl Accent
+  | KeySignatureControl KeySignature
+  | TimeSignatureControl TimeSignature
   deriving (Ord, Eq, Show)
                                   
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
@@ -165,6 +168,6 @@ type Title = String
 data Score =
   Score { scoreTitle :: Title
         , scoreComposer :: String
-        , scoreControls :: [(ScoreControl,Rhythm)]
+        , scoreControls :: ScoreControls
         , scoreVoices   :: [Voice]
         } deriving (Show)
