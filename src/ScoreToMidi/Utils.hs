@@ -267,37 +267,21 @@ articulate articulation duration =
     articulations = [NoArticulation, Tenuto, Portato, Marcato, Staccato, Staccatissimo]
       
 discreteControl :: VoiceControl -> Bool
-discreteControl control =
-  case control of
-    DynamicControl dyn ->
-      case dyn of
-        Pianissimo         -> True
-        Piano              -> True
-        MezzoPiano         -> True
-        MezzoForte         -> True
-        Forte              -> True
-        Fortissimo         -> True
-        Crescendo          -> False
-        EndCrescendo       -> False
-        Decrescendo        -> False
-        EndDecrescendo     -> False
-    BalanceControl _       -> True
-    PanControl pan ->
-      case pan of
-        Pan _              -> True
-        PanUp              -> False
-        PanDown            -> False
-    ArticulationControl _  -> True
-    KeySignatureControl _  -> True
-    TimeSignatureControl _ -> True
-    TextControl _          -> True
-    InstrumentControl _    -> True
-    AccentControl _        -> True
-  
+discreteControl (DynamicControl Crescendo)      = False
+discreteControl (DynamicControl EndCrescendo)   = False
+discreteControl (DynamicControl Decrescendo)    = False
+discreteControl (DynamicControl EndDecrescendo) = False
+discreteControl (PanControl PanUp)              = False
+discreteControl (PanControl PanDown)            = False
+discreteControl _                               = True
+
 -- | Create two element list, each with pair containing duration and Sound event
 --   with at least first element of delay and note on (e.g. for preceding rest)
 --   and second of duration and note off (e.g. for length of note), maybe preceded
 --   by list of discrete control events.
+--   TBD: articulate needs two parts.  First is to shorten duration proportionally,
+--   as currently exists.  Second is to insert rest, or delay, for silence covered
+--   by remaining part, as was forgotten.
 genMidiDiscreteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Set.Set VoiceControl -> [(Duration, Event.T)]
 genMidiDiscreteEvents delay channel pitch duration controls
   | minBound > delay    = error $ "genMidiDiscreteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
@@ -315,6 +299,8 @@ genMidiDiscreteEvents delay channel pitch duration controls
     events                = discreteControlEvents ++ [noteOnEvent, noteOffEvent]
     durations             = [delay] ++ replicate (length discreteControlEvents) (Dur 0) ++ [articulate articulation duration]
 
+-- TBD:  traverse across Set by State that threads rest (if any) from 
+-- articulated control over to delay at beginning of next articulated control.    
 genMidiDiscreteControlEvents :: ChannelMsg.Channel -> Set.Set VoiceControl -> [(Duration, Event.T)]
 genMidiDiscreteControlEvents channel controls =
   zip (replicate (Set.size controls) (Dur 0)) $ Set.foldl (foldControl channel) [] discreteControls

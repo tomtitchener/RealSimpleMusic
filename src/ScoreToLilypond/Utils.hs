@@ -242,7 +242,7 @@ renderTimeSignature (TimeSignature num den) =
 --   e.g. with shorthand notation "-^" for marcato, "--" for tenuto, and "-." for staccato.  There's also
 --   "-'" for staccatissimo, so why not?  And similarly for portato, "-_".
 articulationValues :: [String]
-articulationValues = ["", "--", "-_", "-^", "-.", "-'"]
+articulationValues = ["", "--", "-_", "-^", "-.", "-!"]
 
 -- | Map Articulation enums NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo
 --   to Lilypond strings.

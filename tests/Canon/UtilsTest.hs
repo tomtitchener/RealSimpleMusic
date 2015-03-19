@@ -26,8 +26,29 @@ ixPt2 = [mIxE, mIxF, mIxG]
 ixPt3 = [mIxG, mIxA, mIxG, mIxF, mIxE, mIxC]
 ixPt4 = [mIxC, lIxG, mIxC]
 fjIndexedPitches = ixPt1 ++ ixPt1 ++ ixPt2 ++ ixPt2 ++ ixPt3 ++ ixPt3 ++ ixPt4 ++ ixPt4
+
+accentsPt1, accentsPt2, accentsPt3, accentsPt4, fjAccents :: [VoiceControl]
+accentsPt1 = [AccentControl Soft,AccentControl Normal,AccentControl Hard,AccentControl Normal]
+accentsPt2 = [AccentControl Soft,AccentControl Normal,AccentControl Hard]
+accentsPt3 = [AccentControl Hard,AccentControl Hard,AccentControl Normal,AccentControl Normal,AccentControl Soft,AccentControl VerySoft]
+accentsPt4 = [AccentControl Soft,AccentControl Soft,AccentControl VerySoft]
+fjAccents = accentsPt1 ++ accentsPt1 ++ accentsPt2 ++ accentsPt2 ++ accentsPt3 ++ accentsPt3 ++ accentsPt4 ++ accentsPt4
+
+articulationsPt1, articulationsPt2, articulationsPt3, articulationsPt4, fjArticulations :: [VoiceControl]
+articulationsPt1 = [ArticulationControl Staccato,ArticulationControl Staccato,ArticulationControl Tenuto,ArticulationControl Marcato]
+articulationsPt2 = [ArticulationControl Staccato,ArticulationControl Staccato,ArticulationControl Portato]
+articulationsPt3 = [ArticulationControl Staccatissimo,ArticulationControl Staccatissimo,ArticulationControl Staccatissimo,ArticulationControl Staccatissimo,ArticulationControl Marcato,ArticulationControl Marcato]
+articulationsPt4 = [ArticulationControl Portato,ArticulationControl Portato,ArticulationControl Tenuto]
+fjArticulations = articulationsPt1 ++ articulationsPt1 ++ articulationsPt2 ++ articulationsPt2 ++ articulationsPt3 ++ articulationsPt3 ++ articulationsPt4 ++ articulationsPt4
+
+-- Combine fjAccents and fjArticulations into fjControls which is list of Set.Set composed of two controls each.
+fjControls :: [Set.Set VoiceControl]
+--fjControls = map Set.fromList $ zipWith (\accent articulation -> [accent,articulation]) fjAccents fjArticulations
+fjControls = map Set.singleton fjArticulations
+
+-- Want a list of sets, where each set is per note
 fjIxNotes :: [IndexedNote]
-fjIxNotes = zipWith (\pitch rhythm -> IndexedNote pitch rhythm Set.empty) fjIndexedPitches fjRhythms
+fjIxNotes = zipWith3 IndexedNote fjIndexedPitches fjRhythms fjControls
 
 eig, qtr, hlf :: Rhythm
 eig = Rhythm (1%8)
