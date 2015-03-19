@@ -230,16 +230,17 @@ genMidiInstrumentControlEvent chan (Instrument instrName) =
 genMidiTextMetaEvent :: String -> Event.T
 genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
-foldControl :: ChannelMsg.Channel -> [Event.T] -> VoiceControl -> [Event.T]
-foldControl channel events (DynamicControl       dynamic)       = genMidiDynamicControlEvent    channel dynamic    : events
-foldControl channel events (BalanceControl       balance)       = genMidiBalanceControlEvent    channel balance    : events
-foldControl channel events (PanControl           pan)           = genMidiPanControlEvent        channel pan        : events
-foldControl channel events (InstrumentControl    instrument)    = genMidiInstrumentControlEvent channel instrument : events
-foldControl _       events (TextControl          text)          = genMidiTextMetaEvent          text               : events
-foldControl _       events (KeySignatureControl  keySignature)  = genMidiKeySignatureMetaEvent  keySignature       : events
-foldControl _       events (TimeSignatureControl timeSignature) = genMidiTimeSignatureMetaEvent timeSignature      : events
-foldControl _       events (ArticulationControl  _)             =                                                    events
-foldControl _       events (AccentControl        _)             =                                                    events
+-- | Articulation and Accent are per-note controls that render immediately in the note-on/note-off Midi event stream.
+voiceControlToMaybeEvent :: ChannelMsg.Channel -> VoiceControl -> Maybe Event.T
+voiceControlToMaybeEvent channel (DynamicControl       dynamic)       = Just $ genMidiDynamicControlEvent    channel dynamic
+voiceControlToMaybeEvent channel (BalanceControl       balance)       = Just $ genMidiBalanceControlEvent    channel balance
+voiceControlToMaybeEvent channel (PanControl           pan)           = Just $ genMidiPanControlEvent        channel pan
+voiceControlToMaybeEvent channel (InstrumentControl    instrument)    = Just $ genMidiInstrumentControlEvent channel instrument
+voiceControlToMaybeEvent _       (TextControl          text)          = Just $ genMidiTextMetaEvent          text
+voiceControlToMaybeEvent _       (KeySignatureControl  keySignature)  = Just $ genMidiKeySignatureMetaEvent  keySignature
+voiceControlToMaybeEvent _       (TimeSignatureControl timeSignature) = Just $ genMidiTimeSignatureMetaEvent timeSignature
+voiceControlToMaybeEvent _       (ArticulationControl  _)             = Nothing
+voiceControlToMaybeEvent _       (AccentControl        _)             = Nothing
 
 -- | If an AccentControl exists in controls, answer Accent, else answer Normal
 lookupAccent :: Set.Set VoiceControl -> Accent
@@ -255,17 +256,23 @@ lookupArticulation controls =
     NoArticulation
     (find (\ articulation -> Set.member (ArticulationControl articulation) controls) [(minBound::Articulation)..(maxBound::Articulation)])
 
--- | Shorten duration to simulate articulation
-articulate :: Articulation -> Duration -> Duration
+-- | Shorten duration to simulate articulation.
+--   Answer pair with new duration and remaining
+--   duration to insert as delay before next note.
+articulate :: Articulation -> Duration -> (Duration,Duration)
 articulate articulation duration =
   case elemIndex articulation articulations of
-    Just idx -> Dur (floor (articulated !! idx) * fromInteger (getDur duration))
+    Just idx -> (durNote, durRest)
+                  where
+                    durNote = Dur (floor (articulated !! idx) * (fromInteger (getDur duration)))
+                    durRest = duration - durNote
     Nothing -> error $ "articulate unrecognized articulation " ++ show articulation
   where
     articulated  :: [Double]
-    articulated   = [1.0,            1.0,    0.9,     0.6,     0.5,      0.5]
+    articulated   = [1.0,            1.0,    0.9,     0.6,     0.5,      0.25]
     articulations = [NoArticulation, Tenuto, Portato, Marcato, Staccato, Staccatissimo]
-      
+
+-- | A discrete control can be converted to a single unique Midi control event.
 discreteControl :: VoiceControl -> Bool
 discreteControl (DynamicControl Crescendo)      = False
 discreteControl (DynamicControl EndCrescendo)   = False
@@ -278,34 +285,35 @@ discreteControl _                               = True
 -- | Create two element list, each with pair containing duration and Sound event
 --   with at least first element of delay and note on (e.g. for preceding rest)
 --   and second of duration and note off (e.g. for length of note), maybe preceded
---   by list of discrete control events.
---   TBD: articulate needs two parts.  First is to shorten duration proportionally,
---   as currently exists.  Second is to insert rest, or delay, for silence covered
---   by remaining part, as was forgotten.
-genMidiDiscreteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Set.Set VoiceControl -> [(Duration, Event.T)]
+--   by list of discrete control events.  Answer pair with first element that is
+--   list of duration event pairs that is control events followed by note on and
+--   note off events and second element that is left over rest from e.g. articulated
+--   note.
+genMidiDiscreteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Set.Set VoiceControl -> ([(Duration, Event.T)], Duration)
 genMidiDiscreteEvents delay channel pitch duration controls
   | minBound > delay    = error $ "genMidiDiscreteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
   | maxBound < delay    = error $ "genMidiDiscreteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
   | minBound > duration = error $ "genMidiDiscreteEvents duration " ++ show duration ++ " is less than minimum value " ++ show (minBound::Duration)
   | maxBound < duration = error $ "genMidiDiscreteEvents duration " ++ show duration ++ " is greater than minimum value " ++ show (maxBound::Duration)
-  | otherwise           = zip durations events
+  | otherwise           = (zip durations events, restDur)
   where
     accent                = lookupAccent controls
     articulation          = lookupArticulation controls
     noteOnEvent           = genMidiNoteOn  channel pitch accent
     noteOffEvent          = genMidiNoteOff channel pitch accent
     discreteControls      = Set.filter discreteControl controls
-    discreteControlEvents = Set.foldl (foldControl channel) [] discreteControls
+    discreteControlEvents = catMaybes $ map (voiceControlToMaybeEvent channel) $ Set.toList discreteControls
     events                = discreteControlEvents ++ [noteOnEvent, noteOffEvent]
-    durations             = [delay] ++ replicate (length discreteControlEvents) (Dur 0) ++ [articulate articulation duration]
+    (noteDur, restDur)    = articulate articulation duration
+    durations             = [delay] ++ replicate (length discreteControlEvents) (Dur 0) ++ [noteDur]
 
--- TBD:  traverse across Set by State that threads rest (if any) from 
--- articulated control over to delay at beginning of next articulated control.    
+-- | Emit just control events for a rest.  
 genMidiDiscreteControlEvents :: ChannelMsg.Channel -> Set.Set VoiceControl -> [(Duration, Event.T)]
 genMidiDiscreteControlEvents channel controls =
-  zip (replicate (Set.size controls) (Dur 0)) $ Set.foldl (foldControl channel) [] discreteControls
+  zip [Dur 0..] discreteControlEvents
   where
     discreteControls      = Set.filter discreteControl controls
+    discreteControlEvents = catMaybes $ map (voiceControlToMaybeEvent channel) $ Set.toList discreteControls
 
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
 durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
@@ -314,8 +322,9 @@ durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
 midiNoteToDiscreteEvents :: ChannelMsg.Channel -> MidiNote -> State Duration (EventList.T Event.ElapsedTime Event.T)
 midiNoteToDiscreteEvents ch (MidiNote pitch rhythm controls) =
   do rest <- get
-     put $ Dur 0
-     return $ (EventList.fromPairList . map durEventToNumEvent) (genMidiDiscreteEvents rest ch pitch (rhythmToDuration rhythm) controls)
+     let (durEvents, restDur) = genMidiDiscreteEvents rest ch pitch (rhythmToDuration rhythm) controls
+     put restDur
+     return $ (EventList.fromPairList . map durEventToNumEvent) durEvents
 midiNoteToDiscreteEvents ch (MidiRest rhythm controls) =  
   do rest <- get
      put $ rest + rhythmToDuration rhythm

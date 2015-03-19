@@ -155,11 +155,18 @@ For program examples generally, see the files in `./tests`, including
 
 TBD:
 
+* Bugs:
+  - Articulation fails to add corresponding rests!
+  - Combination of lists of controls into sets produces note clusters
+    in Midi rendering.
+
 * Validate continuous control behavior in both Midi and Lilypond renderings.
   Add behaviors to voices in canons, including accents:
   - Crescendo/Decrescendo (per voice)
   - PanUp/PanDown (per voice)
   - Accelerando/Ritardando (all voices)
+  Add behaviors to all voices together:
+  - Accelerando/Ritardando.
 
 * Automatic cleff disposition:
   - add 8vb/8va.
