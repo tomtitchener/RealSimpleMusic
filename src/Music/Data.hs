@@ -61,20 +61,22 @@ instance Ord Pitch where
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 
 -- | Dynamic (may be continuous)
-data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
+data Dynamic = NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Pan (may be continuous)
 data Pan =
-  Pan { getPan :: Int }
+  NoPan
+  | Pan { getPan :: Int }
   | PanUp
   | PanDown deriving (Read, Show, Ord, Eq)
 
--- | Tempo, beats per minute
+-- | Tempo, beats per minute (may be continuous)
 data Tempo =
-  Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
+  NoTempo
+  | Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
   | Accelerando
   | Ritardando deriving (Show, Ord, Eq)
 

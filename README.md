@@ -155,10 +155,17 @@ For program examples generally, see the files in `./tests`, including
 
 TBD:
 
+* Continuous controls:
+  - Concrete control and start of continuous control
+     on same note, e.g. piano + crescendo.
+ - Watch out for multiple continous controls on same
+    note, e.g. global dynamic plus per-voice dynamic,
+    in Lilypond rendering will print multiple values,
+	Midi doesn't matter even with multiple controls.
+
 * Bugs:
-  - Articulation fails to add corresponding rests!
-  - Combination of lists of controls into sets produces note clusters
-    in Midi rendering.
+  - Articulations need to be proportional in a way that doesn't
+    sound odd.
 
 * Validate continuous control behavior in both Midi and Lilypond renderings.
   Add behaviors to voices in canons, including accents:

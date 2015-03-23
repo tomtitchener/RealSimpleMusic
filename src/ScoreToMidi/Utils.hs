@@ -87,6 +87,7 @@ dynamicToVolume MezzoPiano     = 50
 dynamicToVolume MezzoForte     = 80
 dynamicToVolume Forte          = 100
 dynamicToVolume Fortissimo     = 120
+dynamicToVolume NoDynamic      = error "dynamicToVolume NoDynamic"
 dynamicToVolume Crescendo      = error "dynamicToVolume Crescendo"
 dynamicToVolume EndCrescendo   = error "dynamicToVolume EndCrescendo"
 dynamicToVolume Decrescendo    = error "dynamicToVolume Decrescendo"
@@ -190,6 +191,7 @@ genMidiPanControlEvent chan (Pan pan)
   | 0 > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum 0"
   | 127 < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum 127"
   | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
+genMidiPanControlEvent _ NoPan   = error "genMidiPanControl NoPan"
 genMidiPanControlEvent _ PanUp   = error "genMidiPanControl PanUp"
 genMidiPanControlEvent _ PanDown = error "genMIdiPanControl PanDown"
 
@@ -210,6 +212,7 @@ genMidiTempoMetaEvent (Tempo (Rhythm rhythm) beats) =
     microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
 genMidiTempoMetaEvent Accelerando = error "genMidiTempoMetaEvent Accelerando"
 genMidiTempoMetaEvent Ritardando  = error "genMIdiTempoEvent Ritardando"
+genMidiTempoMetaEvent NoTempo     = error "genMIdiTempoEvent NoTempo"
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
@@ -331,6 +334,7 @@ midiNoteToDiscreteEvents ch (MidiRest rhythm controls) =
      return $ (EventList.fromPairList . map durEventToNumEvent) (genMidiDiscreteControlEvents ch controls)
 
 equalExplicitDynamic :: VoiceControl -> Bool
+equalExplicitDynamic (DynamicControl NoDynamic)      = True 
 equalExplicitDynamic (DynamicControl Pianissimo)     = True 
 equalExplicitDynamic (DynamicControl Piano)          = True 
 equalExplicitDynamic (DynamicControl MezzoPiano)     = True 

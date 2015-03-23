@@ -176,9 +176,9 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 renderAccent :: Accent -> Builder
 renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 
--- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo
+-- | Match strings to enum: NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo
 renderedDynamicValues :: [Builder]
-renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
+renderedDynamicValues = map stringEncoding ["", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
 
 -- | Match of enum values to list above.  First Bool is flag to tell if
 --   continuous dynamic control (cresc, decresc) is engaged.  Second is
@@ -205,6 +205,7 @@ renderPanValue val = stringEncoding "_\\markup" <> renderedOpen <> stringEncodin
 -- | First Bool is flag to tell if continuous dynamic control (cresc, decresc) is engaged,
 --   gets passed through unchanged.  Second is for continuous pan control.
 renderPan :: (Bool, Bool, Pan) -> (Bool, Bool, Builder)
+renderPan (c, p, NoPan)   = (c, p, renderedNothing)
 renderPan (c, p, Pan pan) = if c then (False, p, renderedStopTextSpan <> renderPanValue pan) else (c, p, renderPanValue pan)
 renderPan (_, p, PanUp)   = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
 renderPan (_, p, PanDown) = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
@@ -215,10 +216,11 @@ renderTempo' (Rhythm rhythm) bpm =
   where
     denom = denominator rhythm
 
--- | Bool is flag saing if contnous tempo control is engaged.
+-- | Bool is flag saing if continous tempo control is engaged.
 renderTempo :: (Bool, Tempo) -> (Bool, Builder)
-renderTempo (_, Accelerando)       = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan")
-renderTempo (_, Ritardando)        = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan")
+renderTempo (_, Accelerando)      = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan")
+renderTempo (_, Ritardando)       = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan")
+renderTempo (s, NoTempo)          = (s, renderedNothing)
 renderTempo (s, Tempo rhythm bpm) = (False, if s then renderedStopTextSpan <> renderedTempo else renderedTempo) where renderedTempo = renderTempo' rhythm bpm
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
