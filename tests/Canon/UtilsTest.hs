@@ -33,6 +33,19 @@ accentsPt2 = [AccentControl Soft,AccentControl Normal,AccentControl Hard]
 accentsPt3 = [AccentControl Hard,AccentControl Hard,AccentControl Normal,AccentControl Normal,AccentControl Soft,AccentControl VerySoft]
 accentsPt4 = [AccentControl Soft,AccentControl Soft,AccentControl VerySoft]
 fjAccents = accentsPt1 ++ accentsPt1 ++ accentsPt2 ++ accentsPt2 ++ accentsPt3 ++ accentsPt3 ++ accentsPt4 ++ accentsPt4
+fjAccentsSets :: [Set.Set VoiceControl]
+fjAccentsSets = map Set.singleton fjAccents
+
+dynamicssPt1, dynamicssPt2, dynamicssPt3, dynamicssPt4, fjDynamicss :: [[Dynamic]]
+dynamicssPt1 = [[Piano, Crescendo], [], [Forte], [Piano]]
+dynamicssPt2 = [[MezzoPiano, Crescendo], [], [Fortissimo]]
+dynamicssPt3 = [[Forte, Decrescendo], [], [], [], [], [Piano]]
+dynamicssPt4 = [[MezzoForte, Decrescendo], [], [Pianissimo]]
+fjDynamicss  = dynamicssPt1 ++ dynamicssPt1 ++ dynamicssPt2 ++ dynamicssPt2 ++ dynamicssPt3 ++ dynamicssPt3 ++ dynamicssPt4 ++ dynamicssPt4
+fjDynamicss' :: [[VoiceControl]]
+fjDynamicss' = (map . map) DynamicControl fjDynamicss
+fjDynamicsSets :: [Set.Set VoiceControl]
+fjDynamicsSets = map Set.fromList fjDynamicss'
 
 articulationsPt1, articulationsPt2, articulationsPt3, articulationsPt4, fjArticulations :: [VoiceControl]
 articulationsPt1 = [ArticulationControl Staccato,ArticulationControl Staccato,ArticulationControl Tenuto,ArticulationControl Marcato]
@@ -40,11 +53,12 @@ articulationsPt2 = [ArticulationControl Staccato,ArticulationControl Staccato,Ar
 articulationsPt3 = [ArticulationControl Staccatissimo,ArticulationControl Staccatissimo,ArticulationControl Staccatissimo,ArticulationControl Staccatissimo,ArticulationControl Marcato,ArticulationControl Marcato]
 articulationsPt4 = [ArticulationControl Portato,ArticulationControl Portato,ArticulationControl Tenuto]
 fjArticulations = articulationsPt1 ++ articulationsPt1 ++ articulationsPt2 ++ articulationsPt2 ++ articulationsPt3 ++ articulationsPt3 ++ articulationsPt4 ++ articulationsPt4
+fjArticulationsSets :: [Set.Set VoiceControl]
+fjArticulationsSets = map Set.singleton fjArticulations
 
 -- Combine fjAccents and fjArticulations into fjControls which is list of Set.Set composed of two controls each.
 fjControls :: [Set.Set VoiceControl]
---fjControls = map Set.fromList $ zipWith (\accent articulation -> [accent,articulation]) fjAccents fjArticulations
-fjControls = map Set.singleton fjArticulations
+fjControls = zipWith3 (\accents dynamics articulations -> Set.unions [accents, dynamics, articulations]) fjAccentsSets fjDynamicsSets fjArticulationsSets
 
 -- Want a list of sets, where each set is per note
 fjIxNotes :: [IndexedNote]

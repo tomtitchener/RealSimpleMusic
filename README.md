@@ -155,13 +155,15 @@ For program examples generally, see the files in `./tests`, including
 
 TBD:
 
-* Continuous controls:
-  - Concrete control and start of continuous control
-     on same note, e.g. piano + crescendo.
- - Watch out for multiple continous controls on same
-    note, e.g. global dynamic plus per-voice dynamic,
-    in Lilypond rendering will print multiple values,
-	Midi doesn't matter even with multiple controls.
+* Generate continuous tempo meta events for track 0.
+
+* Add fractional dynamics controls so you can e.g. swell
+   up and down on a single note.
+
+* Revisit No<Control>, which may be unnecessary given 
+  continous controls need pattern with each item being a
+  list and notes with no continuous control can just be an
+  empty list.
 
 * Bugs:
   - Articulations need to be proportional in a way that doesn't
