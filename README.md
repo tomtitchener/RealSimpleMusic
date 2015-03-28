@@ -155,15 +155,20 @@ For program examples generally, see the files in `./tests`, including
 
 TBD:
 
+* Standardize synthesis of tempo span on pattern for volume and pan spans.
+
 * Generate continuous tempo meta events for track 0.
 
-* Add fractional dynamics controls so you can e.g. swell
-   up and down on a single note.
+* Tempo unit should always have numerator of 1, denominator
+   that is a power of 2. 
 
-* Revisit No<Control>, which may be unnecessary given 
-  continous controls need pattern with each item being a
-  list and notes with no continuous control can just be an
-  empty list.
+* Add fractional dynamics controls so you can swell
+  up and down on a single note.
+
+* Allocate durations for continuous controls to
+  accelerate rate of change over time, e.g. Fibonacci.
+  Current strategy is to evenly divide into finest grain 
+  Midi time resolution (tick).  
 
 * Bugs:
   - Articulations need to be proportional in a way that doesn't

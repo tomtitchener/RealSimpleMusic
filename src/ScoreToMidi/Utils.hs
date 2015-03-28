@@ -87,7 +87,6 @@ dynamicToVolume MezzoPiano     = 50
 dynamicToVolume MezzoForte     = 80
 dynamicToVolume Forte          = 100
 dynamicToVolume Fortissimo     = 120
-dynamicToVolume NoDynamic      = error "dynamicToVolume NoDynamic"
 dynamicToVolume Crescendo      = error "dynamicToVolume Crescendo"
 dynamicToVolume EndCrescendo   = error "dynamicToVolume EndCrescendo"
 dynamicToVolume Decrescendo    = error "dynamicToVolume Decrescendo"
@@ -191,7 +190,6 @@ genMidiPanControlEvent chan (Pan pan)
   | 0 > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum 0"
   | 127 < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum 127"
   | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
-genMidiPanControlEvent _ NoPan   = error "genMidiPanControl NoPan"
 genMidiPanControlEvent _ PanUp   = error "genMidiPanControl PanUp"
 genMidiPanControlEvent _ PanDown = error "genMIdiPanControl PanDown"
 
@@ -210,9 +208,8 @@ genMidiTempoMetaEvent (Tempo (Rhythm rhythm) beats) =
     microsPerMinute   = 60000000
     rhythmsPerQuarter = denominator rhythm % 4
     microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
-genMidiTempoMetaEvent Accelerando = error "genMidiTempoMetaEvent Accelerando"
-genMidiTempoMetaEvent Ritardando  = error "genMIdiTempoEvent Ritardando"
-genMidiTempoMetaEvent NoTempo     = error "genMIdiTempoEvent NoTempo"
+genMidiTempoMetaEvent (Ritardando)  = error "genMIdiTempoEvent Ritardando"
+genMidiTempoMetaEvent (Accelerando) = error "genMidiTempoMetaEvent Accelerando"
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
@@ -267,7 +264,7 @@ articulate articulation duration =
   case elemIndex articulation articulations of
     Just idx -> (durNote, durRest)
                   where
-                    durNote = Dur (floor (articulated !! idx) * (fromInteger (getDur duration)))
+                    durNote = Dur (floor (articulated !! idx) * fromInteger (getDur duration))
                     durRest = duration - durNote
     Nothing -> error $ "articulate unrecognized articulation " ++ show articulation
   where
@@ -305,7 +302,7 @@ genMidiDiscreteEvents delay channel pitch duration controls
     noteOnEvent           = genMidiNoteOn  channel pitch accent
     noteOffEvent          = genMidiNoteOff channel pitch accent
     discreteControls      = Set.filter discreteControl controls
-    discreteControlEvents = catMaybes $ map (voiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
+    discreteControlEvents = mapMaybe (voiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
     events                = discreteControlEvents ++ [noteOnEvent, noteOffEvent]
     (noteDur, restDur)    = articulate articulation duration
     durations             = [delay] ++ replicate (length discreteControlEvents) (Dur 0) ++ [noteDur]
@@ -316,7 +313,7 @@ genMidiDiscreteControlEvents channel controls =
   zip [Dur 0..] discreteControlEvents
   where
     discreteControls      = Set.filter discreteControl controls
-    discreteControlEvents = catMaybes $ map (voiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
+    discreteControlEvents = mapMaybe (voiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
 
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
 durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
@@ -334,7 +331,6 @@ midiNoteToDiscreteEvents ch (MidiRest rhythm controls) =
      return $ (EventList.fromPairList . map durEventToNumEvent) (genMidiDiscreteControlEvents ch controls)
 
 equalExplicitDynamic :: VoiceControl -> Bool
-equalExplicitDynamic (DynamicControl NoDynamic)      = True 
 equalExplicitDynamic (DynamicControl Pianissimo)     = True 
 equalExplicitDynamic (DynamicControl Piano)          = True 
 equalExplicitDynamic (DynamicControl MezzoPiano)     = True 
@@ -343,32 +339,72 @@ equalExplicitDynamic (DynamicControl Forte)          = True
 equalExplicitDynamic (DynamicControl Fortissimo)     = True
 equalExplicitDynamic _                               = False
 
-dynamicFromControl :: VoiceControl -> Dynamic
-dynamicFromControl (DynamicControl dynamic) = dynamic
-dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
+-- | Distribute control val 'd' over count 'c' buckets.
+--   Sum of values in each bucket must equal 'd'.  Smaller
+--   values come first, larger values come last in a 
+--   smooth, stepwise sequence.  Progressing from low to
+--   high intensity, as with soft to loud or slow to fast,
+--   the rate of change mirrors audibility, as in it's easier
+--   to hear the small differences at low intensities.  In
+--   the reverse direction, when progressing from high to
+--   low intensity, start with faster rate of change.
+--   TBD:  accelerate rate of change.
+unfoldControl :: (Eq t, Num t, Eq b, Num b) => (t -> b -> t) -> (t,b) -> Maybe (t, (t,b))
+unfoldControl divT (d,c)
+  | c == 0 = Nothing
+  | c == 1 = Just (d, (d, 0))
+  | otherwise = Just (x, (d - x, c - 1))
+    where
+      x = d `divT` c
 
-synthesizeCrescendoVolumeSpan :: Dynamic -> Dynamic -> [Int]
-synthesizeCrescendoVolumeSpan dyn newDyn
-  | newDyn > dyn = [vol,vol-1..newVol]
-  | otherwise    = error $ "synthesizeCrescendoVolumeSpan target dynamic " ++ show newDyn ++ " is not louder than source dynamic " ++ show dyn
-  where
-    vol    = dynamicToVolume dyn
-    newVol = dynamicToVolume newDyn
+-- | TBD: rename this or figure out how to use bind to avoid do notation and in-line it.
+fun :: Num a => a -> State a a
+fun i =
+  do
+    v <- get
+    let v' = v + i
+    put v'
+    return v'
 
-synthesizeDecrescendoVolumeSpan :: Dynamic -> Dynamic -> [Int]
-synthesizeDecrescendoVolumeSpan dyn newDyn
-  | newDyn < dyn = [vol,vol-1..newVol]
-  | otherwise    = error $ "synthesizeDecrescendoVolumeSpan target dynamic " ++ show newDyn ++ " is not softer than source dynamic " ++ show dyn
-  where
-    vol    = dynamicToVolume dyn
-    newVol = dynamicToVolume newDyn
+-- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
+divInts :: Int -> Int -> Int
+divInts x y = x `div` y
 
-synthesizeDurationSpan :: Duration -> Int -> Duration -> [Integer]
-synthesizeDurationSpan rest cnt total =
-  delay:take cnt [durIncr,2*durIncr..]
+-- | Increment Midi dynamic control by one to answer values to span the range for a duration.
+--   Sum of volumes must equal span from start to stop.
+synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
+synthesizeCrescendoSpan start stop (Dur dur)
+  | dur == 0      = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
+  | start >= stop = error $ "synthesizeCrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
+  | otherwise     = evalState (traverse fun increments) (dynamicToVolume start)
   where
-    delay = getDur rest
-    durIncr = getDur total `div` toInteger cnt
+    increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
+
+-- | Decrement Midi dynamic control by one to answer values to span the range for a duration
+--   where resolution to duration is 1, e.g. duration 10 maps to list 10 items long where
+--   each item is value from span of volumes and values sum to range, e.g. for start 20
+--   and stop 10 and Dur 5, [2,2,2,2,2].  
+synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
+synthesizeDecrescendoSpan start stop (Dur dur)
+  | dur == 0      = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
+  | stop >= start = error $ "synthesizeDecrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
+  | otherwise     = evalState (traverse fun increments) (dynamicToVolume start)
+  where
+    increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
+
+-- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
+divIntegers :: Integer -> Integer -> Integer
+divIntegers x y = x `div` y
+
+-- | Answer a list of Duration to cover span of synthesized control events
+--   given the duration for the continuous control and the count of synthesized
+--   control events.  Reverse so larger values, which mean slower perceived 
+--   rate of change happen first.
+--   Sum of Duration in answer must exactly equal total Duration as second argument.  
+synthesizeDurationSpan :: Int -> Duration -> [Duration]
+synthesizeDurationSpan cntCntrls (Dur dur)
+  | cntCntrls > fromIntegral dur = error $ "synthesizeDurationSpan cntCntrls " ++ show cntCntrls ++ " > dur " ++ show dur
+  | otherwise = map Dur $ reverse $ unfoldr (unfoldControl divIntegers) (dur, fromIntegral cntCntrls)
 
 data ControlBufferingState = ControlBufferingNone | ControlBufferingUp | ControlBufferingDown deriving (Bounded, Enum, Show, Ord, Eq)
 
@@ -382,18 +418,37 @@ data MidiControlContext control =
 
 type MidiDynamicControlContext = MidiControlContext Dynamic  
 type MidiPanControlContext     = MidiControlContext Pan
+type MidiTempoControlContext   = MidiControlContext Tempo
 
 startDynamicControlContext :: MidiDynamicControlContext
 startDynamicControlContext = MidiControlContext ControlBufferingNone MezzoForte (Dur 0) (Dur 0)
 
-genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> [Int]) -> ChannelMsg.Channel -> Duration -> Duration -> Dynamic -> Dynamic -> EventList.T Event.ElapsedTime Event.T
+genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> Duration -> [Int]) -> ChannelMsg.Channel -> Duration -> Duration -> Dynamic -> Dynamic -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousDynamicEvents synth ch rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthDynamicEventPairs
   where
-    synthVolSpan           = synth start stop
-    synthDurSpan           = synthesizeDurationSpan rest (length synthVolSpan) dur
-    synthDynamicEventPairs = zipWith (\dur' vol -> (Dur dur', genMidiVolumeEvent ch vol)) synthDurSpan synthVolSpan
+    synthVolSpan           = synth start stop dur
+    synthDurSpan           = rest : synthesizeDurationSpan (length synthVolSpan) dur
+    synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) synthDurSpan synthVolSpan
 
+dynamicFromControl :: VoiceControl -> Dynamic
+dynamicFromControl (DynamicControl dynamic) = dynamic
+dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
+
+-- | Refactor
+bindDynamicControlVars :: MidiNote -> (Dynamic -> Dynamic) -> Dynamic -> (Rhythm, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Dynamic)
+bindDynamicControlVars midiNote modDynamic dynamic =
+  (rhythm, controls, ctrlsDyn, ctrlsCresc, ctrlsDecresc, target) 
+  where
+    rhythm        = midiNoteToRhythm midiNote  
+    controls      = midiNoteToControls midiNote  
+    ctrlsDyn      = Set.filter equalExplicitDynamic controls
+    ctrlsCresc    = Set.filter (== DynamicControl Crescendo) controls
+    ctrlsDecresc  = Set.filter (== DynamicControl Decrescendo) controls
+    target        = if Set.null ctrlsDyn then modDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
+
+-- NB:  add to EventList only stream of control messages approximating continous change!
+-- Isolated discrete controls are emitted separately, see genMidiDiscreteEvents and genMidiDiscreteControlEvents.
 updateDynamicControlContext :: ChannelMsg.Channel -> MidiNote -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
 updateDynamicControlContext _ midiNote (MidiControlContext ControlBufferingNone dynamic rest len)
   | Set.null ctrlsCresc       && Set.null ctrlsDecresc       = (MidiControlContext ControlBufferingNone target (rest + rhythmToDuration rhythm) len, EventList.empty)
@@ -401,36 +456,21 @@ updateDynamicControlContext _ midiNote (MidiControlContext ControlBufferingNone 
   | Set.null ctrlsCresc       && not (Set.null ctrlsDecresc) = (MidiControlContext ControlBufferingDown target rest (len + rhythmToDuration rhythm), EventList.empty)
   | otherwise                                                = error $ "updateDynamicControlContext note with both cresc and decresc controls " ++ show controls
   where
-    rhythm        = midiNoteToRhythm midiNote  
-    controls      = midiNoteToControls midiNote  
-    ctrlsDyn      = Set.filter equalExplicitDynamic controls
-    ctrlsCresc    = Set.filter (== DynamicControl Crescendo) controls
-    ctrlsDecresc  = Set.filter (== DynamicControl Decrescendo) controls
-    target        = if Set.null ctrlsDyn then dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
+    (rhythm, controls, _, ctrlsCresc, ctrlsDecresc, target) = bindDynamicControlVars midiNote id dynamic
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp dynamic rest len) 
   | not (Set.null ctrlsCresc)                              = error $ "updateDynamicControlContext overlapping crescendos for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDyn) && not (Set.null ctrlsDecresc) = (MidiControlContext ControlBufferingUp   target rest (len + rhythmToDuration rhythm), EventList.empty)
   | otherwise                                              = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), crescendoEvents)
   where
-    rhythm             = midiNoteToRhythm midiNote  
-    controls           = midiNoteToControls midiNote  
-    ctrlsDyn           = Set.filter equalExplicitDynamic controls
-    ctrlsCresc         = Set.filter (== DynamicControl Crescendo) controls
-    ctrlsDecresc       = Set.filter (== DynamicControl Decrescendo) controls
-    target             = if Set.null ctrlsDyn then incrDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
-    crescendoEvents    = genMidiContinuousDynamicEvents synthesizeCrescendoVolumeSpan chan rest len dynamic target
+    (rhythm, _, ctrlsDyn, ctrlsCresc, ctrlsDecresc, target) = bindDynamicControlVars midiNote incrDynamic dynamic
+    crescendoEvents                                         = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len)
   | not (Set.null ctrlsDecresc)                          = error $ "updateDynamicControlContext overlapping decrescendos for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDyn) && not (Set.null ctrlsCresc) = (MidiControlContext ControlBufferingDown target rest (len + rhythmToDuration rhythm), EventList.empty)
   | otherwise                                            = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), decrescendoEvents)
   where
-    rhythm             = midiNoteToRhythm midiNote  
-    controls           = midiNoteToControls midiNote  
-    ctrlsDyn           = Set.filter equalExplicitDynamic controls
-    ctrlsCresc         = Set.filter (== DynamicControl Crescendo) controls
-    ctrlsDecresc       = Set.filter (== DynamicControl Decrescendo) controls
-    target             = if Set.null ctrlsDyn then decrDynamic dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
-    decrescendoEvents  = genMidiContinuousDynamicEvents synthesizeDecrescendoVolumeSpan chan rest len dynamic target
+    (rhythm, _, ctrlsDyn, ctrlsCresc, ctrlsDecresc, target) = bindDynamicControlVars midiNote decrDynamic dynamic
+    decrescendoEvents                                       = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
 
 midiNoteToContinuousDynamicEvents :: ChannelMsg.Channel -> MidiNote -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
 midiNoteToContinuousDynamicEvents chan midiNote =
@@ -454,30 +494,43 @@ getPanVal :: Pan -> Int
 getPanVal (Pan val) = val
 getPanVal pan       = error $ "getPan called for continuous instance " ++ show pan
 
-synthesizeUpPanSpan :: Pan -> Pan -> [Pan]
-synthesizeUpPanSpan pan newPan
-  | val > newVal = map Pan [val,(val+1)..newVal]
-  | otherwise    = error $ "synthesizeUpPanSpan target pan " ++ show newVal ++ " <= than source pan " ++ show val
+synthesizeUpPanSpan :: Pan -> Pan -> Duration -> [Pan]
+synthesizeUpPanSpan start stop (Dur dur)
+  | dur == 0      = error $ "synthesizeUpPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | start >= stop = error $ "synthesizeUpPanSpan target pan " ++ show stop ++ " is not greater than source pan " ++ show start
+  | otherwise     = map Pan $ evalState (traverse fun increments) (getPanVal start)
   where
-    val    = getPanVal pan
-    newVal = getPanVal newPan
-
-synthesizeDownPanSpan :: Pan -> Pan -> [Pan]
-synthesizeDownPanSpan pan newPan
-  | val < newVal = map Pan [val,(val-1)..newVal]
-  | otherwise    = error $ "synthesizeUpPanSpan target pan " ++ show newVal ++ " >= than source pan " ++ show val
+    increments = unfoldr (unfoldControl divInts) (getPanVal stop - getPanVal start, fromIntegral dur)
+synthesizeDownPanSpan :: Pan -> Pan -> Duration -> [Pan]
+synthesizeDownPanSpan start stop (Dur dur)
+  | dur == 0      = error $ "synthesizeDownPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | stop >= start = error $ "synthesizeDownPanSpan target pan " ++ show stop ++ " is not less than source pan " ++ show start
+  | otherwise     = map Pan $ evalState (traverse fun increments) (getPanVal start)
   where
-    val    = getPanVal pan
-    newVal = getPanVal newPan
+    increments = unfoldr (unfoldControl divInts) (getPanVal stop - getPanVal start, fromIntegral dur)
 
-genMidiContinuousPanEvents :: (Pan -> Pan -> [Pan]) -> ChannelMsg.Channel -> Duration -> Duration -> Pan -> Pan -> EventList.T Event.ElapsedTime Event.T
+genMidiContinuousPanEvents :: (Pan -> Pan -> Duration -> [Pan]) -> ChannelMsg.Channel -> Duration -> Duration -> Pan -> Pan -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousPanEvents synth chan rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthPanEventPairs
   where
-    synthPanSpan       = synth start stop
-    synthDurSpan       = synthesizeDurationSpan rest (length synthPanSpan) dur
-    synthPanEventPairs = zipWith (\dur' pan -> (Dur dur', genMidiPanControlEvent chan pan)) synthDurSpan synthPanSpan
+    synthPanSpan       = synth start stop dur
+    synthDurSpan       = rest : synthesizeDurationSpan (length synthPanSpan) dur
+    synthPanEventPairs = zipWith (\dur' pan -> (dur', genMidiPanControlEvent chan pan)) synthDurSpan synthPanSpan
 
+-- | Refactor
+bindPanControlVars :: MidiNote -> Pan -> (Rhythm, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Pan)
+bindPanControlVars midiNote pan =
+  (rhythm, controls, ctrlsPan, ctrlsPanUp, ctrlsPanDown, target) 
+  where
+    rhythm        = midiNoteToRhythm midiNote  
+    controls      = midiNoteToControls midiNote  
+    ctrlsPan      = Set.filter equalExplicitPan controls
+    ctrlsPanUp    = Set.filter (== PanControl PanUp) controls
+    ctrlsPanDown  = Set.filter (== PanControl PanDown) controls
+    target        = if Set.null ctrlsPan then pan else panFromControl $ Set.elemAt 0 ctrlsPan
+
+-- NB:  add to EventList only stream of control messages approximating continous change.
+-- Isolated discrete controls are emitted separately, see genMidiDiscreteEvents and genMidiDiscreteControlEvents.
 updatePanControlContext :: ChannelMsg.Channel -> MidiNote -> MidiPanControlContext -> (MidiPanControlContext, EventList.T Event.ElapsedTime Event.T)
 updatePanControlContext _ midiNote (MidiControlContext ControlBufferingNone pan rest len)
   | Set.null ctrlsUp       && Set.null ctrlsDown       = (MidiControlContext ControlBufferingNone target (rest + rhythmToDuration rhythm) len, EventList.empty)
@@ -485,46 +538,145 @@ updatePanControlContext _ midiNote (MidiControlContext ControlBufferingNone pan 
   | Set.null ctrlsUp       && not (Set.null ctrlsDown) = (MidiControlContext ControlBufferingDown target rest (len + rhythmToDuration rhythm), EventList.empty)
   | otherwise                                          = error $ "updatePanControlContext note with both up and down controls " ++ show controls
   where
-    rhythm    = midiNoteToRhythm midiNote  
-    controls  = midiNoteToControls midiNote  
-    ctrlsPan  = Set.filter equalExplicitPan controls
-    ctrlsUp   = Set.filter (== PanControl PanUp) controls
-    ctrlsDown = Set.filter (== PanControl PanDown) controls
-    target    = if Set.null ctrlsPan then pan else panFromControl $ Set.elemAt 0 ctrlsPan
+    (rhythm, controls, _, ctrlsUp, ctrlsDown, target) = bindPanControlVars midiNote pan
 updatePanControlContext chan midiNote (MidiControlContext ControlBufferingUp pan rest len) 
   | not (Set.null ctrlsUp)   = error $ "updatePanControlContext overlapping up for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDown) = error $ "updatePanControlContext overlapping down for MidiNote " ++ show midiNote
   | not (Set.null ctrlsPan)  = (MidiControlContext ControlBufferingUp   target rest (len + rhythmToDuration rhythm), EventList.empty)
   | otherwise                = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), upEvents)
   where
-    rhythm    = midiNoteToRhythm midiNote  
-    controls  = midiNoteToControls midiNote  
-    ctrlsPan  = Set.filter equalExplicitPan controls
-    ctrlsUp   = Set.filter (== PanControl PanUp) controls
-    ctrlsDown = Set.filter (== PanControl PanDown) controls
-    target    = if Set.null ctrlsPan then pan else panFromControl $ Set.elemAt 0 ctrlsPan
-    upEvents  = genMidiContinuousPanEvents synthesizeUpPanSpan chan rest len pan target
+    (rhythm, _, ctrlsPan, ctrlsUp, ctrlsDown, target) = bindPanControlVars midiNote pan
+    upEvents                                          = genMidiContinuousPanEvents synthesizeUpPanSpan chan rest len pan target
 updatePanControlContext chan midiNote (MidiControlContext ControlBufferingDown pan rest len)
   | not (Set.null ctrlsDown) = error $ "updatePanControlContext overlapping down for MidiNote " ++ show midiNote
   | not (Set.null ctrlsUp)   = error $ "updatePanControlContext overlapping up for MidiNote " ++ show midiNote
   | not (Set.null ctrlsPan)  = (MidiControlContext ControlBufferingDown target rest (len + rhythmToDuration rhythm), EventList.empty)
   | otherwise                = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), downEvents)
   where
-    rhythm     = midiNoteToRhythm midiNote  
-    controls   = midiNoteToControls midiNote  
-    ctrlsPan   = Set.filter equalExplicitPan controls
-    ctrlsUp    = Set.filter (== PanControl PanUp) controls
-    ctrlsDown  = Set.filter (== PanControl PanDown) controls
-    target     = if Set.null ctrlsPan then pan else panFromControl $ Set.elemAt 0 ctrlsPan
-    downEvents = genMidiContinuousPanEvents synthesizeDownPanSpan chan rest len pan target
+    (rhythm, _, ctrlsPan, ctrlsUp, ctrlsDown, target) = bindPanControlVars midiNote pan
+    downEvents                                        = genMidiContinuousPanEvents synthesizeDownPanSpan chan rest len pan target
 
 midiNoteToContinuousPanEvents :: ChannelMsg.Channel -> MidiNote -> State MidiPanControlContext (EventList.T Event.ElapsedTime Event.T)
 midiNoteToContinuousPanEvents chan midiNote =
   do ctrlCtxt <- get
      let (ctrlCtxt', events) = updatePanControlContext chan midiNote ctrlCtxt
      put ctrlCtxt'
-     return events     
-     
+     return events
+
+data TempoValue = TempoValue { tempoValueUnit :: Rational, tempoValueBeatsPerMinute :: Integer } deriving (Eq, Show)
+
+-- | Answer normalized first relative to second.
+normalizeTempoValue :: TempoValue -> TempoValue -> TempoValue
+normalizeTempoValue valOne@(TempoValue rhythmOne bpmOne) (TempoValue rhythmTwo _)
+  | numerator rhythmOne == 0 = error $ "normalizeTempoValue div by zero, rhythmOne " ++ show rhythmOne ++ " rhythmTwo " ++ show rhythmTwo
+  | rhythmOne <= rhythmTwo = valOne
+  | otherwise = TempoValue (rhythmOne * rhythmFact) (bpmOne * numerator bpmFact)
+  where
+    rhythmFact = rhythmTwo / rhythmOne
+    bpmFact    = rhythmOne / rhythmTwo
+
+-- | Normalize first with second, second with first.
+normalizeTempoValues :: TempoValue -> TempoValue -> (TempoValue, TempoValue)
+normalizeTempoValues tempoOne tempoTwo = (normalizeTempoValue tempoOne tempoTwo, normalizeTempoValue tempoTwo tempoOne)
+
+-- | A little silly for everything but + and -, which is useful for generating continuous control span.
+instance Num TempoValue where
+  t1 + t2                 = TempoValue un (b1n + b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
+  t1 - t2                 = TempoValue un (b1n - b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
+  t1 * t2                 = TempoValue un (b1n * b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
+  abs (TempoValue u b)    = TempoValue u (abs b)
+  signum (TempoValue _ b) = TempoValue (1%1) sign where sign = if b > 0 then 1 else (-1)
+  fromInteger i           = error $ "fromInteger for TempoValue for integer value " ++ show i -- TempoValue (1%1) i
+  negate (TempoValue u b) = TempoValue u (-b)
+
+-- | Unadorned constraint for signature for unfoldControl is Integral t due to use of `div`.
+--   But Integral is constrained by (Real a, Enum a), which gets you into a realm of numeric
+--   processing way more sophisticated than what's needed just for a continuous span.
+divTempoValueByInt :: TempoValue -> Int -> TempoValue
+divTempoValueByInt (TempoValue un bpm) i = TempoValue un (bpm `div` fromIntegral i)
+
+tempoToTempoValue :: Tempo -> TempoValue
+tempoToTempoValue (Tempo (Rhythm unit) bpm) = TempoValue unit bpm
+tempoToTempoValue tempo = error $ "tempoToTempoValue called for Tempo " ++ show tempo
+
+tempoValueToTempo :: TempoValue -> Tempo
+tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
+
+-- Issue with standardization is going to be Num instance for Tempo for '+', '-'.
+synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
+synthesizeAccelerandoSpan start stop (Dur dur)
+  | dur == 0      = error $ "synthesizeAccelerandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | start >= stop = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
+  | otherwise     = map tempoValueToTempo $ evalState (traverse fun increments) (tempoToTempoValue start)
+  where
+    increments = unfoldr (unfoldControl divTempoValueByInt) (tempoToTempoValue stop - tempoToTempoValue start, fromIntegral dur)
+
+synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
+synthesizeRitardandoSpan start stop (Dur dur)
+  | dur == 0      = error $ "synthesizeRitardandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | stop >= start = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
+  | otherwise     = map tempoValueToTempo $ evalState (traverse fun increments) (tempoToTempoValue start)
+  where
+    increments = unfoldr (unfoldControl divTempoValueByInt) (tempoToTempoValue stop - tempoToTempoValue start, fromIntegral dur)
+
+startTempoControlContext :: MidiTempoControlContext
+startTempoControlContext = MidiControlContext ControlBufferingNone (Tempo (Rhythm (1%4)) 120) (Dur 0) (Dur 0)
+
+-- | Refactoring.
+updateContTempoControlContext :: (Tempo -> Tempo -> Duration -> [Tempo]) -> (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
+updateContTempoControlContext synth (stop, rhythm) (MidiControlContext _ start rest _) =
+  (MidiControlContext ControlBufferingNone stop (rhythmToDuration rhythm) (Dur 0), synthTempoEventList)
+  where
+    synthTempoSpan       = synth start stop (rhythmToDuration rhythm)
+    synthDurSpan         = rest : synthesizeDurationSpan (length synthTempoSpan) (rhythmToDuration rhythm)
+    synthTempoEventPairs = zipWith (\dur' tempo' -> (dur', genMidiTempoMetaEvent tempo')) synthDurSpan synthTempoSpan
+    synthTempoEventList  = EventList.fromPairList $ map durEventToNumEvent synthTempoEventPairs
+
+updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
+-- | New discrete tempo, not buffering => remember new tempo and  duration in context,
+--   answer list with single event at rest dur from previous event for target tempo.
+updateTempoControlContext (target@(Tempo (Rhythm _) _), rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
+  (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromInteger . getDur) rest) (genMidiTempoMetaEvent target))
+-- | New discrete tempo, buffering for accelerando => remember new tempo and length for rest in context,
+--   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
+updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlContext ControlBufferingUp _ _ _) =
+  updateContTempoControlContext synthesizeAccelerandoSpan (target, rhythm) context
+-- | New discrete tempo, buffering for ritardando => remember new tempo and length for rest in context,
+--   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
+updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlContext ControlBufferingDown _ _ _) =
+  updateContTempoControlContext synthesizeRitardandoSpan (target, rhythm) context
+-- | Error patterns indicate failed sequence of (Tempo, Rhythm), e.g. with successive Accelerando and/or
+--   Ritardando without intervening Tempo events or Accelerando or Ritardando without starting Tempo.
+updateTempoControlContext (Ritardando, dur) (MidiControlContext ControlBufferingNone tempo _ len) =
+  (MidiControlContext ControlBufferingDown tempo (rhythmToDuration dur) len, EventList.empty)
+updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
+  error $ "updateTempoControlContext Ritardando when already buffering " ++ show direction
+updateTempoControlContext (Accelerando, dur) (MidiControlContext ControlBufferingNone tempo rest _) =
+  (MidiControlContext ControlBufferingUp tempo rest (rhythmToDuration dur), EventList.empty)
+updateTempoControlContext (Accelerando, _) (MidiControlContext direction _ _ _) =
+  error $ "updateTempoControlContext Accelerando when already buffering " ++ show direction
+  
+-- | State is tuple with rest rhythm, current TempoValue, and single-item buffer with
+--   continuous control valuel (if any), default:  Rhythm (0%4), (TempoValue (1%4) 120), Nothing.
+--   Answer is Event for current (Tempo, Rhythm) pair.
+--   Sequence of (Tempo, Rhythm) pairs requires Tempo values as terminators to continous
+--   controls, e.g. [(Tempo, Rhythm), (Accelerando, Rhythm), (Tempo, Rhythm)] where third
+--   item tells tempo at end of Accelerando, and the same for Ritardando.  It's an illegal
+--   sequence to have back-to-back continuous controls.
+--   Consequence:  encountering a continuous control starts a one-element buffer with the
+--   current continuous control state (as a Maybe).  Encountering a Tempo means first to
+--   check the (Maybe Tempo) isn't empty, and emitting the sequence of incremental Tempo
+--   control events for the duration of the previous continuous control.  So the Maybe 
+--   has to be for the (Tempo, Rhythm) pair.  I still need to carry the (Rational, Integer)
+--   pair (create a local, TempoValue type) so I know where to start the continous control
+--   from.
+tempoToContinuousTempoEvents :: (Tempo, Rhythm) -> State MidiTempoControlContext (EventList.T Event.ElapsedTime Event.T)
+tempoToContinuousTempoEvents pr =
+  do ctrlCtxt <- get
+     let (ctrlCtxt', events) = updateTempoControlContext pr ctrlCtxt
+     put ctrlCtxt'
+     return events
+
 -- | Traverse notes accumulating and emiting rests, converting to Midi
 --   traverse controls converting to Midi,
 --   convert results to single event list merged in time.
@@ -596,13 +748,14 @@ midiVoiceToMidiFile metaEvents midiVoice =
 --   should also be on the first track of a Format 1 file.
 scoreToMetaEvents :: Score -> EventList.T Event.ElapsedTime Event.T
 scoreToMetaEvents (Score _ _ (ScoreControls keySignature timeSignature tempos) _) =
-  EventList.fromPairList $ map durEventToNumEvent controlEvents
+  EventList.merge controlEventList tempoEventList
   where
     prefixEvent        = (Dur 0, genMidiPrefixMetaEvent (ChannelMsg.toChannel 0))
     keySignatureEvent  = (Dur 0, genMidiKeySignatureMetaEvent keySignature)
     timeSignatureEvent = (Dur 0, genMidiTimeSignatureMetaEvent timeSignature)
-    tempoEvents        = map (\(tempo, rhythm) -> (rhythmToDuration rhythm, genMidiTempoMetaEvent tempo)) tempos
-    controlEvents      = prefixEvent : keySignatureEvent : timeSignatureEvent : tempoEvents
+    tempoEventList     = EventList.concat $ evalState (traverse tempoToContinuousTempoEvents tempos) startTempoControlContext
+    controlEvents      = prefixEvent : keySignatureEvent : [timeSignatureEvent]
+    controlEventList   = EventList.fromPairList $ map durEventToNumEvent controlEvents
     
 -- | Given title, voice, and part number, generate
 --   title, convert voice to create midi file byte
@@ -673,6 +826,16 @@ voicesToNotMidiInstruments voices =
 {--
   RealSimpleMusic API: scoreToMidiFiles
 --}
+
+-- | Refactor
+bindScoreToVoicessAndChannelss :: Score -> ([Instrument], [[Voice]], [[ChannelMsg.Channel]])
+bindScoreToVoicessAndChannelss score =
+  (notMidiInstruments, voicess, channelss)
+  where
+    voices             = scoreVoices score
+    notMidiInstruments = voicesToNotMidiInstruments voices
+    voicess            = collectVoicesByInstrumentWithPercussionLast voices
+    channelss          = mapVoicessToPercussionChannelss voicess
     
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -687,10 +850,7 @@ scoreToMidiFiles score
   | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
   | otherwise                     = zipWithM_ (scoreVoicesAndChannelsToMidiFiles score) voicess channelss
   where
-    voices             = scoreVoices score
-    notMidiInstruments = voicesToNotMidiInstruments voices
-    voicess            = collectVoicesByInstrumentWithPercussionLast voices
-    channelss          = mapVoicessToPercussionChannelss voicess
+    (notMidiInstruments, voicess, channelss) = bindScoreToVoicessAndChannelss score
 
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -773,11 +933,8 @@ convertScore convert score
   | not (null notMidiInstruments)   = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
   | otherwise                       = convert score voicess channelss
   where
-    voices             = scoreVoices score
-    notMidiInstruments = voicesToNotMidiInstruments voices
-    voicess            = collectVoicesByInstrumentWithPercussionLast voices
-    channelss          = mapVoicessToChannelss voicess
-    countVoices        = length voicess
+    (notMidiInstruments, voicess, channelss) = bindScoreToVoicessAndChannelss score
+    countVoices                              = length voicess
     
 {--
   RealSimpleMusic APIs: scoreToMidiFile, scoreToByteString (for test)

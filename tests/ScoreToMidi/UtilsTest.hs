@@ -5,6 +5,7 @@ import           RealSimpleMusic
 import           ScoreToMidi.Utils
 import qualified Sound.MIDI.Message.Channel as ChannelMsg
 import           Test.HUnit
+import           Test.QuickCheck
 
 testMapVoicessToChannelss :: Assertion
 testMapVoicessToChannelss =
@@ -38,4 +39,20 @@ testMapVoicessToPercussionChannelss =
        [Voice (Instrument "piano") []], [Voice (Instrument "flute") []], [Voice (Instrument "Marimba") []], [Voice (Instrument "Cowbell") []]]
     channels =
       (map . map) ChannelMsg.fromChannel $ mapVoicessToPercussionChannelss voicess
-    
+
+instance Arbitrary Duration where
+  arbitrary = elements [(minBound::Duration)..(maxBound::Duration)]
+
+{--
+synthesizeDurationSpan :: Int -> Duration -> [Duration]
+synthesizeDurationSpan cnt (Dur total) =
+--}
+
+-- Int is count of elements in list of synthesized controls.
+-- Duration is from some Rhythm.
+testSynthesizeDurationSpan :: Int -> Duration -> Property
+testSynthesizeDurationSpan cnt dur =
+  cnt > 0 && cnt < (2 * dur') ==>
+    dur == sum (synthesizeDurationSpan cnt dur)
+    where
+      dur' = fromIntegral $ getDur dur

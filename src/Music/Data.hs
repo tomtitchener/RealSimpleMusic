@@ -63,7 +63,7 @@ data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 -- | Dynamic (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering makes
 --   sense.
-data Dynamic = NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
+data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
@@ -72,19 +72,16 @@ data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | 
 --   be LT enum for continuous controls so that Lilypond rendering
 --   makes sense.
 data Pan =
-  NoPan
-  | Pan { getPan :: Int }
+  Pan { getPan :: Int }
   | PanUp
   | PanDown deriving (Read, Show, Ord, Eq)
 
--- | Tempo, beats per minute (may be continuous).  Note: enum for 
---   discrete control must be LT enum for continuous controls so
---   that Lilypond rendering makes sense.
+-- | Tempo data, unit is e.g. Rhythm (1%4), beats per minute.
+--   Ritardando and Accelerando are continuous.
 data Tempo =
-  NoTempo
-  | Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
-  | Accelerando
-  | Ritardando deriving (Show, Ord, Eq)
+  Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
+  | Ritardando 
+  | Accelerando deriving (Show, Eq, Ord)
 
 -- | Key Signature, negative for count flats, positive for count sharps
 newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, Eq)
@@ -133,7 +130,7 @@ data VoiceControl =
                                   
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
 --   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
-newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num)
+newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional)
 
 -- | A note is either an ordinary note with pitch and rhythm,
 --   an accented note with pitch, rhythm, and accent,

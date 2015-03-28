@@ -99,7 +99,7 @@ timeSignature :: TimeSignature
 timeSignature = TimeSignature 4 4
 
 tempo :: Tempo
-tempo = Tempo (Rhythm (1%4)) 60
+tempo = Tempo (Rhythm (1%4)) 100
 
 -- Simple Canon
 createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon

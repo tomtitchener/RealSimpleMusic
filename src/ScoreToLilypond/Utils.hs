@@ -205,22 +205,18 @@ renderPanValue val = stringEncoding "_\\markup" <> renderedOpen <> stringEncodin
 -- | First Bool is flag to tell if continuous dynamic control (cresc, decresc) is engaged,
 --   gets passed through unchanged.  Second is for continuous pan control.
 renderPan :: (Bool, Bool, Pan) -> (Bool, Bool, Builder)
-renderPan (c, p, NoPan)   = (c, p, renderedNothing)
 renderPan (c, p, Pan pan) = if c then (False, p, renderedStopTextSpan <> renderPanValue pan) else (c, p, renderPanValue pan)
 renderPan (_, p, PanUp)   = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
 renderPan (_, p, PanDown) = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
 
 renderTempo' :: Rhythm -> Integer -> Builder
 renderTempo' (Rhythm rhythm) bpm =
-  stringEncoding "\\tempo " <> integerDec denom <> stringEncoding " = " <> integerDec bpm
-  where
-    denom = denominator rhythm
+  stringEncoding "\\tempo " <> integerDec (denominator rhythm) <> stringEncoding " = " <> integerDec bpm
 
 -- | Bool is flag saing if continous tempo control is engaged.
 renderTempo :: (Bool, Tempo) -> (Bool, Builder)
-renderTempo (_, Accelerando)      = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan")
-renderTempo (_, Ritardando)       = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan")
-renderTempo (s, NoTempo)          = (s, renderedNothing)
+renderTempo (_, Accelerando)                  = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan")
+renderTempo (_, Ritardando)                   = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan")
 renderTempo (s, Tempo rhythm bpm) = (False, if s then renderedStopTextSpan <> renderedTempo else renderedTempo) where renderedTempo = renderTempo' rhythm bpm
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
@@ -292,13 +288,18 @@ renderVoiceControls (c, p) controls =
 
 -- | Bool in first Pair element is flag to say if accel or ritard is active so we
 --   know to end text span when they stop.
-renderTempoControls' :: (Tempo,Rhythm) -> State Bool Builder
+--   TBD:  rhythm turns into a space instead of a rest, as delay before
+--   next event which may be rendering of target rhythm e.g. for accel or
+--   ritard.
+renderTempoControls' :: (Tempo, Rhythm) -> State Bool Builder
 renderTempoControls' (tempo, _) =
   do s <- get
      let (s', b) = renderTempo (s, tempo)
      put s'
      return b
-     
+
+-- TBD:  show at top of first staff, as separate line 
+-- paired with top staff via "<<" and ">>" syntax.
 renderTempoControls :: [(Tempo,Rhythm)] -> Builder
 renderTempoControls controls = mconcat $ evalState (traverse renderTempoControls' controls) False
 
@@ -355,7 +356,7 @@ renderClef notes
   | bassesDown > bassesUp    = renderedClef <> renderedSpace <> renderedBass
   | otherwise                = error $ "renderClef split range, trebles up " ++ show treblesUp ++ " down " ++ show treblesDown ++ " basses down " ++ show bassesDown ++ " up " ++ show bassesUp
   where
-    pitches = catMaybes $ map noteToPitch notes
+    pitches = mapMaybe noteToPitch notes
     (treblesDown, treblesUp) = mapPair length $ partition (< Pitch F (Octave (-1))) pitches
     (bassesDown,  bassesUp)  = mapPair length $ partition (< Pitch G (Octave 1))    pitches
 
@@ -443,7 +444,7 @@ renderedGlobalValues (ScoreControls keySignature timeSignature tempos) =
   <> renderedClose
   <> renderedNewline
   where
-    renderedTempo = if null tempos then renderedNothing else snd $ renderTempo (False, (fst (tempos !! 0)))
+    renderedTempo = if null tempos then renderedNothing else snd $ renderTempo (False, fst (head tempos))
 
 renderedHeader :: String -> String -> Builder
 renderedHeader title composer =
