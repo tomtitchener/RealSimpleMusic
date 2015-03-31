@@ -357,14 +357,10 @@ unfoldControl divT (d,c)
     where
       x = d `divT` c
 
--- | TBD: rename this or figure out how to use bind to avoid do notation and in-line it.
-fun :: Num a => a -> State a a
-fun i =
-  do
-    v <- get
-    let v' = v + i
-    put v'
-    return v'
+-- Sum running total with new increment.
+-- Used to traverse a list of increments into a running total.
+carriedSum :: Num a => a -> State a a
+carriedSum i = get >>= \v -> let v' = v + i in put v' >> return v'
 
 -- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
 divInts :: Int -> Int -> Int
@@ -378,7 +374,7 @@ synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
 synthesizeCrescendoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
   | start >= stop = error $ "synthesizeCrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
-  | otherwise     = evalState (traverse fun increments) (dynamicToVolume start)
+  | otherwise     = evalState (traverse carriedSum increments) (dynamicToVolume start)
   where
     increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
 
@@ -390,7 +386,7 @@ synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
 synthesizeDecrescendoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
   | stop >= start = error $ "synthesizeDecrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
-  | otherwise     = evalState (traverse fun increments) (dynamicToVolume start)
+  | otherwise     = evalState (traverse carriedSum increments) (dynamicToVolume start)
   where
     increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
 
@@ -502,14 +498,14 @@ synthesizeUpPanSpan :: Pan -> Pan -> Duration -> [Pan]
 synthesizeUpPanSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeUpPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | start >= stop = error $ "synthesizeUpPanSpan target pan " ++ show stop ++ " is not greater than source pan " ++ show start
-  | otherwise     = map Pan $ evalState (traverse fun increments) (getPanVal start)
+  | otherwise     = map Pan $ evalState (traverse carriedSum increments) (getPanVal start)
   where
     increments = unfoldr (unfoldControl divInts) (getPanVal stop - getPanVal start, fromIntegral dur)
 synthesizeDownPanSpan :: Pan -> Pan -> Duration -> [Pan]
 synthesizeDownPanSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeDownPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | stop >= start = error $ "synthesizeDownPanSpan target pan " ++ show stop ++ " is not less than source pan " ++ show start
-  | otherwise     = map Pan $ evalState (traverse fun increments) (getPanVal start)
+  | otherwise     = map Pan $ evalState (traverse carriedSum increments) (getPanVal start)
   where
     increments = unfoldr (unfoldControl divInts) (getPanVal stop - getPanVal start, fromIntegral dur)
 
@@ -614,7 +610,7 @@ synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
 synthesizeAccelerandoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeAccelerandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | start >= stop = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
-  | otherwise     = map tempoValueToTempo $ evalState (traverse fun increments) (tempoToTempoValue start)
+  | otherwise     = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
   where
     increments = unfoldr (unfoldControl divTempoValueByInt) (tempoToTempoValue stop - tempoToTempoValue start, fromIntegral dur)
 
@@ -622,7 +618,7 @@ synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
 synthesizeRitardandoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeRitardandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | stop >= start = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
-  | otherwise     = map tempoValueToTempo $ evalState (traverse fun increments) (tempoToTempoValue start)
+  | otherwise     = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
   where
     increments = unfoldr (unfoldControl divTempoValueByInt) (tempoToTempoValue stop - tempoToTempoValue start, fromIntegral dur)
 

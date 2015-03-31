@@ -160,13 +160,17 @@ TBD:
   sound odd.
 
 * Incomplete Features:
-  - render tempos in Lilypond
+  - render tempos in Lilypond.  First, experiment by hand-editing
+  a Lilypond file to see if I can get a second tempo using space and
+  the << and >> delimiters to group a pair of sequences together
+  on the same staff.
 
 * Tests:
-  - articulations render in midi (canon examples, by hand)
-  - tempo changes render in midi  (canon examples, by hand)
-  - tempo changes render in Lilypond (canon examples, by hand)
-  - properties for spans, dur, dyn, pan, tempo.
+  - articulations render in midi (canon examples, by ear)
+  - pan changes render in midi  (canon examples, by ear) 
+  - dynamics changes render in midi  (canon examples, by ear) 
+  - tempo changes render in midi  (canon examples, by ear) 
+  - tempo changes render in Lilypond (canon examples, by hear)
 
 * Validate tempo input:
   - unit should always have numerator of 1, denominator
@@ -174,7 +178,7 @@ TBD:
   - combination of unit and bpm should not exceed tick
   resolution, or maybe not come within 10x tick resolution.
 
-* Add fractional dynamics controlst to swell up and down
+* Add fractional dynamics controls to swell up and down
   on a single note.
 
 * Allocate durations and values continuous controls to

@@ -69,88 +69,45 @@ testSynthesizeDurationSpan =
 
 -- Stop short of EndCrescendo, Decrescendo, and etc. to avoid errors when tryig to convert to Int.
 instance Arbitrary Dynamic where
-  arbitrary = elements [(Pianissimo)..(Fortissimo)]
+  arbitrary = elements [Pianissimo .. Fortissimo]
 
 -- Type signature requires FlexibleContexts
--- TBD:  refactor without do notation.
 cmpFun :: (MonadState (Bool, t) m, Ord t) => Ordering -> t -> m Bool
-cmpFun ord b =
-  do
-    (ok, a) <- get
-    let ok' = ok && a `compare` b == ord
-    put (ok', b)
-    return ok'
+cmpFun ord b = get >>= \(ok, a) -> let ok' = ok && a `compare` b == ord in put (ok', b) >> return ok'
 
--- TBD: refactor abstracting (possible for Tempo with conversions?)
---  * type (Dynamic, Pan, Tempo),
---  * translation to compare list (dynamicToVolume, id, id)
---  * ascending vs. descending (LT vs. GT)
---  * synthesize method (synthesizeCrescendoSpan, etc.)
-
--- Stop value must be equal to Volume translation for start and stop inputs,
+-- End value must be equal to translation for start and stop inputs,
 -- intermediate values must be consistently increasing (repetitions allowed).
 -- Count of elements must equal to value of Duration.
 -- (Start value is equal to start less increment.)
+testSynthesizeSpan :: (Ord a, Ord b) => Ordering ->  (a -> a -> Duration -> [b]) -> (a -> b) -> a -> a -> Duration -> Property
+testSynthesizeSpan cmp synth cnvt start stop dur =
+  start `compare` stop == cmp ==>
+    last vals == cnvt stop
+    && isUniform valSingles
+    && length vals == fromIntegral (getDur dur)
+    where
+      vals           = synth start stop dur
+      valSingles     = (map head . group) vals
+      isUniform xs = and $ evalState (traverse (cmpFun cmp) (tail xs)) (True, head xs)
+
 testSynthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> Property
-testSynthesizeCrescendoSpan start stop dur =
-  start < stop ==>
-    last vols == dynamicToVolume stop
-    && isAscending volSingles
-    && length vols == fromIntegral (getDur dur)
-    where
-      vols           = synthesizeCrescendoSpan start stop dur
-      volSingles     = (map head . group) vols
-      isAscending xs = and $ evalState (traverse (cmpFun LT) (tail xs)) (True, head xs)
-
--- Stop value must be equal to Volume translation for start and stop inputs,
--- intermediate values must be consistently decreasing (repetitions allowed).
--- Count of elements must equal to value of Duration.
--- (Start value is equal to start less increment.)
+testSynthesizeCrescendoSpan =
+  testSynthesizeSpan LT synthesizeCrescendoSpan dynamicToVolume
+  
 testSynthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> Property
-testSynthesizeDecrescendoSpan start stop dur =
-  start > stop ==>
-    last vols == dynamicToVolume stop
-    && isDescending volSingles
-    && length vols == fromIntegral (getDur dur)
-    where
-      vols            = synthesizeDecrescendoSpan start stop dur
-      volSingles      = (map head . group) vols
-      isDescending xs = and $ evalState (traverse (cmpFun GT) (tail xs)) (True, head xs)
-
+testSynthesizeDecrescendoSpan =
+  testSynthesizeSpan GT synthesizeDecrescendoSpan dynamicToVolume
+      
 -- Stop short of EndCrescendo, Decrescendo, and etc. to avoid errors when tryig to convert to Int.
 instance Arbitrary Pan where
   arbitrary = elements $ map Pan [0..127]
 
--- Stop value must be equal to Volume translation for start and stop inputs,
--- intermediate values must be consistently increasing (repetitions allowed).
--- Count of elements must equal to value of Duration.
--- (Start value is equal to start less increment.)
 testSynthesizeUpPanSpan :: Pan -> Pan -> Duration -> Property
-testSynthesizeUpPanSpan start stop dur =
-  start < stop ==>
-    last pans == stop
-    && isAscending panSingles
-    && length pans == fromIntegral (getDur dur)
-    where
-      pans           = synthesizeUpPanSpan start stop dur
-      panSingles     = (map head . group) pans
-      isAscending xs = and  $ evalState (traverse (cmpFun LT) (tail xs)) (True, head xs)
-
--- Stop value must be equal to Volume translation for start and stop inputs,
--- intermediate values must be consistently decreasing (repetitions allowed).
--- Count of elements must equal to value of Duration.
--- (Start value is equal to start less increment.)
+testSynthesizeUpPanSpan = testSynthesizeSpan LT synthesizeUpPanSpan id 
+  
 testSynthesizeDownPanSpan :: Pan -> Pan -> Duration -> Property
-testSynthesizeDownPanSpan start stop dur =
-  start > stop ==>
-    last pans == stop
-    && isDescending panSingles
-    && length pans == fromIntegral (getDur dur)
-    where
-      pans            = synthesizeDownPanSpan start stop dur
-      panSingles      = (map head . group) pans
-      isDescending xs = and $ evalState (traverse (cmpFun GT) (tail xs)) (True, head xs)
-
+testSynthesizeDownPanSpan = testSynthesizeSpan GT synthesizeDownPanSpan id
+      
 instance Ord TempoValue where
   one `compare` two = bpmOne `compare` bpmTwo where (TempoValue _ bpmOne, TempoValue _ bpmTwo) = normalizeTempoValues one two
 
@@ -171,37 +128,23 @@ instance Arbitrary NormalizedTempoValues where
       let (tempoOne', tempoTwo') = normalizeTempoValues tempoOne tempoTwo
       return $ NormalizedTempoValues tempoOne' tempoTwo'
 
--- Stop value must be equal to Tempo translation for start and stop inputs,
--- intermediate values must be consistently increasing (repetitions allowed).
--- Count of elements must equal to value of Duration.
--- (Start value is equal to start less increment.)
-testSynthesizeAccelerandoSpan :: NormalizedTempoValues -> Duration -> Property
-testSynthesizeAccelerandoSpan (NormalizedTempoValues start stop) dur =
-  start < stop ==>
-    last tempos == stopTempo
-    && isAscending tempoSingles
-    && length tempos == fromIntegral (getDur dur)
-    where
-      (start', stop') = normalizeTempoValues start stop
-      startTempo      = tempoValueToTempo start'
-      stopTempo       = tempoValueToTempo stop'
-      tempos          = synthesizeAccelerandoSpan startTempo stopTempo dur
-      tempoSingles    = (map head . group) tempos
-      isAscending xs  = and  $ evalState (traverse (cmpFun LT) (tail xs)) (True, head xs)
+-- | Refactor
+bindTempos :: TempoValue -> TempoValue -> (Tempo, Tempo)
+bindTempos start stop =
+  (startTempo, stopTempo)
+  where
+    (start', stop') = normalizeTempoValues start stop
+    startTempo      = tempoValueToTempo start'
+    stopTempo       = tempoValueToTempo stop'
 
--- Stop value must be equal to Tempo translation for start and stop inputs,
--- intermediate values must be consistently decreasing (repetitions allowed).
--- Count of elements must equal to value of Duration.
--- (Start value is equal to start plus increment.)
+testSynthesizeAccelerandoSpan :: NormalizedTempoValues -> Duration -> Property
+testSynthesizeAccelerandoSpan (NormalizedTempoValues start stop) =
+  testSynthesizeSpan LT synthesizeAccelerandoSpan id startTempo stopTempo
+  where
+    (startTempo, stopTempo) = bindTempos start stop
+      
 testSynthesizeRitardandoSpan :: NormalizedTempoValues -> Duration -> Property
-testSynthesizeRitardandoSpan (NormalizedTempoValues start stop) dur =
-  start > stop ==>
-    last tempos == stopTempo
-    && isDescending tempoSingles
-    && length tempos == fromIntegral (getDur dur)
-    where
-      startTempo      = tempoValueToTempo start
-      stopTempo       = tempoValueToTempo stop
-      tempos          = synthesizeRitardandoSpan startTempo stopTempo dur
-      tempoSingles    = (map head . group) tempos
-      isDescending xs = and  $ evalState (traverse (cmpFun GT) (tail xs)) (True, head xs)
+testSynthesizeRitardandoSpan (NormalizedTempoValues start stop) =
+  testSynthesizeSpan GT synthesizeRitardandoSpan id startTempo stopTempo
+  where
+    (startTempo, stopTempo) = bindTempos start stop
