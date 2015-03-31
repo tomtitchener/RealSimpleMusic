@@ -39,6 +39,13 @@ tests =
   , testCase           "mapVoicessToChannelss"             testMapVoicessToChannelss
   , testCase           "mapManyVoicessToChannelss"         testMapManyVoicessToChannelss
   , testCase           "mapVoicessToPercussionChannelss"   testMapVoicessToPercussionChannelss
+  , testProperty       "testSynthesizeDurationSpan"        testSynthesizeDurationSpan
+  , testProperty       "testSynthesizeCrescendoSpan"       testSynthesizeCrescendoSpan
+  , testProperty       "testSynthesizeDecrescendoSpan"     testSynthesizeDecrescendoSpan
+  , testProperty       "testSynthesizeUpPanSpan"           testSynthesizeUpPanSpan
+  , testProperty       "testSynthesizeDownPanSpan"         testSynthesizeDownPanSpan
+  , testProperty       "testSynthesizeAccelerandoSpan"     testSynthesizeAccelerandoSpan
+  , testProperty       "testSynthesizeRitardandoSpan"      testSynthesizeRitardandoSpan
   -- ScoreToLilypond
   , testCase           "equiv pitch class vals"            testEquivPitchClassValues
   , testCase           "testPitchNames"                    testPitchNames

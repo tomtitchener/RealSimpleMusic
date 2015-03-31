@@ -155,38 +155,33 @@ For program examples generally, see the files in `./tests`, including
 
 TBD:
 
-* Standardize synthesis of tempo span on pattern for volume and pan spans.
-
-* Generate continuous tempo meta events for track 0.
-
-* Tempo unit should always have numerator of 1, denominator
-   that is a power of 2. 
-
-* Add fractional dynamics controls so you can swell
-  up and down on a single note.
-
-* Allocate durations for continuous controls to
-  accelerate rate of change over time, e.g. Fibonacci.
-  Current strategy is to evenly divide into finest grain 
-  Midi time resolution (tick).  
-
 * Bugs:
   - Articulations need to be proportional in a way that doesn't
-    sound odd.
+  sound odd.
 
-* Validate continuous control behavior in both Midi and Lilypond renderings.
-  Add behaviors to voices in canons, including accents:
-  - Crescendo/Decrescendo (per voice)
-  - PanUp/PanDown (per voice)
-  - Accelerando/Ritardando (all voices)
-  Add behaviors to all voices together:
-  - Accelerando/Ritardando.
+* Incomplete Features:
+  - render tempos in Lilypond
+
+* Tests:
+  - articulations render in midi (canon examples, by hand)
+  - tempo changes render in midi  (canon examples, by hand)
+  - tempo changes render in Lilypond (canon examples, by hand)
+  - properties for spans, dur, dyn, pan, tempo.
+
+* Validate tempo input:
+  - unit should always have numerator of 1, denominator
+  that is a power of 2.
+  - combination of unit and bpm should not exceed tick
+  resolution, or maybe not come within 10x tick resolution.
+
+* Add fractional dynamics controlst to swell up and down
+  on a single note.
+
+* Allocate durations and values continuous controls to
+  accelerate rate of change over time, e.g. Fibonacci.
 
 * Automatic cleff disposition:
   - add 8vb/8va.
-
-* Score controls
-  - Lilypond rendering for all tempos with rhythms
 
 * Expand Instrument
   - Need additional attributes:  range, family, staff (Viola, DrumStaff vs. RhythmicStaff

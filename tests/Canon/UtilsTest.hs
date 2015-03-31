@@ -203,7 +203,6 @@ testCanon =
   where
     generatedCanonByteString = writeFJCanonToByteString [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] [2%1, 1%4, 1%8]
 
-
 {--
 writeFJSimpleCanonToFile "Acoustic Grand Piano" 4 (2%1)
 writeFJScalesCanonToFile [piano, marimba, vibes, piano] [cMaj, afMaj, eMin, dMin] [0, -1, 1, -2] (2%1)

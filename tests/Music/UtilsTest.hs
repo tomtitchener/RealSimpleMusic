@@ -138,14 +138,15 @@ instance Arbitrary Pitch where
 -- same scale degree there cannot be any duplicates in the
 -- scale.  
 instance Arbitrary Scale where
-  arbitrary = do pitchClasses <- listOf1 arbitrary
-                 rotN <- arbitrary
-                 let
-                   pcs = rotate (rotN `mod` length pitchClasses) (rmdups pitchClasses)
-                   in
-                     return $ Scale pcs $ reverse pcs
-    where
-      rmdups = map head . group . sort
+  arbitrary =
+    do
+      pitchClasses <- listOf1 arbitrary
+      rotN <- arbitrary
+      let
+        rmdups = map head . group . sort
+        pcs = rotate (rotN `mod` length pitchClasses) (rmdups pitchClasses)
+        in
+          return $ Scale pcs $ reverse pcs
 
 propTransposePitchId :: Scale -> Pitch -> Interval -> Property
 propTransposePitchId scale pitch@(Pitch pc _) interval =

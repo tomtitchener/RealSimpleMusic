@@ -176,20 +176,23 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 renderAccent :: Accent -> Builder
 renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 
--- | Match strings to enum: NoDynamic | Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo
+-- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo
 renderedDynamicValues :: [Builder]
-renderedDynamicValues = map stringEncoding ["", "\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
+renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
 
 -- | Match of enum values to list above.  First Bool is flag to tell if
 --   continuous dynamic control (cresc, decresc) is engaged.  Second is
 --   for continuous pan control and gets passed through unchanged.
 renderDynamic :: (Bool, Bool, Dynamic) -> (Bool, Bool, Builder)
-renderDynamic (c, p, dynamic) =
-  (c', p, if c then renderedStopTextSpan <> renderedDynamic else renderedDynamic)
-  where
-    renderedDynamic = renderedDynamicValues !! fromEnum dynamic
-    c' = dynamic == Crescendo || dynamic == Decrescendo
-    
+renderDynamic (True,  _, Crescendo)      = error "renderDynamic Cresecendo inside crescendo or decrescendo"
+renderDynamic (False, p, Crescendo)      = (True,  p, renderedDynamicValues !! fromEnum Crescendo)
+renderDynamic (True,  p, EndCrescendo)   = (False, p, renderedDynamicValues !! fromEnum EndCrescendo)
+renderDynamic (True,  _, Decrescendo)    = error "renderDynamic Decrescendo inside crescendo or decrescendo"
+renderDynamic (False, p, Decrescendo)    = (True,  p, renderedDynamicValues !! fromEnum Decrescendo)
+renderDynamic (True,  p, EndDecrescendo) = (False, p, renderedDynamicValues !! fromEnum EndDecrescendo)
+renderDynamic (False, p, dynamic)        = (False, p, renderedDynamicValues !! fromEnum dynamic)
+renderDynamic (True,  p, dynamic)        = (False, p, renderedDynamicValues !! fromEnum EndDecrescendo <> renderedDynamicValues !! fromEnum dynamic)
+
 -- | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
 balanceValues = ["_\\markup {left}", "_\\markup {center-left}", "_\\markup {center}", "_\\markup {center-right}", "_\\markup {right}"] 
@@ -205,9 +208,9 @@ renderPanValue val = stringEncoding "_\\markup" <> renderedOpen <> stringEncodin
 -- | First Bool is flag to tell if continuous dynamic control (cresc, decresc) is engaged,
 --   gets passed through unchanged.  Second is for continuous pan control.
 renderPan :: (Bool, Bool, Pan) -> (Bool, Bool, Builder)
-renderPan (c, p, Pan pan) = if c then (False, p, renderedStopTextSpan <> renderPanValue pan) else (c, p, renderPanValue pan)
-renderPan (_, p, PanUp)   = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
-renderPan (_, p, PanDown) = (True, p, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
+renderPan (d, p, Pan pan) = if p then (d, p, renderedStopTextSpan <> renderPanValue pan) else (d, p, renderPanValue pan)
+renderPan (d, _, PanUp)   = (d, True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
+renderPan (d, _, PanDown) = (d, True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
 
 renderTempo' :: Rhythm -> Integer -> Builder
 renderTempo' (Rhythm rhythm) bpm =

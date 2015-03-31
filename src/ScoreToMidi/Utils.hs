@@ -264,7 +264,7 @@ articulate articulation duration =
   case elemIndex articulation articulations of
     Just idx -> (durNote, durRest)
                   where
-                    durNote = Dur (floor (articulated !! idx) * fromInteger (getDur duration))
+                    durNote = Dur (floor $ (articulated !! idx) * fromInteger (getDur duration))
                     durRest = duration - durNote
     Nothing -> error $ "articulate unrecognized articulation " ++ show articulation
   where
@@ -370,8 +370,10 @@ fun i =
 divInts :: Int -> Int -> Int
 divInts x y = x `div` y
 
--- | Increment Midi dynamic control by one to answer values to span the range for a duration.
---   Sum of volumes must equal span from start to stop.
+-- | Increment Midi dynamic control by increment to answer values to span the range for a duration.
+--   Stop values must be equal to Volume translation for start and stop inputs, intermediate
+--   values must be consistently increasing (repetitions allowed).   Initial value is equal to
+--   start less increment.
 synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
 synthesizeCrescendoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
@@ -380,10 +382,10 @@ synthesizeCrescendoSpan start stop (Dur dur)
   where
     increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
 
--- | Decrement Midi dynamic control by one to answer values to span the range for a duration
---   where resolution to duration is 1, e.g. duration 10 maps to list 10 items long where
---   each item is value from span of volumes and values sum to range, e.g. for start 20
---   and stop 10 and Dur 5, [2,2,2,2,2].  
+-- | Decrement Midi dynamic control by increment to answer values to span the range for a duration.
+--   Stop values must be equal to Volume translation for start and stop inputs, intermediate
+--   values must be consistently decreasing (repetitions allowed).   Initial value is equal to
+--   start plus increment.
 synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
 synthesizeDecrescendoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
@@ -400,7 +402,9 @@ divIntegers x y = x `div` y
 --   given the duration for the continuous control and the count of synthesized
 --   control events.  Reverse so larger values, which mean slower perceived 
 --   rate of change happen first.
---   Sum of Duration in answer must exactly equal total Duration as second argument.  
+--   Sum of Duration in answer must exactly equal total Duration as second argument.
+--   Assumption is durations are for list of controls, one-by-one, so count of
+--   controls should never be larger than total duration.
 synthesizeDurationSpan :: Int -> Duration -> [Duration]
 synthesizeDurationSpan cntCntrls (Dur dur)
   | cntCntrls > fromIntegral dur = error $ "synthesizeDurationSpan cntCntrls " ++ show cntCntrls ++ " > dur " ++ show dur
@@ -603,6 +607,9 @@ tempoValueToTempo :: TempoValue -> Tempo
 tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
 
 -- Issue with standardization is going to be Num instance for Tempo for '+', '-'.
+-- Bug:  derived Ord for Tempo means (Tempo (Rhythm (1%4)) <any>) < (Tempo (Rhythm (1%2)) <any>)
+-- Need an explicit instance that normalizes Tempo compared with Tempo, orders Tempo of anything
+-- always under Accelerando, always under Ritardando.
 synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
 synthesizeAccelerandoSpan start stop (Dur dur)
   | dur == 0      = error $ "synthesizeAccelerandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
