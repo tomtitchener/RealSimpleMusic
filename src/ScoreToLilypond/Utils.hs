@@ -27,7 +27,7 @@ charEncoding :: Char -> Builder
 charEncoding = char7
 
 -- | Rendered character constants 
-renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedNothing, renderedDoubleBar, renderedStopTextSpan, renderedClef, renderedBass, renderedTreble :: Builder
+renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedEmpty, renderedNothing, renderedDoubleBar, renderedStopTextSpan, renderedStartTextSpan, renderedClef, renderedBass, renderedTreble, renderedCloseSection :: Builder
 renderedQuote         = charEncoding '\''
 renderedComma         = charEncoding ','
 renderedSpace         = charEncoding ' '
@@ -41,12 +41,15 @@ renderedDash          = charEncoding '-'
 renderedSlash         = charEncoding '/'
 renderedDoubleQuote   = charEncoding '\"'
 renderedAsterisk      = charEncoding '*'
+renderedEmpty         = charEncoding 's'
 renderedNothing       = stringEncoding ""
 renderedDoubleBar     = stringEncoding "\\bar \"|.\""
 renderedStopTextSpan  = stringEncoding "\\stopTextSpan"
-renderedClef         = stringEncoding "\\clef"
+renderedStartTextSpan = stringEncoding "\\startTextSpan"
+renderedClef          = stringEncoding "\\clef"
 renderedTreble        = stringEncoding "treble"
 renderedBass          = stringEncoding "bass"
+renderedCloseSection  = stringEncoding ">>"
 
 -- | Global reference sets key and time signatures.
 renderedGlobalKey :: Builder
@@ -218,9 +221,11 @@ renderTempo' (Rhythm rhythm) bpm =
 
 -- | Bool is flag saing if continous tempo control is engaged.
 renderTempo :: (Bool, Tempo) -> (Bool, Builder)
-renderTempo (_, Accelerando)                  = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"\\startTextSpan")
-renderTempo (_, Ritardando)                   = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"\\startTextSpan")
-renderTempo (s, Tempo rhythm bpm) = (False, if s then renderedStopTextSpan <> renderedTempo else renderedTempo) where renderedTempo = renderTempo' rhythm bpm
+renderTempo (False, Accelerando)  = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"")
+renderTempo (True,  Accelerando)  = error "renderTempo two continuous controls in a row without intervening discrete control"
+renderTempo (False, Ritardando)   = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"")
+renderTempo (True,  Ritardando)   = error "renderTempo two continuous controls in a row without intervening discrete control"
+renderTempo (_, Tempo rhythm bpm) = (False, renderTempo' rhythm bpm)
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
 --   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the
@@ -289,22 +294,40 @@ renderVoiceControls (c, p) controls =
   where
     (bs, (c', p')) = runState (traverse renderVoiceControls' controls) (c, p)
 
+renderSpacesForRhythms :: [Builder] -> Builder
+renderSpacesForRhythms []                               = mempty
+renderSpacesForRhythms [renderedRhythm]                 = renderedEmpty <> renderedRhythm
+renderSpacesForRhythms (renderedRhythm:renderedRhythms) = renderedEmpty <> renderedRhythm <> mconcat [renderedSpace <> renderSpacesForRhythms renderedRhythms]
+
+renderSpace :: Rhythm -> Builder
+renderSpace rhythm = renderSpacesForRhythms (renderRhythm rhythm)
+
 -- | Bool in first Pair element is flag to say if accel or ritard is active so we
 --   know to end text span when they stop.
---   TBD:  rhythm turns into a space instead of a rest, as delay before
---   next event which may be rendering of target rhythm e.g. for accel or
---   ritard.
+renderTempoAndRhythm :: Bool -> Tempo -> Rhythm -> (Bool, Builder)
+renderTempoAndRhythm s tempo rhythm =
+  (s', b')
+  where
+    (s', b) = renderTempo (s, tempo)                           -- b = \tempo 4 = 200 <or> \override TextSpanner.bound-details.left.text = "accel."
+    spaces  = renderSpacesForRhythms (renderRhythm rhythm)
+    b'
+      | not s && s'     = b <> spaces <> renderedStartTextSpan -- b''= \override TextSpanner.bound-details.left.text = "accel." s1*10 \startTextSpan
+      | s     && not s' = b <> spaces <> renderedStopTextSpan  -- b'' = \b'= \tempo 4 = 200 s1*10 \stopTextSpan
+      | otherwise       = b <> spaces
+    
 renderTempoControls' :: (Tempo, Rhythm) -> State Bool Builder
-renderTempoControls' (tempo, _) =
+renderTempoControls' (tempo, rhythm) =
   do s <- get
-     let (s', b) = renderTempo (s, tempo)
+     let (s', b) = renderTempoAndRhythm s tempo rhythm
      put s'
      return b
 
--- TBD:  show at top of first staff, as separate line 
--- paired with top staff via "<<" and ">>" syntax.
 renderTempoControls :: [(Tempo,Rhythm)] -> Builder
-renderTempoControls controls = mconcat $ evalState (traverse renderTempoControls' controls) False
+renderTempoControls controls =
+  renderedOpen
+  <> mconcat (evalState (traverse renderTempoControls' controls) False)
+  <> renderedClose
+  <> renderedNewline
 
 -- | Pitch doesn't matter when written to a percussion staff
 dummyPercussionPitch :: Pitch
@@ -370,12 +393,13 @@ renderInstrument (Instrument instrumentName) =
 
 -- | Start each voice with a block that enables automatic ties across bar lines.
 renderedVoicePrefix :: Builder
-renderedVoicePrefix = stringEncoding "\\new Voice \\with \n{\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}\n"
+renderedVoicePrefix = stringEncoding "\\new Voice \\with \n{\\remove \"Note_heads_engraver\" \\consists \"Completion_heads_engraver\" \\remove \"Rest_engraver\" \\consists \"Completion_rest_engraver\"}\n<<\n"
 
 -- | Render the Voice type in Lilypond syntax.
-renderVoice :: Voice -> Builder
-renderVoice (Voice instrument notes) =
+renderVoice :: [(Tempo, Rhythm)] -> Voice -> Builder
+renderVoice tempoControls (Voice instrument notes) =
   renderedVoicePrefix
+  <> renderTempoControls tempoControls
   <> renderedOpen
   <> renderInstrument instrument
   <> renderedSpace
@@ -388,11 +412,13 @@ renderVoice (Voice instrument notes) =
   <> renderedDoubleBar
   <> renderedClose
   <> renderedNewline
+  <> renderedCloseSection
+  <> renderedNewline
 
 -- | Render a list of Voice types in Lilypond syntax, no separators.
-renderVoices :: [Voice] -> Builder
-renderVoices [] = mempty
-renderVoices (voice:voices) = renderVoice voice <> mconcat [renderVoices voices]
+renderVoices :: [(Tempo, Rhythm)] -> [Voice] -> Builder
+renderVoices _ []                         = mempty
+renderVoices tempoControls (voice:voices) = renderVoice tempoControls voice <> mconcat [renderVoices tempoControls voices]
 
 -- | Every Lilypond file should start with a version number.
 renderedVersion :: Builder
@@ -435,19 +461,19 @@ renderedVersion = stringEncoding "\\version \"2.18.2\"\n"
 --   (Tempo. Rhythm) pairs, which has to be global for all voices, 
 --   and which maybe I can merge with the "<< ... >>" syntax.
 
-renderedGlobalValues :: ScoreControls -> Builder
-renderedGlobalValues (ScoreControls keySignature timeSignature tempos) =
+renderedGlobalValues :: KeySignature -> TimeSignature -> Builder
+renderedGlobalValues keySignature timeSignature =
   stringEncoding "global = {"
   <> renderKeySignature keySignature
   <> renderedSpace
   <> renderTimeSignature timeSignature
   <> renderedSpace
-  <> renderedTempo -- just the first one, if one exists!
+-- <> renderedTempo -- just the first one, if one exists!
   <> renderedSpace
   <> renderedClose
   <> renderedNewline
-  where
-    renderedTempo = if null tempos then renderedNothing else snd $ renderTempo (False, fst (head tempos))
+--where
+--renderedTempo = if null tempos then renderedNothing else snd $ renderTempo (False, fst (head tempos))
 
 renderedHeader :: String -> String -> Builder
 renderedHeader title composer =
@@ -460,13 +486,13 @@ renderedHeader title composer =
   <> renderedNewline
   
 renderScore :: Score -> Builder
-renderScore (Score title composer controls voices) =
+renderScore (Score title composer (ScoreControls keySignature timeSignature tempoControls) voices) =
   renderedVersion
   <> renderedHeader title composer
-  <> renderedGlobalValues controls
+  <> renderedGlobalValues keySignature timeSignature
   <> renderedAccentValues
   <> stringEncoding "\\score {\n\\new StaffGroup << \n"
-  <> renderVoices voices
+  <> renderVoices tempoControls voices
   <> stringEncoding ">>\n\\layout { }\n\\midi { }\n"
   <> renderedClose
   <> renderedNewline

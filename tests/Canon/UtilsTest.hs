@@ -72,7 +72,7 @@ rh1, rh2, rh3, fjRhythms :: [Rhythm]
 rh1 = [qtr, qtr, qtr, qtr]
 rh2 = [qtr, qtr, hlf]
 rh3 = [eig, eig, eig, eig, qtr, qtr]
-fjRhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2
+fjRhythms = rh1 ++ rh1 ++ rh2 ++ rh2 ++ rh3 ++ rh3 ++ rh2 ++ rh2 -- 32%4 or 8%1
 
 piano, marimba, vibes :: Instrument
 piano = Instrument "Acoustic Grand Piano"
@@ -98,13 +98,25 @@ keySignature = KeySignature (-1) -- F Major, one flat.
 timeSignature :: TimeSignature
 timeSignature = TimeSignature 4 4
 
-tempo :: Tempo
-tempo = Tempo (Rhythm (1%4)) 100
+slowTempo :: Tempo
+slowTempo = Tempo (Rhythm (1%4)) 80
+
+fastTempo :: Tempo
+fastTempo = Tempo (Rhythm (1%4)) 120
+
+oneMeasure :: Rhythm
+oneMeasure = Rhythm (1%1)
+
+fjRhythmTotal :: Rhythm
+fjRhythmTotal = sum fjRhythms - oneMeasure
+
+tempos :: [(Tempo,Rhythm)]
+tempos = [(slowTempo,oneMeasure),(Accelerando,fjRhythmTotal),(fastTempo,oneMeasure),(Ritardando,fjRhythmTotal),(slowTempo,oneMeasure)]
 
 -- Simple Canon
 createFJSimpleCanon :: String -> Int -> Rational -> SimpleCanon
 createFJSimpleCanon instrName voices dur =
-  SimpleCanon title keySignature timeSignature tempo ixNotes cMaj distance instr voices repetitions  
+  SimpleCanon title keySignature timeSignature tempos ixNotes cMaj distance instr voices repetitions  
   where
     title = "Frere Jacques Simple"
     ixNotes = fjIxNotes
@@ -138,7 +150,7 @@ testSimpleCanon =
 -- Scales Canon
 createFJScalesCanon :: [Instrument] -> [Scale] -> [Octave] -> Rational -> ScalesCanon
 createFJScalesCanon instruments scales octaves dur =
-  ScalesCanon title keySignature timeSignature tempo ixNotes scales distance octaves instruments repetitions  
+  ScalesCanon title keySignature timeSignature tempos ixNotes scales distance octaves instruments repetitions  
   where
     title = "Frere Jacques Scales"
     ixNotes = fjIxNotes
@@ -172,7 +184,7 @@ testScalesCanon =
 -- Canon
 createFJCanon :: [Instrument] -> [Scale] -> [Octave] -> [Rational] -> Canon
 createFJCanon instruments scales octaves durs =
-  Canon title keySignature timeSignature tempo ixNotess scales distances octaves instruments repetitions  
+  Canon title keySignature timeSignature tempos ixNotess scales distances octaves instruments repetitions  
   where
     title = "Frere Jacques Canon"
     ixNotess = replicate (length instruments) fjIxNotes

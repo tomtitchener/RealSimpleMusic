@@ -608,7 +608,7 @@ tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
 -- always under Accelerando, always under Ritardando.
 synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
 synthesizeAccelerandoSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeAccelerandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | dur == 0      = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
   | start >= stop = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
   | otherwise     = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
   where
@@ -616,7 +616,7 @@ synthesizeAccelerandoSpan start stop (Dur dur)
 
 synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
 synthesizeRitardandoSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeRitardandoSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | dur == 0      = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
   | stop >= start = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
   | otherwise     = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
   where

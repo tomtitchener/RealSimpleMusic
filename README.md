@@ -159,12 +159,6 @@ TBD:
   - Articulations need to be proportional in a way that doesn't
   sound odd.
 
-* Incomplete Features:
-  - render tempos in Lilypond.  First, experiment by hand-editing
-  a Lilypond file to see if I can get a second tempo using space and
-  the << and >> delimiters to group a pair of sequences together
-  on the same staff.
-
 * Tests:
   - articulations render in midi (canon examples, by ear)
   - pan changes render in midi  (canon examples, by ear) 

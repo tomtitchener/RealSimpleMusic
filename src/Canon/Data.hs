@@ -14,7 +14,7 @@ data SimpleCanon =
   {sTitle         :: Title
   ,sKeySignature  :: KeySignature
   ,sTimeSignature :: TimeSignature
-  ,sTempo         :: Tempo
+  ,sTempos        :: [(Tempo,Rhythm)]
   ,sIxNotes       :: [IndexedNote]
   ,sScale         :: Scale
   ,sDistance      :: Rhythm
@@ -29,7 +29,7 @@ data ScalesCanon =
   {scTitle         :: Title
   ,scKeySignature  :: KeySignature
   ,scTimeSignature :: TimeSignature
-  ,scTempo         :: Tempo
+  ,scTempos        :: [(Tempo,Rhythm)]
   ,scIxNotes       :: [IndexedNote]
   ,scScales        :: [Scale]
   ,scDistance      :: Rhythm
@@ -44,7 +44,7 @@ data Canon =
   {cTitle         :: Title
   ,cKeySignature  :: KeySignature
   ,cTimeSignature :: TimeSignature
-  ,cTempo         :: Tempo
+  ,cTempos        :: [(Tempo,Rhythm)]
   ,cIxNotess      :: [[IndexedNote]]
   ,cScales        :: [Scale]
   ,cDistances     :: [Rhythm]
