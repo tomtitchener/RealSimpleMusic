@@ -107,9 +107,6 @@ testSynthesizeUpPanSpan = testSynthesizeSpan LT synthesizeUpPanSpan id
   
 testSynthesizeDownPanSpan :: Pan -> Pan -> Duration -> Property
 testSynthesizeDownPanSpan = testSynthesizeSpan GT synthesizeDownPanSpan id
-      
-instance Ord TempoValue where
-  one `compare` two = bpmOne `compare` bpmTwo where (TempoValue _ bpmOne, TempoValue _ bpmTwo) = normalizeTempoValues one two
 
 instance Arbitrary TempoValue where
   arbitrary =

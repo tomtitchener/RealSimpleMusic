@@ -155,53 +155,41 @@ For program examples generally, see the files in `./tests`, including
 
 TBD:
 
-* Bugs:
-  - Articulations need to be proportional in a way that doesn't
-  sound odd.
-
 * Tests:
-  - articulations render in midi (canon examples, by ear)
-  - pan changes render in midi  (canon examples, by ear) 
-  - dynamics changes render in midi  (canon examples, by ear) 
-  - tempo changes render in midi  (canon examples, by ear) 
-  - tempo changes render in Lilypond (canon examples, by hear)
+  
+- Articulations are proportional in a way that doesn't sound odd.
+- Articulations render in midi (canon examples, by ear).
+- Pan changes render in midi  (canon examples, by ear).
+- Dynamics changes render in midi  (canon examples, by ear).
+- Tempo changes render in midi  (canon examples, by ear).
+- Tempo changes render in Lilypond (canon examples, by ear).
 
-* Validate tempo input:
-  - unit should always have numerator of 1, denominator
-  that is a power of 2.
-  - combination of unit and bpm should not exceed tick
-  resolution, or maybe not come within 10x tick resolution.
+* Features
 
-* Add fractional dynamics controls to swell up and down
+- Add fractional dynamics controls to swell up and down
   on a single note.
-
-* Allocate durations and values continuous controls to
+- Allocate durations and values continuous controls to
   accelerate rate of change over time, e.g. Fibonacci.
-
-* Automatic cleff disposition:
-  - add 8vb/8va.
-
-* Expand Instrument
-  - Need additional attributes:  range, family, staff (Viola, DrumStaff vs. RhythmicStaff
+- Automatic cleff disposition:
+  o add 8vb/8va.
+- Expand Instrument
+  o Need additional attributes:  range, family, staff (Viola, DrumStaff vs. RhythmicStaff
     for relatively pitched, e.g. tam-tam, vs unpitched e.g. snare)
-  - With range attribute, add validation pass .. when?  Rendering to Midi at the least,
+  o With range attribute, add validation pass .. when?  Rendering to Midi at the least,
     maybe to Lilypond as well.
-  - With family attribute, group staves by family for Lilypond.
-
-* Multi-note instruments, e.g. piano, marimaba, vibes, etc.
-  - Music types need for any Note to also be a Chord of multiple simultaneous
+  o With family attribute, group staves by family for Lilypond.
+- Multi-note instruments, e.g. piano, marimaba, vibes, etc.
+  o Music types need for any Note to also be a Chord of multiple simultaneous
     notes of equal duration.  Ugh, that's not strictly true.  With piano, you
     can hang onto pitches selectively.  So a list of notes each with its own
     duration all of which start at the same time.
-  - Midi should be trivially able to render chords.
-  - Lilypond rendering requires rhythmic spaces to cover rests for
+  o Midi should be trivially able to render chords.
+  o Lilypond rendering requires rhythmic spaces to cover rests for
     multiple staves, disposition of notes by staff 
-
-* Validate Lilypond output.  Just assume lilypond executable exists?
+-Validate Lilypond output.  Just assume lilypond executable exists?
   Is it possible to configure test with command-line arguments?
   Right now, there's just a list of repl commands to create Lilyond files for the
   three canons, which I then check by running through lilypond to see they compile
   without errors.
+- Update tests for better coverage.
 
-* Update tests for better coverage.  I tend to forget about adding tests as I get 
-  things to just compile and they seem to behave as expected.

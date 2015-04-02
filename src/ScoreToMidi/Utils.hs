@@ -408,17 +408,13 @@ synthesizeDurationSpan cntCntrls (Dur dur)
 
 data ControlBufferingState = ControlBufferingNone | ControlBufferingUp | ControlBufferingDown deriving (Bounded, Enum, Show, Ord, Eq)
 
-data MidiControlContext control =
-  MidiControlContext {
-    ctxtState    :: ControlBufferingState
-    , ctxtInit   :: control
-    , ctxtRest   :: Duration
-    , ctxtSpan   :: Duration
-    } deriving (Show)
-
-type MidiDynamicControlContext = MidiControlContext Dynamic  
-type MidiPanControlContext     = MidiControlContext Pan
-type MidiTempoControlContext   = MidiControlContext Tempo
+-- | State when traversing span of continuous controls.
+--   First Duration is for accumulating Rest.
+--   Second Duration is for accumulating total Span.
+data MidiControlContext control = MidiControlContext ControlBufferingState control Duration Duration 
+type MidiDynamicControlContext  = MidiControlContext Dynamic  
+type MidiPanControlContext      = MidiControlContext Pan
+type MidiTempoControlContext    = MidiControlContext Tempo
 
 startDynamicControlContext :: MidiDynamicControlContext
 startDynamicControlContext = MidiControlContext ControlBufferingNone MezzoForte (Dur 0) (Dur 0)
@@ -563,7 +559,10 @@ midiNoteToContinuousPanEvents chan midiNote =
      put ctrlCtxt'
      return events
 
-data TempoValue = TempoValue { tempoValueUnit :: Rational, tempoValueBeatsPerMinute :: Integer } deriving (Eq, Show)
+-- | Simple type for Num and Ord instances on normalized values.
+--   Rational is unit, e.g. (1%2), (1%4) ...
+--   Integer is beats per minute.     
+data TempoValue = TempoValue Rational Integer deriving (Eq, Show)
 
 -- | Answer normalized first relative to second.
 normalizeTempoValue :: TempoValue -> TempoValue -> TempoValue
@@ -579,7 +578,11 @@ normalizeTempoValue valOne@(TempoValue rhythmOne bpmOne) (TempoValue rhythmTwo _
 normalizeTempoValues :: TempoValue -> TempoValue -> (TempoValue, TempoValue)
 normalizeTempoValues tempoOne tempoTwo = (normalizeTempoValue tempoOne tempoTwo, normalizeTempoValue tempoTwo tempoOne)
 
--- | A little silly for everything but + and -, which is useful for generating continuous control span.
+-- | Normalize values before comparing.
+instance Ord TempoValue where
+  one `compare` two = bpmOne `compare` bpmTwo where (TempoValue _ bpmOne, TempoValue _ bpmTwo) = normalizeTempoValues one two
+                                                    
+-- | A little silly for everything but + and -, which are used to generate continuous control span.
 instance Num TempoValue where
   t1 + t2                 = TempoValue un (b1n + b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
   t1 - t2                 = TempoValue un (b1n - b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
@@ -589,9 +592,10 @@ instance Num TempoValue where
   fromInteger i           = error $ "fromInteger for TempoValue for integer value " ++ show i -- TempoValue (1%1) i
   negate (TempoValue u b) = TempoValue u (-b)
 
+
 -- | Unadorned constraint for signature for unfoldControl is Integral t due to use of `div`.
 --   But Integral is constrained by (Real a, Enum a), which gets you into a realm of numeric
---   processing way more sophisticated than what's needed just for a continuous span.
+--   processing too sophisticated for what's needed for a continuous span.
 divTempoValueByInt :: TempoValue -> Int -> TempoValue
 divTempoValueByInt (TempoValue un bpm) i = TempoValue un (bpm `div` fromIntegral i)
 
@@ -602,25 +606,31 @@ tempoToTempoValue tempo = error $ "tempoToTempoValue called for Tempo " ++ show 
 tempoValueToTempo :: TempoValue -> Tempo
 tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
 
--- Issue with standardization is going to be Num instance for Tempo for '+', '-'.
--- Bug:  derived Ord for Tempo means (Tempo (Rhythm (1%4)) <any>) < (Tempo (Rhythm (1%2)) <any>)
--- Need an explicit instance that normalizes Tempo compared with Tempo, orders Tempo of anything
--- always under Accelerando, always under Ritardando.
-synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
-synthesizeAccelerandoSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
-  | start >= stop = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
-  | otherwise     = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
+-- | Refactor
+bindContinuousTempoValues :: Tempo -> Tempo -> Duration -> (TempoValue, TempoValue, [TempoValue])
+bindContinuousTempoValues start stop (Dur dur) =
+  (startVal, stopVal, increments)
   where
-    increments = unfoldr (unfoldControl divTempoValueByInt) (tempoToTempoValue stop - tempoToTempoValue start, fromIntegral dur)
+    startVal   = tempoToTempoValue start
+    stopVal    = tempoToTempoValue stop
+    increments = unfoldr (unfoldControl divTempoValueByInt) (stopVal - startVal, fromIntegral dur)
+  
+-- | Convert Tempo to TempoValue for Num instance 
+synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
+synthesizeAccelerandoSpan start stop dur
+  | dur == (Dur 0)      = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
+  | startVal >= stopVal = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
+  | otherwise           = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
+  where
+    (startVal, stopVal, increments) = bindContinuousTempoValues start stop dur
 
 synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
-synthesizeRitardandoSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
-  | stop >= start = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
-  | otherwise     = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
+synthesizeRitardandoSpan start stop dur
+  | dur == Dur 0        = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
+  | stopVal >= startVal = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
+  | otherwise           = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
   where
-    increments = unfoldr (unfoldControl divTempoValueByInt) (tempoToTempoValue stop - tempoToTempoValue start, fromIntegral dur)
+    (startVal, stopVal, increments) = bindContinuousTempoValues start stop dur
 
 startTempoControlContext :: MidiTempoControlContext
 startTempoControlContext = MidiControlContext ControlBufferingNone (Tempo (Rhythm (1%4)) 120) (Dur 0) (Dur 0)
@@ -744,19 +754,35 @@ midiVoiceToMidiFile metaEvents midiVoice =
   where
     voiceEventList = midiVoiceToEventList midiVoice
 
+-- | Tempo must have 1 as numerator, power of 2 as denominator in range 1/1, 1/2, 1/8, 1/16, 1/32, 1/64
+--   At tick == 1/512, that leaves 8 ticks for span of continuous controls for shortest note, still
+--   much faster than a listener would detect unless the tempo is extremely slow.
+validateTempo :: Tempo -> Tempo
+validateTempo tempo@(Tempo (Rhythm rhythm) _)
+  | numerator rhythm /= 1                = error $ "validateTempo numerator of rhythm " ++ show rhythm ++ " is not 1"
+  | denominator rhythm `notElem` twoPows = error $ "validateTempo denominator of rhythm " ++ show rhythm ++ " not acceptable power of 2 " ++ show twoPows
+  | otherwise = tempo
+  where
+    twoPows = map (2^) [(0::Int)..6]
+validateTempo continuousTempo = continuousTempo
+    
+validateTempoPair :: (Tempo, Rhythm) -> (Tempo, Rhythm)
+validateTempoPair (tempo, rhythm) = (validateTempo tempo, rhythm)
+    
 -- | Generate meta events for start of file.
 --   The first track of a Format 1 file is special, and is also known as the 'Tempo Map'.
 --   It should contain all meta-events of the types Time Signature, and Set Tempo.
 --   The meta-events Sequence/Track Name, Sequence Number, Marker, and SMTPE Offset
 --   should also be on the first track of a Format 1 file.
 scoreToMetaEvents :: Score -> EventList.T Event.ElapsedTime Event.T
-scoreToMetaEvents (Score _ _ (ScoreControls keySignature timeSignature tempos) _) =
+scoreToMetaEvents (Score _ _ (ScoreControls keySignature timeSignature tempos) _) = 
   EventList.merge controlEventList tempoEventList
   where
+    tempos'            = map validateTempoPair tempos
     prefixEvent        = (Dur 0, genMidiPrefixMetaEvent (ChannelMsg.toChannel 0))
     keySignatureEvent  = (Dur 0, genMidiKeySignatureMetaEvent keySignature)
     timeSignatureEvent = (Dur 0, genMidiTimeSignatureMetaEvent timeSignature)
-    tempoEventList     = EventList.concat $ evalState (traverse tempoToContinuousTempoEvents tempos) startTempoControlContext
+    tempoEventList     = EventList.concat $ evalState (traverse tempoToContinuousTempoEvents tempos') startTempoControlContext
     controlEvents      = prefixEvent : keySignatureEvent : [timeSignatureEvent]
     controlEventList   = EventList.fromPairList $ map durEventToNumEvent controlEvents
     
@@ -811,6 +837,7 @@ collectVoicesByInstrumentWithPercussionLast voices =
 --   using drum channel for percussion voices, otherwise channel
 --   zero.  Use when emitting Midi file per voice to be assembled
 --   later on, e.g. with Logic or GarageBand.
+--   BUG:  Obsolete?
 mapVoicessToPercussionChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
 mapVoicessToPercussionChannelss voicess = 
   zipWith voiceAndLenToChans (map head voicess) (map length voicess)
@@ -830,15 +857,14 @@ voicesToNotMidiInstruments voices =
   RealSimpleMusic API: scoreToMidiFiles
 --}
 
--- | Refactor
-bindScoreToVoicessAndChannelss :: Score -> ([Instrument], [[Voice]], [[ChannelMsg.Channel]])
+-- | Refactor:  always called when generating a single file with multiple channels.
+bindScoreToVoicessAndChannelss :: Score -> ([Instrument], [[Voice]])
 bindScoreToVoicessAndChannelss score =
-  (notMidiInstruments, voicess, channelss)
+  (notMidiInstruments, voicess)
   where
     voices             = scoreVoices score
     notMidiInstruments = voicesToNotMidiInstruments voices
     voicess            = collectVoicesByInstrumentWithPercussionLast voices
-    channelss          = mapVoicessToPercussionChannelss voicess
     
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -853,7 +879,8 @@ scoreToMidiFiles score
   | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
   | otherwise                     = zipWithM_ (scoreVoicesAndChannelsToMidiFiles score) voicess channelss
   where
-    (notMidiInstruments, voicess, channelss) = bindScoreToVoicessAndChannelss score
+    channelss                     = mapVoicessToPercussionChannelss voicess
+    (notMidiInstruments, voicess) = bindScoreToVoicessAndChannelss score
 
 -- | Collect list of voices into list of list
 --   of voices with same instrument, then
@@ -867,11 +894,11 @@ scoreToMidiFiles score
 --   Logic or GarageBand.
 scoreVoicessAndChannelssToByteString :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
 scoreVoicessAndChannelssToByteString score voicess channelss
-  | length voicess /= length channelss = error $ "scoreVoicessAndChannelssToOneMidiFile mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
-  | null channelss                     = error "scoreVoicessAndChannelssToOneMidiFile empty channelss"
-  | null midiVoices                    = error "scoreVoicessAndChannelssToOneMidiFile empty midiVoicess"
-  | null voiceEventLists               = error "scoreVoicessAndChannelssToOneMidiFile empty voiceEventLists"
-  | null voicess                       = error "scoreVoicessAndChannelssToOneMidiFile empty voicess"
+  | length voicess /= length channelss = error $ "scoreVoicessAndChannelssToByteString mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
+  | null channelss                     = error "scoreVoicessAndChannelssToByteString empty channelss"
+  | null midiVoices                    = error "scoreVoicessAndChannelssToByteString empty midiVoicess"
+  | null voiceEventLists               = error "scoreVoicessAndChannelssToByteString empty voiceEventLists"
+  | null voicess                       = error "scoreVoicessAndChannelssToByteString empty voicess"
   | otherwise                          = SaveFile.toByteString midiFile
   where
     midiVoices      = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
@@ -929,15 +956,16 @@ mapVoicessToChannelss voicess
   where
     countAllVoices = sum $ map length voicess
       
--- | Refactor
+-- | Refactor:  convertScore always called when converting to single file.
 convertScore :: (Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
 convertScore convert score 
   | countVoices > maxMidiTrack      = error $ "convertScore, count of voices: " ++ show countVoices ++ " exceeds count of Midi channels: " ++ show maxMidiTrack
   | not (null notMidiInstruments)   = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
   | otherwise                       = convert score voicess channelss
   where
-    (notMidiInstruments, voicess, channelss) = bindScoreToVoicessAndChannelss score
-    countVoices                              = length voicess
+    countVoices                   = length voicess
+    channelss                     = mapVoicessToChannelss voicess
+    (notMidiInstruments, voicess) = bindScoreToVoicessAndChannelss score
     
 {--
   RealSimpleMusic APIs: scoreToMidiFile, scoreToByteString (for test)
