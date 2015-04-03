@@ -618,7 +618,7 @@ bindContinuousTempoValues start stop (Dur dur) =
 -- | Convert Tempo to TempoValue for Num instance 
 synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
 synthesizeAccelerandoSpan start stop dur
-  | dur == (Dur 0)      = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
+  | dur == Dur 0        = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
   | startVal >= stopVal = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
   | otherwise           = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
   where

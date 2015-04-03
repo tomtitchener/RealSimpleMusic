@@ -4,9 +4,9 @@
 
 module Music.Data where
 
-import           Data.Ratio
 import           Data.List
 import           Data.Maybe
+import           Data.Ratio
 import qualified Data.Set      as Set
 
 -- | Pitch classes with two accidentals enharmonic equivalents
@@ -28,15 +28,11 @@ equivPitchClasses :: PitchClass -> PitchClass -> Bool
 equivPitchClasses pc1 pc2 =
   pitchClass2EnhEquivIdx pc1 enhChromPitchClasses == pitchClass2EnhEquivIdx pc2 enhChromPitchClasses
 
-{--
-instance Ord PitchClass where
-  pc1 `compare` pc2 = pitchClass2EnhEquivIdx pc1 enhChromPitchClasses `compare` pitchClass2EnhEquivIdx pc2 enhChromPitchClasses 
---}
-
 -- | Scale is two lists of pitch classes
-data Scale = Scale { ascendingScale  :: [PitchClass]
-                   , descendingScale :: [PitchClass]
-                   } deriving (Eq, Show)
+data Scale =
+  Scale { ascendingScale  :: [PitchClass]
+        , descendingScale :: [PitchClass]
+        } deriving (Eq, Show)
 
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
@@ -63,7 +59,25 @@ data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 -- | Dynamic (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering makes
 --   sense.
-data Dynamic = Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
+--   TBD:  fractional Crescendo and Decrescendo.  Original design has a
+--   set of controls per Note.  Doesn't allow swell up and down or down
+--   and back up within a note.  Or multiple swells within a long note.
+--   Fractional control would have a list of non-fractional dynamic
+--   values with a per-value indication of its proportion in the total
+--   duration for the Note.  
+data Dynamic =
+  Pianissimo
+  | Piano
+  | MezzoPiano
+  | MezzoForte
+  | Forte
+  | Fortissimo
+  | Crescendo
+  | EndCrescendo
+  | Decrescendo
+  | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
+
+{-- FractionalDynamic [(Dynamic, Int)] --}
 
 -- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
@@ -87,7 +101,7 @@ data Tempo =
 newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, Eq)
 
 -- | Time Signature, numerator and denominator
-data TimeSignature = TimeSignature { timeSigNum   :: Integer , timeSigDenom :: Integer } deriving (Show)
+data TimeSignature = TimeSignature { timeSigNum :: Integer , timeSigDenom :: Integer } deriving (Show)
 
 toRatio :: TimeSignature -> Rational
 toRatio ts = timeSigNum ts % timeSigDenom ts

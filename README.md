@@ -168,6 +168,14 @@ TBD:
 
 - Add fractional dynamics controls to swell up and down
   on a single note.
+- Multi-note instruments, e.g. piano, marimaba, vibes, etc.
+  o Music types need for any Note to also be a Chord of multiple simultaneous
+    notes of equal duration.  Ugh, that's not strictly true.  With piano, you
+    can hang onto pitches selectively.  So a list of notes each with its own
+    duration all of which start at the same time.
+  o Midi should be trivially able to render chords.
+  o Lilypond rendering requires rhythmic spaces to cover rests for
+    multiple staves, disposition of notes by staff 
 - Allocate durations and values continuous controls to
   accelerate rate of change over time, e.g. Fibonacci.
 - Automatic cleff disposition:
@@ -178,14 +186,6 @@ TBD:
   o With range attribute, add validation pass .. when?  Rendering to Midi at the least,
     maybe to Lilypond as well.
   o With family attribute, group staves by family for Lilypond.
-- Multi-note instruments, e.g. piano, marimaba, vibes, etc.
-  o Music types need for any Note to also be a Chord of multiple simultaneous
-    notes of equal duration.  Ugh, that's not strictly true.  With piano, you
-    can hang onto pitches selectively.  So a list of notes each with its own
-    duration all of which start at the same time.
-  o Midi should be trivially able to render chords.
-  o Lilypond rendering requires rhythmic spaces to cover rests for
-    multiple staves, disposition of notes by staff 
 -Validate Lilypond output.  Just assume lilypond executable exists?
   Is it possible to configure test with command-line arguments?
   Right now, there's just a list of repl commands to create Lilyond files for the
@@ -193,3 +193,7 @@ TBD:
   without errors.
 - Update tests for better coverage.
 
+* Tools
+
+- Look at travis-ci.org like Seth mentioned today.  See if I can run
+  Linux builds and tests.
