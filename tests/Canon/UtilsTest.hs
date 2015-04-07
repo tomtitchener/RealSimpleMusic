@@ -40,7 +40,7 @@ dynamicssPt1, dynamicssPt2, dynamicssPt3, dynamicssPt4, fjDynamicss :: [[Dynamic
 dynamicssPt1 = [[Piano, Crescendo], [], [Forte], [Piano]]
 dynamicssPt2 = [[MezzoPiano, Crescendo], [], [Fortissimo]]
 dynamicssPt3 = [[Forte, Decrescendo], [], [], [], [], [Piano]]
-dynamicssPt4 = [[MezzoForte, Decrescendo], [], [Pianissimo]]
+dynamicssPt4 = [[MezzoForte, Decrescendo], [], [Piano]]
 fjDynamicss  = dynamicssPt1 ++ dynamicssPt1 ++ dynamicssPt2 ++ dynamicssPt2 ++ dynamicssPt3 ++ dynamicssPt3 ++ dynamicssPt4 ++ dynamicssPt4
 fjDynamicss' :: [[VoiceControl]]
 fjDynamicss' = (map . map) DynamicControl fjDynamicss
