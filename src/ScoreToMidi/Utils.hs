@@ -349,6 +349,10 @@ equalExplicitDynamic _                               = False
 --   the reverse direction, when progressing from high to
 --   low intensity, start with faster rate of change.
 --   TBD:  accelerate rate of change.
+--   BUG:  when c > d, result is series of zero values
+--   followed by 1's to cover span.  So rather than a
+--   a smooth curve, you get ramp for the d units at 
+--   the end of the c span.
 unfoldControl :: (Eq t, Num t, Eq b, Num b) => (t -> b -> t) -> (t,b) -> Maybe (t, (t,b))
 unfoldControl divT (d,c)
   | c == 0 = Nothing
@@ -364,34 +368,6 @@ carriedSum :: Num a => a -> State a a
 carriedSum i = get >>= \v -> let v' = v + i in put v' >> return v'
 
 -- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
-divInts :: Int -> Int -> Int
-divInts x y = x `div` y
-
--- | Increment Midi dynamic control by increment to answer values to span the range for a duration.
---   Stop values must be equal to Volume translation for start and stop inputs, intermediate
---   values must be consistently increasing (repetitions allowed).   Initial value is equal to
---   start less increment.
-synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
-synthesizeCrescendoSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
-  | start >= stop = error $ "synthesizeCrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
-  | otherwise     = evalState (traverse carriedSum increments) (dynamicToVolume start)
-  where
-    increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
-
--- | Decrement Midi dynamic control by increment to answer values to span the range for a duration.
---   Stop values must be equal to Volume translation for start and stop inputs, intermediate
---   values must be consistently decreasing (repetitions allowed).   Initial value is equal to
---   start plus increment.
-synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> [Int]
-synthesizeDecrescendoSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
-  | stop >= start = error $ "synthesizeDecrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
-  | otherwise     = evalState (traverse carriedSum increments) (dynamicToVolume start)
-  where
-    increments = map fromIntegral $ unfoldr (unfoldControl divInts) (dynamicToVolume stop - dynamicToVolume start, fromIntegral dur)
-
--- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
 divIntegers :: Integer -> Integer -> Integer
 divIntegers x y = x `div` y
 
@@ -402,10 +378,49 @@ divIntegers x y = x `div` y
 --   Sum of Duration in answer must exactly equal total Duration as second argument.
 --   Assumption is durations are for list of controls, one-by-one, so count of
 --   controls should never be larger than total duration.
-synthesizeDurationSpan :: Int -> Duration -> [Duration]
-synthesizeDurationSpan cntCntrls (Dur dur)
-  | cntCntrls /= fromIntegral dur = error $ "synthesizeDurationSpan cntCntrls " ++ show cntCntrls ++ " /= dur " ++ show dur
+synthesizeDurationSpan :: Int -> Integer -> [Duration]
+synthesizeDurationSpan cntCntrls dur
+  | cntCntrls > fromIntegral dur = error $ "synthesizeDurationSpan cntCntrls " ++ show cntCntrls ++ " > " ++ show dur
   | otherwise = map Dur $ reverse $ unfoldr (unfoldControl divIntegers) (dur, fromIntegral cntCntrls)
+
+-- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
+divInts :: Int -> Int -> Int
+divInts x y = x `div` y
+
+-- | Refactor
+bindSpanVars :: (Integral a, Num b) => Int -> Int -> a -> (Int, Int, Int, Int, [b])
+bindSpanVars start stop dur =
+  (dur', start, stop, span', increments)
+  where
+    span'       = stop - start
+    dur'        = fromIntegral dur
+    increments  = map fromIntegral $ unfoldr (unfoldControl divInts) (span', dur')
+
+-- | Increment Midi dynamic control by increment to answer values to span the range for a duration.
+--   Stop values must be equal to Volume translation for start and stop inputs, intermediate
+--   values must be consistently increasing (repetitions allowed).   Initial value is equal to
+--   start less increment.
+synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> ([Int],[Duration])
+synthesizeCrescendoSpan start stop (Dur dur)
+  | dur == 0        = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
+  | start >= stop   = error $ "synthesizeCrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
+  | volSpan <= dur' = ([startVol..stopVol], synthesizeDurationSpan volSpan dur)
+  | otherwise       = (evalState (traverse carriedSum increments) startVol, replicate volSpan (Dur 1))
+  where
+    (dur', startVol, stopVol, volSpan, increments) = bindSpanVars (dynamicToVolume start) (dynamicToVolume stop) dur
+
+-- | Decrement Midi dynamic control by increment to answer values to span the range for a duration.
+--   Stop values must be equal to Volume translation for start and stop inputs, intermediate
+--   values must be consistently decreasing (repetitions allowed).   Initial value is equal to
+--   start plus increment.
+synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> ([Int],[Duration])
+synthesizeDecrescendoSpan start stop (Dur dur)
+  | dur == 0            = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
+  | stop >= start       = error $ "synthesizeDecrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
+  | abs volSpan <= dur' = ([startVol,(startVol-1)..stopVol], synthesizeDurationSpan (abs volSpan) dur)
+  | otherwise           = (evalState (traverse carriedSum increments) startVol, replicate (abs volSpan) (Dur 1))
+  where
+    (dur', startVol, stopVol, volSpan, increments) = bindSpanVars (dynamicToVolume start) (dynamicToVolume stop) dur
 
 data ControlBufferingState = ControlBufferingNone | ControlBufferingUp | ControlBufferingDown deriving (Bounded, Enum, Show, Ord, Eq)
 
@@ -420,14 +435,13 @@ type MidiTempoControlContext    = MidiControlContext Tempo
 startDynamicControlContext :: MidiDynamicControlContext
 startDynamicControlContext = MidiControlContext ControlBufferingNone MezzoForte (Dur 0) (Dur 0)
 
-genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> Duration -> [Int]) -> ChannelMsg.Channel -> Duration -> Duration -> Dynamic -> Dynamic -> EventList.T Event.ElapsedTime Event.T
+genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> Duration -> ([Int],[Duration])) -> ChannelMsg.Channel -> Duration -> Duration -> Dynamic -> Dynamic -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousDynamicEvents synth ch rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthDynamicEventPairs
   where
     -- BUG:  vol span will have one fewer elements than dur span!  And etc. for Pan, Tempo.
-    synthVolSpan           = synth start stop dur
-    synthDurSpan           = rest : synthesizeDurationSpan (length synthVolSpan) dur -- CRASH:  synth dur span says 4K length synthVolSpan vs. .5 K dur!
-    synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) synthDurSpan synthVolSpan
+    (volSpan, durSpan)     = synth start stop dur
+    synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) (rest:durSpan) volSpan
 dynamicFromControl :: VoiceControl -> Dynamic
 dynamicFromControl (DynamicControl dynamic) = dynamic
 dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
@@ -489,28 +503,30 @@ getPanVal :: Pan -> Int
 getPanVal (Pan val) = val
 getPanVal pan       = error $ "getPan called for continuous instance " ++ show pan
 
-synthesizeUpPanSpan :: Pan -> Pan -> Duration -> [Pan]
+synthesizeUpPanSpan :: Pan -> Pan -> Duration -> ([Pan],[Duration])
 synthesizeUpPanSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeUpPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
-  | start >= stop = error $ "synthesizeUpPanSpan target pan " ++ show stop ++ " is not greater than source pan " ++ show start
-  | otherwise     = map Pan $ evalState (traverse carriedSum increments) (getPanVal start)
+  | dur == 0        = error $ "synthesizeUpPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | start >= stop   = error $ "synthesizeUpPanSpan target pan " ++ show stop ++ " is not greater than source pan " ++ show start
+  | panSpan <= dur' = (map Pan [startPan..stopPan], synthesizeDurationSpan panSpan dur)
+  | otherwise       = (map Pan $ evalState (traverse carriedSum increments) startPan, replicate panSpan (Dur 1))
   where
-    increments = unfoldr (unfoldControl divInts) (getPanVal stop - getPanVal start, fromIntegral dur)
-synthesizeDownPanSpan :: Pan -> Pan -> Duration -> [Pan]
+    (dur', startPan, stopPan, panSpan, increments) = bindSpanVars (getPan start) (getPan stop) dur
+    
+synthesizeDownPanSpan :: Pan -> Pan -> Duration -> ([Pan],[Duration])
 synthesizeDownPanSpan start stop (Dur dur)
-  | dur == 0      = error $ "synthesizeDownPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
-  | stop >= start = error $ "synthesizeDownPanSpan target pan " ++ show stop ++ " is not less than source pan " ++ show start
-  | otherwise     = map Pan $ evalState (traverse carriedSum increments) (getPanVal start)
+  | dur == 0            = error $ "synthesizeDownPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
+  | stop >= start       = error $ "synthesizeDownPanSpan target pan " ++ show stop ++ " is not less than source pan " ++ show start
+  | abs panSpan <= dur' = (map Pan [startPan,(startPan-1)..stopPan], synthesizeDurationSpan (abs panSpan) dur)
+  | otherwise           = (map Pan $ evalState (traverse carriedSum increments) startPan, replicate (abs panSpan) (Dur 1))
   where
-    increments = unfoldr (unfoldControl divInts) (getPanVal stop - getPanVal start, fromIntegral dur)
+    (dur', startPan, stopPan, panSpan, increments) = bindSpanVars (getPan start) (getPan stop) dur
 
-genMidiContinuousPanEvents :: (Pan -> Pan -> Duration -> [Pan]) -> ChannelMsg.Channel -> Duration -> Duration -> Pan -> Pan -> EventList.T Event.ElapsedTime Event.T
+genMidiContinuousPanEvents :: (Pan -> Pan -> Duration -> ([Pan],[Duration])) -> ChannelMsg.Channel -> Duration -> Duration -> Pan -> Pan -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousPanEvents synth chan rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthPanEventPairs
   where
-    synthPanSpan       = synth start stop dur
-    synthDurSpan       = rest : synthesizeDurationSpan (length synthPanSpan) dur
-    synthPanEventPairs = zipWith (\dur' pan -> (dur', genMidiPanControlEvent chan pan)) synthDurSpan synthPanSpan
+    (panSpan,durSpan)  = synth start stop dur
+    synthPanEventPairs = zipWith (\dur' pan -> (dur', genMidiPanControlEvent chan pan)) (rest:durSpan) panSpan
 
 -- | Refactor
 bindPanControlVars :: MidiNote -> Pan -> (Rhythm, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Pan)
@@ -638,7 +654,7 @@ updateContTempoControlContext synth (stop, rhythm) (MidiControlContext _ start r
   where
     len'                 = rhythmToDuration rhythm + len
     synthTempoSpan       = synth start stop len'
-    synthDurSpan         = rest : synthesizeDurationSpan (length synthTempoSpan) len'
+    synthDurSpan         = rest : synthesizeDurationSpan (length synthTempoSpan) (getDur len')
     synthTempoEventPairs = zipWith (\dur' tempo' -> (dur', genMidiTempoMetaEvent tempo')) synthDurSpan synthTempoSpan
     synthTempoEventList  = EventList.fromPairList $ map durEventToNumEvent synthTempoEventPairs
 
@@ -668,20 +684,7 @@ updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
 updateTempoControlContext (Accelerando, _) (MidiControlContext direction _ _ _) =
   error $ "updateTempoControlContext Accelerando when already buffering " ++ show direction
   
--- | State is tuple with rest rhythm, current TempoValue, and single-item buffer with
---   continuous control valuel (if any), default:  Rhythm (0%4), (TempoValue (1%4) 120), Nothing.
---   Answer is Event for current (Tempo, Rhythm) pair.
---   Sequence of (Tempo, Rhythm) pairs requires Tempo values as terminators to continous
---   controls, e.g. [(Tempo, Rhythm), (Accelerando, Rhythm), (Tempo, Rhythm)] where third
---   item tells tempo at end of Accelerando, and the same for Ritardando.  It's an illegal
---   sequence to have back-to-back continuous controls.
---   Consequence:  encountering a continuous control starts a one-element buffer with the
---   current continuous control state (as a Maybe).  Encountering a Tempo means first to
---   check the (Maybe Tempo) isn't empty, and emitting the sequence of incremental Tempo
---   control events for the duration of the previous continuous control.  So the Maybe 
---   has to be for the (Tempo, Rhythm) pair.  I still need to carry the (Rational, Integer)
---   pair (create a local, TempoValue type) so I know where to start the continous control
---   from.
+-- | TBD
 tempoToContinuousTempoEvents :: (Tempo, Rhythm) -> State MidiTempoControlContext (EventList.T Event.ElapsedTime Event.T)
 tempoToContinuousTempoEvents pr =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateTempoControlContext pr ctrlCtxt in put ctrlCtxt' >> return events

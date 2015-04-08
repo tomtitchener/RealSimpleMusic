@@ -65,7 +65,7 @@ instance Arbitrary IntDurPair where
 -- Sum of durs in dur span must exactly equal input dur
 testSynthesizeDurationSpan :: Property
 testSynthesizeDurationSpan =
-  forAll arbitrary $ \(IntDurPair cnt dur) -> dur == sum (synthesizeDurationSpan cnt dur)
+  forAll arbitrary $ \(IntDurPair cnt dur) -> dur == sum (synthesizeDurationSpan cnt (getDur dur))
 
 -- Stop short of EndCrescendo, Decrescendo, and etc. to avoid errors when tryig to convert to Int.
 instance Arbitrary Dynamic where
@@ -79,14 +79,14 @@ cmpFun ord b = get >>= \(ok, a) -> let ok' = ok && a `compare` b == ord in put (
 -- intermediate values must be consistently increasing (repetitions allowed).
 -- Count of elements must equal to value of Duration.
 -- (Start value is equal to start less increment.)
-testSynthesizeSpan :: (Ord a, Ord b) => Ordering ->  (a -> a -> Duration -> [b]) -> (a -> b) -> a -> a -> Duration -> Property
+testSynthesizeSpan :: (Ord a, Ord b) => Ordering ->  (a -> a -> Duration -> ([b],[Duration])) -> (a -> b) -> a -> a -> Duration -> Property
 testSynthesizeSpan cmp synth cnvt start stop dur =
   start `compare` stop == cmp ==>
     last vals == cnvt stop
     && isUniform valSingles
     && length vals == fromIntegral (getDur dur)
     where
-      vals           = synth start stop dur
+      vals           = fst $ synth start stop dur
       valSingles     = (map head . group) vals
       isUniform xs = and $ evalState (traverse (cmpFun cmp) (tail xs)) (True, head xs)
 
@@ -134,14 +134,20 @@ bindTempos start stop =
     startTempo      = tempoValueToTempo start'
     stopTempo       = tempoValueToTempo stop'
 
+synthesizeAccelerandoSpan' :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
+synthesizeAccelerandoSpan' t1 t2 d = (synthesizeAccelerandoSpan t1 t2 d, [])
+
 testSynthesizeAccelerandoSpan :: NormalizedTempoValues -> Duration -> Property
 testSynthesizeAccelerandoSpan (NormalizedTempoValues start stop) =
-  testSynthesizeSpan LT synthesizeAccelerandoSpan id startTempo stopTempo
+  testSynthesizeSpan LT synthesizeAccelerandoSpan' id startTempo stopTempo
   where
     (startTempo, stopTempo) = bindTempos start stop
       
+synthesizeRitardandoSpan' :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
+synthesizeRitardandoSpan' t1 t2 d = (synthesizeRitardandoSpan t1 t2 d, [])
+
 testSynthesizeRitardandoSpan :: NormalizedTempoValues -> Duration -> Property
 testSynthesizeRitardandoSpan (NormalizedTempoValues start stop) =
-  testSynthesizeSpan GT synthesizeRitardandoSpan id startTempo stopTempo
+  testSynthesizeSpan GT synthesizeRitardandoSpan' id startTempo stopTempo
   where
     (startTempo, stopTempo) = bindTempos start stop
