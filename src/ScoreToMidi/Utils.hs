@@ -357,12 +357,6 @@ unfoldControl divT (d,c)
     where
       x = d `divT` c
 
--- Sum running total with new increment.
--- Used to traverse a list of increments into a running total.
--- TBD:  why isn't this just scanl?
-carriedSum :: Num a => a -> State a a
-carriedSum i = get >>= \v -> let v' = v + i in put v' >> return v'
-
 -- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
 divIntegers :: Integer -> Integer -> Integer
 divIntegers x y = x `div` y
@@ -391,7 +385,7 @@ bindIntSpanVars start stop dur =
     span'       = stop - start
     dur'        = fromIntegral dur
     increments  = map fromIntegral $ unfoldr (unfoldControl divInts) (span', dur')
-    ctls        = evalState (traverse carriedSum increments) start
+    ctls        = tail $ scanl (+) start increments
     durs        = replicate (length ctls) (Dur 1)
 
 -- | Increment Midi dynamic control by increment to answer values to span the range for a duration.
@@ -615,6 +609,7 @@ tempoToTempoValue tempo = error $ "tempoToTempoValue called for Tempo " ++ show 
 tempoValueToTempo :: TempoValue -> Tempo
 tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
 
+-- | Too much trouble to generalize bindIntSpanVars to work for TempoValue as well.
 bindTempoValSpanVars :: Integral a => TempoValue -> TempoValue -> a -> (Int, Integer, [TempoValue], [Duration])
 bindTempoValSpanVars start stop dur =
   (dur', bpmSpan, ctls, durs)
@@ -622,9 +617,10 @@ bindTempoValSpanVars start stop dur =
     span'@(TempoValue _ bpmSpan) = stop - start
     dur'                         = fromIntegral dur
     increments                   = unfoldr (unfoldControl divTempoValueByInt) (span', dur')
-    ctls                         = evalState (traverse carriedSum increments) start
+    ctls                         = tail $ scanl (+) start increments
     durs                         = replicate (length ctls) (Dur 1)
 
+-- | Refactor
 genTempoRange :: TempoValue -> TempoValue -> [TempoValue]
 genTempoRange (TempoValue startRhythm startBpm) (TempoValue stopRhythm stopBpm)
   | startRhythm /= stopRhythm = error $ "genTempoRange startRhythm " ++ show startRhythm ++ " /= stopRhythm " ++ show stopRhythm
@@ -691,7 +687,6 @@ updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
 updateTempoControlContext (Accelerando, _) (MidiControlContext direction _ _ _) =
   error $ "updateTempoControlContext Accelerando when already buffering " ++ show direction
   
--- | TBD: comment
 tempoToContinuousTempoEvents :: (Tempo, Rhythm) -> State MidiTempoControlContext (EventList.T Event.ElapsedTime Event.T)
 tempoToContinuousTempoEvents pr =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateTempoControlContext pr ctrlCtxt in put ctrlCtxt' >> return events

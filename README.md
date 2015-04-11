@@ -47,7 +47,9 @@ Folder hierarchy:
                        Frere Jacques Canon.mid   -- canon reference  
                        Frere Jacques Canon.pdf   -- canon score
 					   
- The file `./src/Music/Data.hs` declares Music types and builds them  
+#### Music Files
+
+The file `./src/Music/Data.hs` declares Music types and builds them  
 up, element-by-element into a simple `Score` type:
 
 * a `Score`comprises a `Title` (a synonym for `String`), a composer
@@ -75,6 +77,8 @@ up, element-by-element into a simple `Score` type:
 * a `ScoreControl` is one of `TempoControl` with `Tempo`,
   `KeySignatureControl` with `KeySignature`, or
   `TimeSignatureControl` with `TimeSignature`.
+
+#### API
 
 The file `./src/ScoreToMidi/RealSimpleMusic.hs` contains the API
 for the package.   In addition to the types above, the main functions
@@ -112,6 +116,8 @@ which, in principal, lets you swap the piccolo part to a tuba if you want.
 Absent a tempo control, the Midi file defaults to 120 beats per
 minute.  It's a one-way trip.  There's no conversion from MIDI to the
 simple music types.  
+
+#### Example
 
 Here's a minimal `Score` that contains one `Voice` with one note,
 middle `C` that's one whole-note long:
@@ -153,42 +159,40 @@ For program examples generally, see the files in `./tests`, including
 * `ScoreToLilypond/UtilsTest.hs` - test `Lilypond` methods
 * `ScoreToMidi/UtilsTest.hs` - test `ScoreToMidi` methods
 
-TBD:
+### TBD:
 
-* Tests:
+#### Tests:
   
-- Pan changes render in midi  (canon examples, by ear).
+* Pan changes render in midi (canon examples, by ear).
 
-* Features
+#### Features
 
-- Add fractional dynamics controls to swell up and down
+* Add fractional dynamics controls to swell up and down
   on a single note.
-- Multi-note instruments, e.g. piano, marimaba, vibes, etc.
-  o Music types need for any Note to also be a Chord of multiple simultaneous
-    notes of equal duration.  Ugh, that's not strictly true.  With piano, you
-    can hang onto pitches selectively.  So a list of notes each with its own
-    duration all of which start at the same time.
-  o Midi should be trivially able to render chords.
-  o Lilypond rendering requires rhythmic spaces to cover rests for
-    multiple staves, disposition of notes by staff 
-- Allocate durations and values continuous controls to
+* Multi-note instruments, e.g. piano, marimaba, vibes, etc. Music
+  types need for any Note to also be a Chord of multiple simultaneous
+  Notes of equal duration.  Ugh, that's not strictly true.  With
+  piano, you can hang onto pitches selectively.  So a list of notes
+  each with its own duration all of which start at the same time.
+  Midi should be trivially able to render chords. Lilypond rendering
+  requires rhythmic spaces to cover rests for multiple staves,
+  disposition of notes by staff
+* Allocate durations and values continuous controls to
   accelerate rate of change over time, e.g. Fibonacci.
-- Automatic cleff disposition:
-  o add 8vb/8va.
-- Expand Instrument
-  o Need additional attributes:  range, family, staff (Viola, DrumStaff vs. RhythmicStaff
-    for relatively pitched, e.g. tam-tam, vs unpitched e.g. snare)
-  o With range attribute, add validation pass .. when?  Rendering to Midi at the least,
-    maybe to Lilypond as well.
-  o With family attribute, group staves by family for Lilypond.
--Validate Lilypond output.  Just assume lilypond executable exists?
-  Is it possible to configure test with command-line arguments?
-  Right now, there's just a list of repl commands to create Lilyond files for the
-  three canons, which I then check by running through lilypond to see they compile
-  without errors.
-- Update tests for better coverage.
+* Automatic cleff disposition:  add 8vb/8va.
+* Expand Instrument:  Need additional attributes:  range, family,
+  staff (Viola, DrumStaff vs. RhythmicStaff for relatively pitched,
+  e.g. tam-tam, vs unpitched e.g. snare).  With range attribute, add
+  validation pass .. when? Rendering to Midi at the least, maybe to
+  Lilypond as well. With family attribute, group staves by family for
+  Lilypond.
+* Validate Lilypond output.  Just assume lilypond executable exists?
+  Is it possible to configure test with command-line arguments? Right
+  now, there's just a list of repl commands to create Lilyond files
+  for the three canons, which I then check by running through lilypond
+  to see they compile without errors.
+* Update tests for better coverage.
 
-* Tools
+#### Tools
 
-- Look at travis-ci.org like Seth mentioned today.  See if I can run
-  Linux builds and tests.
+- Look at travis-ci.org.  See if I can run Linux builds and tests.
