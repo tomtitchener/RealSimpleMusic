@@ -157,12 +157,7 @@ TBD:
 
 * Tests:
   
-- Articulations are proportional in a way that doesn't sound odd.
-- Articulations render in midi (canon examples, by ear).
 - Pan changes render in midi  (canon examples, by ear).
-- Dynamics changes render in midi  (canon examples, by ear).
-- Tempo changes render in midi  (canon examples, by ear).
-- Tempo changes render in Lilypond (canon examples, by ear).
 
 * Features
 

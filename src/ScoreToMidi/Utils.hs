@@ -348,11 +348,7 @@ equalExplicitDynamic _                               = False
 --   to hear the small differences at low intensities.  In
 --   the reverse direction, when progressing from high to
 --   low intensity, start with faster rate of change.
---   TBD:  accelerate rate of change.
---   BUG:  when c > d, result is series of zero values
---   followed by 1's to cover span.  So rather than a
---   a smooth curve, you get ramp for the d units at 
---   the end of the c span.
+--   TBD:  accelerate rate of change?
 unfoldControl :: (Eq t, Num t, Eq b, Num b) => (t -> b -> t) -> (t,b) -> Maybe (t, (t,b))
 unfoldControl divT (d,c)
   | c == 0 = Nothing
@@ -388,13 +384,15 @@ divInts :: Int -> Int -> Int
 divInts x y = x `div` y
 
 -- | Refactor
-bindSpanVars :: (Integral a, Num b) => Int -> Int -> a -> (Int, Int, Int, Int, [b])
-bindSpanVars start stop dur =
-  (dur', start, stop, span', increments)
+bindIntSpanVars :: Integral a => Int -> Int -> a -> (Int, Int, Int, Int, [Int], [Duration])
+bindIntSpanVars start stop dur =
+  (dur', start, stop, span', ctls, durs)
   where
     span'       = stop - start
     dur'        = fromIntegral dur
     increments  = map fromIntegral $ unfoldr (unfoldControl divInts) (span', dur')
+    ctls        = evalState (traverse carriedSum increments) start
+    durs        = replicate (length ctls) (Dur 1)
 
 -- | Increment Midi dynamic control by increment to answer values to span the range for a duration.
 --   Stop values must be equal to Volume translation for start and stop inputs, intermediate
@@ -404,10 +402,10 @@ synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> ([Int],[Duration])
 synthesizeCrescendoSpan start stop (Dur dur)
   | dur == 0        = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
   | start >= stop   = error $ "synthesizeCrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
-  | volSpan <= dur' = ([startVol..stopVol], synthesizeDurationSpan volSpan dur)
-  | otherwise       = (evalState (traverse carriedSum increments) startVol, replicate volSpan (Dur 1))
+  | volSpan <= dur' = ([startVol..(stopVol-1)], synthesizeDurationSpan volSpan dur)
+  | otherwise       = (vols, durs)
   where
-    (dur', startVol, stopVol, volSpan, increments) = bindSpanVars (dynamicToVolume start) (dynamicToVolume stop) dur
+    (dur', startVol, stopVol, volSpan, vols, durs) = bindIntSpanVars (dynamicToVolume start) (dynamicToVolume stop) dur
 
 -- | Decrement Midi dynamic control by increment to answer values to span the range for a duration.
 --   Stop values must be equal to Volume translation for start and stop inputs, intermediate
@@ -417,10 +415,10 @@ synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> ([Int],[Duration]
 synthesizeDecrescendoSpan start stop (Dur dur)
   | dur == 0            = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
   | stop >= start       = error $ "synthesizeDecrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
-  | abs volSpan <= dur' = ([startVol,(startVol-1)..stopVol], synthesizeDurationSpan (abs volSpan) dur)
-  | otherwise           = (evalState (traverse carriedSum increments) startVol, replicate (abs volSpan) (Dur 1))
+  | abs volSpan <= dur' = ([startVol,(startVol-1)..(stopVol+1)], synthesizeDurationSpan (abs volSpan) dur)
+  | otherwise           = (vols, durs)
   where
-    (dur', startVol, stopVol, volSpan, increments) = bindSpanVars (dynamicToVolume start) (dynamicToVolume stop) dur
+    (dur', startVol, stopVol, volSpan, vols, durs) = bindIntSpanVars (dynamicToVolume start) (dynamicToVolume stop) dur
 
 data ControlBufferingState = ControlBufferingNone | ControlBufferingUp | ControlBufferingDown deriving (Bounded, Enum, Show, Ord, Eq)
 
@@ -439,9 +437,9 @@ genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> Duration -> ([Int],[Dur
 genMidiContinuousDynamicEvents synth ch rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthDynamicEventPairs
   where
-    -- BUG:  vol span will have one fewer elements than dur span!  And etc. for Pan, Tempo.
     (volSpan, durSpan)     = synth start stop dur
-    synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) (rest:durSpan) volSpan
+    synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) (rest:durSpan) (dynamicToVolume start:volSpan)
+    
 dynamicFromControl :: VoiceControl -> Dynamic
 dynamicFromControl (DynamicControl dynamic) = dynamic
 dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
@@ -471,14 +469,14 @@ updateDynamicControlContext _ midiNote (MidiControlContext ControlBufferingNone 
     (rhythm, controls, _, ctrlsCresc, ctrlsDecresc, dynamic', _) = bindDynamicControlVars midiNote id dynamic
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp dynamic rest len) 
   | not (Set.null ctrlsCresc)                              = error $ "updateDynamicControlContext overlapping crescendos for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsDyn) || not (Set.null ctrlsDecresc) = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), crescendoEvents)
+  | not (Set.null ctrlsDyn) || not (Set.null ctrlsDecresc) = (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), crescendoEvents)
   | otherwise                                              = (MidiControlContext ControlBufferingUp   dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
     (rhythm, _, ctrlsDyn, ctrlsCresc, ctrlsDecresc, _, target) = bindDynamicControlVars midiNote incrDynamic dynamic
     crescendoEvents                                            = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len)
   | not (Set.null ctrlsDecresc)                          = error $ "updateDynamicControlContext overlapping decrescendos for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsDyn) || not (Set.null ctrlsCresc) = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), decrescendoEvents)
+  | not (Set.null ctrlsDyn) || not (Set.null ctrlsCresc) = (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), decrescendoEvents)
   | otherwise                                            = (MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
     (rhythm, _, ctrlsDyn, ctrlsCresc, ctrlsDecresc, _, target) = bindDynamicControlVars midiNote decrDynamic dynamic
@@ -507,26 +505,26 @@ synthesizeUpPanSpan :: Pan -> Pan -> Duration -> ([Pan],[Duration])
 synthesizeUpPanSpan start stop (Dur dur)
   | dur == 0        = error $ "synthesizeUpPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | start >= stop   = error $ "synthesizeUpPanSpan target pan " ++ show stop ++ " is not greater than source pan " ++ show start
-  | panSpan <= dur' = (map Pan [startPan..stopPan], synthesizeDurationSpan panSpan dur)
-  | otherwise       = (map Pan $ evalState (traverse carriedSum increments) startPan, replicate panSpan (Dur 1))
+  | panSpan <= dur' = (map Pan [startPan..(stopPan-1)], synthesizeDurationSpan panSpan dur)
+  | otherwise       = (map Pan pans, durs)
   where
-    (dur', startPan, stopPan, panSpan, increments) = bindSpanVars (getPan start) (getPan stop) dur
+    (dur', startPan, stopPan, panSpan, pans, durs) = bindIntSpanVars (getPan start) (getPan stop) dur
     
 synthesizeDownPanSpan :: Pan -> Pan -> Duration -> ([Pan],[Duration])
 synthesizeDownPanSpan start stop (Dur dur)
   | dur == 0            = error $ "synthesizeDownPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | stop >= start       = error $ "synthesizeDownPanSpan target pan " ++ show stop ++ " is not less than source pan " ++ show start
-  | abs panSpan <= dur' = (map Pan [startPan,(startPan-1)..stopPan], synthesizeDurationSpan (abs panSpan) dur)
-  | otherwise           = (map Pan $ evalState (traverse carriedSum increments) startPan, replicate (abs panSpan) (Dur 1))
+  | abs panSpan <= dur' = (map Pan [startPan,(startPan-1)..(stopPan+1)], synthesizeDurationSpan (abs panSpan) dur)
+  | otherwise           = (map Pan pans, durs)
   where
-    (dur', startPan, stopPan, panSpan, increments) = bindSpanVars (getPan start) (getPan stop) dur
+    (dur', startPan, stopPan, panSpan, pans, durs) = bindIntSpanVars (getPan start) (getPan stop) dur
 
 genMidiContinuousPanEvents :: (Pan -> Pan -> Duration -> ([Pan],[Duration])) -> ChannelMsg.Channel -> Duration -> Duration -> Pan -> Pan -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousPanEvents synth chan rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthPanEventPairs
   where
     (panSpan,durSpan)  = synth start stop dur
-    synthPanEventPairs = zipWith (\dur' pan -> (dur', genMidiPanControlEvent chan pan)) (rest:durSpan) panSpan
+    synthPanEventPairs = zipWith (\dur' pan -> (dur', genMidiPanControlEvent chan pan)) (rest:durSpan) (start:panSpan)
 
 -- | Refactor
 bindPanControlVars :: MidiNote -> Pan -> (Rhythm, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, Pan)
@@ -553,7 +551,7 @@ updatePanControlContext _ midiNote (MidiControlContext ControlBufferingNone pan 
 updatePanControlContext chan midiNote (MidiControlContext ControlBufferingUp pan rest len) 
   | not (Set.null ctrlsUp)   = error $ "updatePanControlContext overlapping up for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDown) = error $ "updatePanControlContext overlapping down for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsPan)  = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), upEvents)
+  | not (Set.null ctrlsPan)  = (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), upEvents)
   | otherwise                = (MidiControlContext ControlBufferingUp   pan    rest (len + rhythmToDuration rhythm), EventList.empty)
   where
     (rhythm, _, ctrlsPan, ctrlsUp, ctrlsDown, target) = bindPanControlVars midiNote pan
@@ -561,7 +559,7 @@ updatePanControlContext chan midiNote (MidiControlContext ControlBufferingUp pan
 updatePanControlContext chan midiNote (MidiControlContext ControlBufferingDown pan rest len)
   | not (Set.null ctrlsDown) = error $ "updatePanControlContext overlapping down for MidiNote " ++ show midiNote
   | not (Set.null ctrlsUp)   = error $ "updatePanControlContext overlapping up for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsPan)  = (MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0), downEvents)
+  | not (Set.null ctrlsPan)  = (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), downEvents)
   | otherwise                = (MidiControlContext ControlBufferingDown pan    rest (len + rhythmToDuration rhythm), EventList.empty)
   where
     (rhythm, _, ctrlsPan, ctrlsUp, ctrlsDown, target) = bindPanControlVars midiNote pan
@@ -604,7 +602,6 @@ instance Num TempoValue where
   fromInteger i           = error $ "fromInteger for TempoValue for integer value " ++ show i -- TempoValue (1%1) i
   negate (TempoValue u b) = TempoValue u (-b)
 
-
 -- | Unadorned constraint for signature for unfoldControl is Integral t due to use of `div`.
 --   But Integral is constrained by (Real a, Enum a), which gets you into a realm of numeric
 --   processing too sophisticated for what's needed for a continuous span.
@@ -618,44 +615,54 @@ tempoToTempoValue tempo = error $ "tempoToTempoValue called for Tempo " ++ show 
 tempoValueToTempo :: TempoValue -> Tempo
 tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
 
--- | Refactor
-bindContinuousTempoValues :: Tempo -> Tempo -> Duration -> (TempoValue, TempoValue, [TempoValue])
-bindContinuousTempoValues start stop (Dur dur) =
-  (startVal, stopVal, increments)
+bindTempoValSpanVars :: Integral a => TempoValue -> TempoValue -> a -> (Int, Integer, [TempoValue], [Duration])
+bindTempoValSpanVars start stop dur =
+  (dur', bpmSpan, ctls, durs)
   where
-    startVal   = tempoToTempoValue start
-    stopVal    = tempoToTempoValue stop
-    increments = unfoldr (unfoldControl divTempoValueByInt) (stopVal - startVal, fromIntegral dur)
-  
--- | Convert Tempo to TempoValue for Num instance 
-synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
-synthesizeAccelerandoSpan start stop dur
-  | dur == Dur 0        = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
-  | startVal >= stopVal = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
-  | otherwise           = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
-  where
-    (startVal, stopVal, increments) = bindContinuousTempoValues start stop dur
+    span'@(TempoValue _ bpmSpan) = stop - start
+    dur'                         = fromIntegral dur
+    increments                   = unfoldr (unfoldControl divTempoValueByInt) (span', dur')
+    ctls                         = evalState (traverse carriedSum increments) start
+    durs                         = replicate (length ctls) (Dur 1)
 
-synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> [Tempo]
-synthesizeRitardandoSpan start stop dur
-  | dur == Dur 0        = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
-  | stopVal >= startVal = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
-  | otherwise           = map tempoValueToTempo $ evalState (traverse carriedSum increments) (tempoToTempoValue start)
+genTempoRange :: TempoValue -> TempoValue -> [TempoValue]
+genTempoRange (TempoValue startRhythm startBpm) (TempoValue stopRhythm stopBpm)
+  | startRhythm /= stopRhythm = error $ "genTempoRange startRhythm " ++ show startRhythm ++ " /= stopRhythm " ++ show stopRhythm
+  | stopBpm < startBpm        = map (TempoValue startRhythm) [(startBpm-1),(startBpm-2)..stopBpm]
+  | otherwise                 = map (TempoValue startRhythm) [(startBpm+1)..stopBpm]
+  
+-- | Convert Tempo to TempoValue for Num instance
+synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
+synthesizeAccelerandoSpan start stop (Dur dur)
+  | dur' == 0                     = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
+  | startTempoVal >= stopTempoVal = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
+  | bpmSpan <= dur                = (map tempoValueToTempo (genTempoRange startTempoVal stopTempoVal), synthesizeDurationSpan (fromIntegral bpmSpan) dur)
+  | otherwise                     = (map tempoValueToTempo vals, durs)
   where
-    (startVal, stopVal, increments) = bindContinuousTempoValues start stop dur
+    (startTempoVal, stopTempoVal) = normalizeTempoValues (tempoToTempoValue start) (tempoToTempoValue stop)
+    (dur', bpmSpan, vals, durs)   = bindTempoValSpanVars startTempoVal stopTempoVal dur 
+
+-- | Convert Tempo to TempoValue for Num instance 
+synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
+synthesizeRitardandoSpan start stop (Dur dur)
+  | dur' == 0                     = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
+  | stopTempoVal >= startTempoVal = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
+  | abs bpmSpan <= dur            = (map tempoValueToTempo (genTempoRange startTempoVal stopTempoVal), synthesizeDurationSpan (fromIntegral (abs bpmSpan)) dur)
+  | otherwise                     = (map tempoValueToTempo vals, durs)
+  where
+    (startTempoVal, stopTempoVal) = normalizeTempoValues (tempoToTempoValue start) (tempoToTempoValue stop)
+    (dur', bpmSpan, vals, durs)   = bindTempoValSpanVars startTempoVal stopTempoVal dur
 
 startTempoControlContext :: MidiTempoControlContext
 startTempoControlContext = MidiControlContext ControlBufferingNone (Tempo (Rhythm (1%4)) 120) (Dur 0) (Dur 0)
 
--- | Refactoring.
-updateContTempoControlContext :: (Tempo -> Tempo -> Duration -> [Tempo]) -> (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
+-- | Refactor.
+updateContTempoControlContext :: (Tempo -> Tempo -> Duration -> ([Tempo],[Duration])) -> (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
 updateContTempoControlContext synth (stop, rhythm) (MidiControlContext _ start rest len) =
   (MidiControlContext ControlBufferingNone stop (rhythmToDuration rhythm) (Dur 0), synthTempoEventList)
   where
-    len'                 = rhythmToDuration rhythm + len
-    synthTempoSpan       = synth start stop len'
-    synthDurSpan         = rest : synthesizeDurationSpan (length synthTempoSpan) (getDur len')
-    synthTempoEventPairs = zipWith (\dur' tempo' -> (dur', genMidiTempoMetaEvent tempo')) synthDurSpan synthTempoSpan
+    (tempoSpan, durSpan) = synth start stop len
+    synthTempoEventPairs = zipWith (\dur' tempo' -> (dur', genMidiTempoMetaEvent tempo')) (rest:durSpan) tempoSpan
     synthTempoEventList  = EventList.fromPairList $ map durEventToNumEvent synthTempoEventPairs
 
 updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
@@ -663,6 +670,12 @@ updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoControlContext -> (Midi
 --   answer list with single event at rest dur from previous event for target tempo.
 updateTempoControlContext (target@(Tempo (Rhythm _) _), rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
   (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromInteger . getDur) rest) (genMidiTempoMetaEvent target))
+-- | New accelerando, not buffering anything, start new buffering up state with length for duration.
+updateTempoControlContext (Accelerando, rhythm) (MidiControlContext ControlBufferingNone tempo rest len) =
+  (MidiControlContext ControlBufferingUp tempo rest (rhythmToDuration rhythm + len), EventList.empty)
+-- | New ritardando, not buffering anything, start new buffering down state with length for duration.
+updateTempoControlContext (Ritardando, rhythm) (MidiControlContext ControlBufferingNone tempo rest len) =
+  (MidiControlContext ControlBufferingDown tempo rest (rhythmToDuration rhythm + len), EventList.empty)
 -- | New discrete tempo, buffering for accelerando => remember new tempo and length for rest in context,
 --   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
 updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlContext ControlBufferingUp _ _ _) =
@@ -671,12 +684,6 @@ updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlConte
 --   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
 updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlContext ControlBufferingDown _ _ _) =
   updateContTempoControlContext synthesizeRitardandoSpan (target, rhythm) context
--- | New ritardando, not buffering anything, start new buffering down state with length for duration.
-updateTempoControlContext (Ritardando, rhythm) (MidiControlContext ControlBufferingNone tempo rest len) =
-  (MidiControlContext ControlBufferingDown tempo rest (rhythmToDuration rhythm + len), EventList.empty)
--- | New accelerando, not buffering anything, start new buffering down state with length for duration.
-updateTempoControlContext (Accelerando, dur) (MidiControlContext ControlBufferingNone tempo rest len) =
-  (MidiControlContext ControlBufferingUp tempo rest (rhythmToDuration dur + len), EventList.empty)
 -- | Error patterns indicate failed sequence of (Tempo, Rhythm), e.g. with successive Accelerando and/or
 --   Ritardando without intervening Tempo events or Accelerando or Ritardando without starting Tempo.
 updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
@@ -684,7 +691,7 @@ updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
 updateTempoControlContext (Accelerando, _) (MidiControlContext direction _ _ _) =
   error $ "updateTempoControlContext Accelerando when already buffering " ++ show direction
   
--- | TBD
+-- | TBD: comment
 tempoToContinuousTempoEvents :: (Tempo, Rhythm) -> State MidiTempoControlContext (EventList.T Event.ElapsedTime Event.T)
 tempoToContinuousTempoEvents pr =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateTempoControlContext pr ctrlCtxt in put ctrlCtxt' >> return events
@@ -836,7 +843,6 @@ collectVoicesByInstrumentWithPercussionLast voices =
 --   using drum channel for percussion voices, otherwise channel
 --   zero.  Use when emitting Midi file per voice to be assembled
 --   later on, e.g. with Logic or GarageBand.
---   BUG:  Obsolete?
 mapVoicessToPercussionChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
 mapVoicessToPercussionChannelss voicess = 
   zipWith voiceAndLenToChans (map head voicess) (map length voicess)

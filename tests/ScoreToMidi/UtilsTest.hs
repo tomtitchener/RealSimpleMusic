@@ -75,16 +75,18 @@ instance Arbitrary Dynamic where
 cmpFun :: (MonadState (Bool, t) m, Ord t) => Ordering -> t -> m Bool
 cmpFun ord b = get >>= \(ok, a) -> let ok' = ok && a `compare` b == ord in put (ok', b) >> return ok'
 
--- End value must be equal to translation for start and stop inputs,
--- intermediate values must be consistently increasing (repetitions allowed).
--- Count of elements must equal to value of Duration.
--- (Start value is equal to start less increment.)
+-- Intermediate values must be consistently increasing (repetitions allowed).
 testSynthesizeSpan :: (Ord a, Ord b) => Ordering ->  (a -> a -> Duration -> ([b],[Duration])) -> (a -> b) -> a -> a -> Duration -> Property
 testSynthesizeSpan cmp synth cnvt start stop dur =
   start `compare` stop == cmp ==>
-    last vals == cnvt stop
+    if cmp == LT
+    then
+      head vals >= cnvt start
+      && last vals <= cnvt stop
+    else
+      cnvt start >= head vals 
+      && cnvt stop <= last vals 
     && isUniform valSingles
-    && length vals == fromIntegral (getDur dur)
     where
       vals           = fst $ synth start stop dur
       valSingles     = (map head . group) vals
@@ -134,20 +136,14 @@ bindTempos start stop =
     startTempo      = tempoValueToTempo start'
     stopTempo       = tempoValueToTempo stop'
 
-synthesizeAccelerandoSpan' :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
-synthesizeAccelerandoSpan' t1 t2 d = (synthesizeAccelerandoSpan t1 t2 d, [])
-
 testSynthesizeAccelerandoSpan :: NormalizedTempoValues -> Duration -> Property
 testSynthesizeAccelerandoSpan (NormalizedTempoValues start stop) =
-  testSynthesizeSpan LT synthesizeAccelerandoSpan' id startTempo stopTempo
+  testSynthesizeSpan LT synthesizeAccelerandoSpan id startTempo stopTempo
   where
     (startTempo, stopTempo) = bindTempos start stop
       
-synthesizeRitardandoSpan' :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
-synthesizeRitardandoSpan' t1 t2 d = (synthesizeRitardandoSpan t1 t2 d, [])
-
 testSynthesizeRitardandoSpan :: NormalizedTempoValues -> Duration -> Property
 testSynthesizeRitardandoSpan (NormalizedTempoValues start stop) =
-  testSynthesizeSpan GT synthesizeRitardandoSpan' id startTempo stopTempo
+  testSynthesizeSpan GT synthesizeRitardandoSpan id startTempo stopTempo
   where
     (startTempo, stopTempo) = bindTempos start stop
