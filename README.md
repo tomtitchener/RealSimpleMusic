@@ -195,4 +195,8 @@ For program examples generally, see the files in `./tests`, including
 
 #### Tools
 
-- Look at travis-ci.org.  See if I can run Linux builds and tests.
+* Look at travis-ci.org.  See if I can run Linux builds and tests.
+
+* Look at Overtone in Clojure, Chris Ford keynote, Clojure/Conj 2012.
+
+

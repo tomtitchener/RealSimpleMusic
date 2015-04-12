@@ -27,7 +27,7 @@ charEncoding :: Char -> Builder
 charEncoding = char7
 
 -- | Rendered character constants 
-renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedEmpty, renderedNothing, renderedDoubleBar, renderedStopTextSpan, renderedStartTextSpan, renderedClef, renderedBass, renderedTreble, renderedCloseSection :: Builder
+renderedQuote, renderedComma, renderedSpace, renderedOpen, renderedClose, renderedDot, renderedRest, renderedTie, renderedNewline, renderedDash, renderedSlash, renderedDoubleQuote, renderedAsterisk, renderedEmpty, renderedNothing, renderedDoubleBar, renderedStopTextSpan, renderedStartTextSpan, renderedClef, renderedBass, renderedTreble, renderedCloseSection, renderedEndDynamic :: Builder
 renderedQuote         = charEncoding '\''
 renderedComma         = charEncoding ','
 renderedSpace         = charEncoding ' '
@@ -50,6 +50,7 @@ renderedClef          = stringEncoding "\\clef"
 renderedTreble        = stringEncoding "treble"
 renderedBass          = stringEncoding "bass"
 renderedCloseSection  = stringEncoding ">>"
+renderedEndDynamic    = stringEncoding "\\!"
 
 -- | Global reference sets key and time signatures.
 renderedGlobalKey :: Builder
@@ -179,9 +180,9 @@ renderedAccentValues = mconcat $ zipWith renderAccentKeyValue (filter (/= "") ac
 renderAccent :: Accent -> Builder
 renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 
--- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | EndCrescendo | Decrescendo | EndDecrescendo
+-- | Match strings to enum: Pianissimo | Piano | MezzoPiano | MezzoForte | Forte | Fortissimo | Crescendo | Decrescendo 
 renderedDynamicValues :: [Builder]
-renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\!", "\\>", "\\!"]
+renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\>"]
 
 -- | Match of enum values to list above.  First Bool is flag to tell if
 --   continuous dynamic control (cresc, decresc) is engaged.  Second is
@@ -189,12 +190,10 @@ renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f"
 renderDynamic :: (Bool, Bool, Dynamic) -> (Bool, Bool, Builder)
 renderDynamic (True,  _, Crescendo)      = error "renderDynamic Cresecendo inside crescendo or decrescendo"
 renderDynamic (False, p, Crescendo)      = (True,  p, renderedDynamicValues !! fromEnum Crescendo)
-renderDynamic (True,  p, EndCrescendo)   = (False, p, renderedDynamicValues !! fromEnum EndCrescendo)
 renderDynamic (True,  _, Decrescendo)    = error "renderDynamic Decrescendo inside crescendo or decrescendo"
 renderDynamic (False, p, Decrescendo)    = (True,  p, renderedDynamicValues !! fromEnum Decrescendo)
-renderDynamic (True,  p, EndDecrescendo) = (False, p, renderedDynamicValues !! fromEnum EndDecrescendo)
 renderDynamic (False, p, dynamic)        = (False, p, renderedDynamicValues !! fromEnum dynamic)
-renderDynamic (True,  p, dynamic)        = (False, p, renderedDynamicValues !! fromEnum EndDecrescendo <> renderedDynamicValues !! fromEnum dynamic)
+renderDynamic (True,  p, dynamic)        = (False, p, renderedEndDynamic <> renderedDynamicValues !! fromEnum dynamic)
 
 -- | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]

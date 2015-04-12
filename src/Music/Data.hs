@@ -59,12 +59,6 @@ data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 -- | Dynamic (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering makes
 --   sense.
---   TBD:  fractional Crescendo and Decrescendo.  Original design has a
---   set of controls per Note.  Doesn't allow swell up and down or down
---   and back up within a note.  Or multiple swells within a long note.
---   Fractional control would have a list of non-fractional dynamic
---   values with a per-value indication of its proportion in the total
---   duration for the Note.  
 data Dynamic =
   Pianissimo
   | Piano
@@ -73,11 +67,7 @@ data Dynamic =
   | Forte
   | Fortissimo
   | Crescendo
-  | EndCrescendo
-  | Decrescendo
-  | EndDecrescendo deriving (Bounded, Enum, Show, Ord, Eq)
-
-{-- FractionalDynamic [(Dynamic, Int)] --}
+  | Decrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
 -- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
