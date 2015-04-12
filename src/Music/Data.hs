@@ -69,6 +69,33 @@ data Dynamic =
   | Crescendo
   | Decrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
+-- WIP:  toward fractional dynamic, Int in FractionalDynamic
+-- is proportion summed across all elements in list, e.g.
+-- [(Piano,1),(MezzoPiano,1)] is 50% Piano, 50% MezzoPiano, and
+-- [(Piano,0),(Crescendo,1),(Forte,0),(Decrescendo,3),(Piano,0)]
+-- is 25% crescendo from Piano to Forte followed by immediate 75% 
+-- decrescendo to Piano.  Stage by first decomposing DynamicControl 
+-- Dynamic into DiscreteDynamic value and processing as is and
+-- giving an error for FractionalDynamic.  Then add error handling
+-- to make sure Set VoiceControl doesn't contain multiple instances
+-- of DiscreteDynamic or a mix of DiscreteDynamic and FractionalDynamic
+-- seeing as Set will admit anything that doesn't answer EQ to compare.
+-- Finally, interpret (single) FractionalDynamic by emitting stream
+-- of Midi controls within span of single note.
+data DiscreteDynamic =
+  Pianissimo'
+  | Piano'
+  | MezzoPiano'
+  | MezzoForte'
+  | Forte'
+  | Fortissimo'
+  | Crescendo'
+  | Decrescendo' deriving (Bounded, Enum, Show, Ord, Eq)
+
+data Dynamic' =
+  DiscreteDynamic
+  | FractionalDynamic [(DiscreteDynamic, Int)]
+
 -- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 
