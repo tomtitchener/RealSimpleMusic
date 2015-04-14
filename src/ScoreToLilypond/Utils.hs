@@ -184,17 +184,22 @@ renderAccent accent =  stringEncoding $ accentKeys !! fromEnum accent
 renderedDynamicValues :: [Builder]
 renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f", "\\ff", "\\<", "\\>"]
 
+-- (Rhythm (10%1)) [(Piano,0),(Crescendo,1),(Forte,0),(Decrescendo,1),(Piano,0)]
+renderFractionalDynamic :: Rhythm -> [(DiscreteDynamicValue, Int)] -> Builder
+renderFractionalDynamic _ _ = undefined
+
 -- | Match of enum values to list above.  First Bool is flag to tell if
 --   continuous dynamic control (cresc, decresc) is engaged.  Second is
 --   for continuous pan control and gets passed through unchanged.
-renderDynamic :: (Bool, Bool, Dynamic) -> (Bool, Bool, Builder)
-renderDynamic (_,     _, FractionalDynamic _)            = error "renderDynamic FractionalDynamic TBD"
-renderDynamic (True,  _, DiscreteDynamic Crescendo)      = error "renderDynamic Cresecendo inside crescendo or decrescendo"
-renderDynamic (False, p, DiscreteDynamic Crescendo)      = (True,  p, renderedDynamicValues !! fromEnum Crescendo)
-renderDynamic (True,  _, DiscreteDynamic Decrescendo)    = error "renderDynamic Decrescendo inside crescendo or decrescendo"
-renderDynamic (False, p, DiscreteDynamic Decrescendo)    = (True,  p, renderedDynamicValues !! fromEnum Decrescendo)
-renderDynamic (False, p, DiscreteDynamic dynamic)        = (False, p, renderedDynamicValues !! fromEnum dynamic)
-renderDynamic (True,  p, DiscreteDynamic dynamic)        = (False, p, renderedEndDynamic <> renderedDynamicValues !! fromEnum dynamic)
+renderDynamic :: Bool -> Bool -> Rhythm -> Dynamic -> (Bool, Bool, Builder)
+renderDynamic True  _ _ (FractionalDynamic _)              = error "renderDynamic FractionalDynamic inside crescendo or decrescendo"
+renderDynamic False p rhythm (FractionalDynamic fractions) = (False, p, renderFractionalDynamic rhythm fractions)
+renderDynamic True  _ _ (DiscreteDynamic Crescendo)        = error "renderDynamic Cresecendo inside crescendo or decrescendo"
+renderDynamic False p _ (DiscreteDynamic Crescendo)        = (True,  p, renderedDynamicValues !! fromEnum Crescendo)
+renderDynamic True  _ _ (DiscreteDynamic Decrescendo)      = error "renderDynamic Decrescendo inside crescendo or decrescendo"
+renderDynamic False p _ (DiscreteDynamic Decrescendo)      = (True,  p, renderedDynamicValues !! fromEnum Decrescendo)
+renderDynamic False p _ (DiscreteDynamic dynamic)          = (False, p, renderedDynamicValues !! fromEnum dynamic)
+renderDynamic True  p _ (DiscreteDynamic dynamic)          = (False, p, renderedEndDynamic <> renderedDynamicValues !! fromEnum dynamic)
 
 -- | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
@@ -269,30 +274,27 @@ renderNoteForRhythms renderedTie' renderedPitch renderedControls (renderedRhythm
   renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie' <> renderedSpace <> renderNoteForRhythms renderedTie' renderedPitch renderedNothing renderedRhythms]
 
 -- | Emit Lilypond text corresponding to VoiceControl enum.
-renderVoiceControl ::  (Bool, Bool, VoiceControl) -> (Bool, Bool, Builder)
-renderVoiceControl (c, p, DynamicControl dynamic)             = renderDynamic (c, p, dynamic)
-renderVoiceControl (c, p, BalanceControl balance)             = (c, p, renderBalance balance)
-renderVoiceControl (c, p, PanControl pan)                     = renderPan (c, p, pan)
-renderVoiceControl (c, p, ArticulationControl articulation)   = (c, p, renderArticulation articulation)
-renderVoiceControl (c, p, TextControl text)                   = (c, p, renderText text)
-renderVoiceControl (c, p, AccentControl accent)               = (c, p, renderAccent accent)
-renderVoiceControl (c, p, InstrumentControl instrument)       = (c, p, renderInstrument instrument)
-renderVoiceControl (c, p, KeySignatureControl keySignature)   = (c, p, renderKeySignature keySignature)
-renderVoiceControl (c, p, TimeSignatureControl timeSignature) = (c, p, renderTimeSignature timeSignature)
+renderVoiceControl ::  (Bool, Bool, Rhythm, VoiceControl) -> (Bool, Bool, Builder)
+renderVoiceControl (c, p, r, DynamicControl dynamic)             = renderDynamic c p r dynamic
+renderVoiceControl (c, p, _, BalanceControl balance)             = (c, p, renderBalance balance)
+renderVoiceControl (c, p, _, PanControl pan)                     = renderPan (c, p, pan)
+renderVoiceControl (c, p, _, ArticulationControl articulation)   = (c, p, renderArticulation articulation)
+renderVoiceControl (c, p, _, TextControl text)                   = (c, p, renderText text)
+renderVoiceControl (c, p, _, AccentControl accent)               = (c, p, renderAccent accent)
+renderVoiceControl (c, p, _, InstrumentControl instrument)       = (c, p, renderInstrument instrument)
+renderVoiceControl (c, p, _, KeySignatureControl keySignature)   = (c, p, renderKeySignature keySignature)
+renderVoiceControl (c, p, _, TimeSignatureControl timeSignature) = (c, p, renderTimeSignature timeSignature)
 
 -- | Emit a list list of space-separated controls.
-renderVoiceControls' :: VoiceControl -> State (Bool, Bool) Builder
-renderVoiceControls' control =
-  do (c, p) <- get
-     let (c', p', b) = renderVoiceControl (c, p, control)
-     put (c', p')
-     return b
-    
-renderVoiceControls :: (Bool, Bool) -> [VoiceControl] -> (Bool, Bool, Builder)
-renderVoiceControls (c, p) controls =
+renderVoiceControls' :: Rhythm -> VoiceControl -> State (Bool, Bool) Builder
+renderVoiceControls' rhythm control =
+  get >>= \(c, p) -> let (c', p', b) = renderVoiceControl (c, p, rhythm, control) in put (c', p') >> return b
+     
+renderVoiceControls :: (Bool, Bool, Rhythm) -> [VoiceControl] -> (Bool, Bool, Builder)
+renderVoiceControls (c, p, rhythm) controls =
   (c', p', mconcat bs)
   where
-    (bs, (c', p')) = runState (traverse renderVoiceControls' controls) (c, p)
+    (bs, (c', p')) = runState (traverse (renderVoiceControls' rhythm) controls) (c, p)
 
 renderSpacesForRhythms :: [Builder] -> Builder
 renderSpacesForRhythms []                               = mempty
@@ -317,11 +319,8 @@ renderTempoAndRhythm s tempo rhythm =
     
 renderTempoControls' :: (Tempo, Rhythm) -> State Bool Builder
 renderTempoControls' (tempo, rhythm) =
-  do s <- get
-     let (s', b) = renderTempoAndRhythm s tempo rhythm
-     put s'
-     return b
-
+  get >>= \s -> let (s', b) = renderTempoAndRhythm s tempo rhythm in put s' >> return b
+     
 renderTempoControls :: [(Tempo,Rhythm)] -> Builder
 renderTempoControls controls =
   renderedOpen
@@ -338,20 +337,20 @@ renderNote :: (Bool, Bool) -> Note -> (Bool, Bool, Builder)
 renderNote (c, p) (Note pitch rhythm controls) =
   (c', p', renderedNote)
   where
-    (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
+    (c', p', renderedVoiceControls) = renderVoiceControls (c, p, rhythm) (Set.toAscList controls)
     renderedPitch  = renderPitch pitch
     renderedRhythms = renderRhythm rhythm
     renderedNote = renderNoteForRhythms renderedTie renderedPitch renderedVoiceControls renderedRhythms
 renderNote (c, p) (Rest rhythm controls) =
   (c', p', renderedNote)
   where
-    (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
+    (c', p', renderedVoiceControls) = renderVoiceControls (c, p, rhythm) (Set.toAscList controls)
     renderedRhythms = renderRhythm rhythm
     renderedNote = renderNoteForRhythms renderedNothing renderedRest renderedVoiceControls renderedRhythms
 renderNote (c, p) (PercussionNote rhythm controls) =
   (c', p', renderedNote)
   where
-    (c', p', renderedVoiceControls) = renderVoiceControls (c, p) (Set.toAscList controls)
+    (c', p', renderedVoiceControls) = renderVoiceControls (c, p, rhythm) (Set.toAscList controls)
     renderedPitch = renderPitch dummyPercussionPitch
     renderedRhythms = renderRhythm rhythm
     renderedNote = renderNoteForRhythms renderedTie renderedPitch renderedVoiceControls renderedRhythms
@@ -359,10 +358,7 @@ renderNote (c, p) (PercussionNote rhythm controls) =
 -- | Spaces separate notes in a rendered list of notes.
 renderNotes' :: Note -> State (Bool, Bool) Builder 
 renderNotes' note =
-  do (c, p) <- get
-     let (c', p', b) = renderNote (c, p) note
-     put (c', p')
-     return b
+  get >>= \(c, p) -> let (c', p', b) = renderNote (c, p) note in put (c', p') >> return b
     
 renderNotes :: [Note] -> Builder
 renderNotes notes = mconcat $ intersperse renderedSpace $ evalState (traverse renderNotes' notes) (False, False)
