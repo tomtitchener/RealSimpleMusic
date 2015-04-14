@@ -161,14 +161,23 @@ For program examples generally, see the files in `./tests`, including
 
 ### TBD:
 
+#### Unfinished Business
+
+* ScoreToLilypond for fractional dynamics.
+
+#### Cleanup:
+
+* Switch from Set to List for Note, IndexedNote, MidiNote.
+* Validate rhythm denominator is power of 2 or hide type and add
+  constructor that does validation.
+
 #### Tests:
-  
-* Pan changes render in midi (canon examples, by ear).
+
+* Fractional dynamics behave (canon example by inspection with GarageBand).
+* Pan changes render in midi (canon examples, by inspection with GarageBand).
 
 #### Features
 
-* Add fractional dynamics controls to swell up and down
-  on a single note.
 * Multi-note instruments, e.g. piano, marimaba, vibes, etc. Music
   types need for any Note to also be a Chord of multiple simultaneous
   Notes of equal duration.  Ugh, that's not strictly true.  With

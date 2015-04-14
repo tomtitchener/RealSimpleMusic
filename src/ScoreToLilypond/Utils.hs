@@ -188,12 +188,13 @@ renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f"
 --   continuous dynamic control (cresc, decresc) is engaged.  Second is
 --   for continuous pan control and gets passed through unchanged.
 renderDynamic :: (Bool, Bool, Dynamic) -> (Bool, Bool, Builder)
-renderDynamic (True,  _, Crescendo)      = error "renderDynamic Cresecendo inside crescendo or decrescendo"
-renderDynamic (False, p, Crescendo)      = (True,  p, renderedDynamicValues !! fromEnum Crescendo)
-renderDynamic (True,  _, Decrescendo)    = error "renderDynamic Decrescendo inside crescendo or decrescendo"
-renderDynamic (False, p, Decrescendo)    = (True,  p, renderedDynamicValues !! fromEnum Decrescendo)
-renderDynamic (False, p, dynamic)        = (False, p, renderedDynamicValues !! fromEnum dynamic)
-renderDynamic (True,  p, dynamic)        = (False, p, renderedEndDynamic <> renderedDynamicValues !! fromEnum dynamic)
+renderDynamic (_,     _, FractionalDynamic _)            = error "renderDynamic FractionalDynamic TBD"
+renderDynamic (True,  _, DiscreteDynamic Crescendo)      = error "renderDynamic Cresecendo inside crescendo or decrescendo"
+renderDynamic (False, p, DiscreteDynamic Crescendo)      = (True,  p, renderedDynamicValues !! fromEnum Crescendo)
+renderDynamic (True,  _, DiscreteDynamic Decrescendo)    = error "renderDynamic Decrescendo inside crescendo or decrescendo"
+renderDynamic (False, p, DiscreteDynamic Decrescendo)    = (True,  p, renderedDynamicValues !! fromEnum Decrescendo)
+renderDynamic (False, p, DiscreteDynamic dynamic)        = (False, p, renderedDynamicValues !! fromEnum dynamic)
+renderDynamic (True,  p, DiscreteDynamic dynamic)        = (False, p, renderedEndDynamic <> renderedDynamicValues !! fromEnum dynamic)
 
 -- | LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
 balanceValues :: [String]
@@ -268,7 +269,7 @@ renderNoteForRhythms renderedTie' renderedPitch renderedControls (renderedRhythm
   renderedPitch <> renderedRhythm <> renderedControls <> mconcat [renderedTie' <> renderedSpace <> renderNoteForRhythms renderedTie' renderedPitch renderedNothing renderedRhythms]
 
 -- | Emit Lilypond text corresponding to VoiceControl enum.
-renderVoiceControl :: (Bool, Bool, VoiceControl) -> (Bool, Bool, Builder)
+renderVoiceControl ::  (Bool, Bool, VoiceControl) -> (Bool, Bool, Builder)
 renderVoiceControl (c, p, DynamicControl dynamic)             = renderDynamic (c, p, dynamic)
 renderVoiceControl (c, p, BalanceControl balance)             = (c, p, renderBalance balance)
 renderVoiceControl (c, p, PanControl pan)                     = renderPan (c, p, pan)

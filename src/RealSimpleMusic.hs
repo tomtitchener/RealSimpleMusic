@@ -26,6 +26,7 @@ module RealSimpleMusic (
    ,  transposePitch
    ,  getPitch
    ,  Dynamic(..)
+   ,  DiscreteDynamicValue(..)
    ,  Balance(..)
    ,  Pan(..)
    ,  Tempo(..)

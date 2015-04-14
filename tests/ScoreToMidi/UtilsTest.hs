@@ -68,7 +68,7 @@ testSynthesizeDurationSpan =
   forAll arbitrary $ \(IntDurPair cnt dur) -> dur == sum (synthesizeDurationSpan cnt (getDur dur))
 
 -- Stop short of EndCrescendo, Decrescendo, and etc. to avoid errors when tryig to convert to Int.
-instance Arbitrary Dynamic where
+instance Arbitrary DiscreteDynamicValue where
   arbitrary = elements [Pianissimo .. Fortissimo]
 
 -- Type signature requires FlexibleContexts
@@ -92,11 +92,11 @@ testSynthesizeSpan cmp synth cnvt start stop dur =
       valSingles     = (map head . group) vals
       isUniform xs = and $ evalState (traverse (cmpFun cmp) (tail xs)) (True, head xs)
 
-testSynthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> Property
+testSynthesizeCrescendoSpan :: DiscreteDynamicValue -> DiscreteDynamicValue -> Duration -> Property
 testSynthesizeCrescendoSpan =
   testSynthesizeSpan LT synthesizeCrescendoSpan dynamicToVolume
   
-testSynthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> Property
+testSynthesizeDecrescendoSpan :: DiscreteDynamicValue -> DiscreteDynamicValue -> Duration -> Property
 testSynthesizeDecrescendoSpan =
   testSynthesizeSpan GT synthesizeDecrescendoSpan dynamicToVolume
       

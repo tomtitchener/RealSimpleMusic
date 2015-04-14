@@ -80,7 +80,7 @@ pitchClassToOffset B   = 11
 pitchClassToOffset Cf  = 11
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
-dynamicToVolume :: Num a => Dynamic -> a
+dynamicToVolume :: Num a => DiscreteDynamicValue -> a
 dynamicToVolume Pianissimo     = 10
 dynamicToVolume Piano          = 30
 dynamicToVolume MezzoPiano     = 50
@@ -162,20 +162,24 @@ genMidiVolumeEvent :: ChannelMsg.Channel -> Int -> Event.T
 genMidiVolumeEvent chan vol =
   genEvent chan $ VoiceMsg.Control VoiceMsg.mainVolume vol
 
-genMidiDynamicControlEvent :: ChannelMsg.Channel -> Dynamic -> Event.T
-genMidiDynamicControlEvent chan dyn = genMidiVolumeEvent chan $ dynamicToVolume dyn
-         
+-- FractionalDynamic should be a "can't get here from there" as this 
+-- is only called with values that pass the discreteControl test.
+-- Is there be a way to do this at compile time instead?
+genDiscreteMidiDynamicControlEvent :: ChannelMsg.Channel -> Dynamic -> Event.T
+genDiscreteMidiDynamicControlEvent chan (DiscreteDynamic dyn) = genMidiVolumeEvent chan $ dynamicToVolume dyn
+genDiscreteMidiDynamicControlEvent _ (FractionalDynamic dyns) = error $ "genMidiDynamicControlEvent FractionalDynamic " ++ show dyns
+
 genMidiBalanceControlEvent :: ChannelMsg.Channel -> Balance -> Event.T
 genMidiBalanceControlEvent chan balance =
   genEvent chan (VoiceMsg.Control VoiceMsg.panorama $ balanceToBalance balance)
 
-genMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
-genMidiPanControlEvent chan (Pan pan)
+genDiscreteMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
+genDiscreteMidiPanControlEvent chan (Pan pan)
   | 0 > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum 0"
   | 127 < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum 127"
   | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
-genMidiPanControlEvent _ PanUp   = error "genMidiPanControl PanUp"
-genMidiPanControlEvent _ PanDown = error "genMIdiPanControl PanDown"
+genDiscreteMidiPanControlEvent _ PanUp   = error "genMidiPanControl PanUp"
+genDiscreteMidiPanControlEvent _ PanDown = error "genMidiPanControl PanDown"
 
 -- | Midi Channel Prefix tells system what channel to associate with
 --   meta events before an event with a channel appears.  Customary
@@ -215,16 +219,16 @@ genMidiTextMetaEvent :: String -> Event.T
 genMidiTextMetaEvent  = Event.MetaEvent . Meta.TextEvent
 
 -- | Articulation and Accent are per-note controls that render immediately in the note-on/note-off Midi event stream.
-voiceControlToMaybeEvent :: ChannelMsg.Channel -> VoiceControl -> Maybe Event.T
-voiceControlToMaybeEvent channel (DynamicControl       dynamic)       = Just $ genMidiDynamicControlEvent    channel dynamic
-voiceControlToMaybeEvent channel (BalanceControl       balance)       = Just $ genMidiBalanceControlEvent    channel balance
-voiceControlToMaybeEvent channel (PanControl           pan)           = Just $ genMidiPanControlEvent        channel pan
-voiceControlToMaybeEvent channel (InstrumentControl    instrument)    = Just $ genMidiInstrumentControlEvent channel instrument
-voiceControlToMaybeEvent _       (TextControl          text)          = Just $ genMidiTextMetaEvent          text
-voiceControlToMaybeEvent _       (KeySignatureControl  keySignature)  = Just $ genMidiKeySignatureMetaEvent  keySignature
-voiceControlToMaybeEvent _       (TimeSignatureControl timeSignature) = Just $ genMidiTimeSignatureMetaEvent timeSignature
-voiceControlToMaybeEvent _       (ArticulationControl  _)             = Nothing
-voiceControlToMaybeEvent _       (AccentControl        _)             = Nothing
+discreteVoiceControlToMaybeEvent :: ChannelMsg.Channel -> VoiceControl -> Maybe Event.T
+discreteVoiceControlToMaybeEvent channel (DynamicControl       dynamic)       = Just $ genDiscreteMidiDynamicControlEvent channel dynamic
+discreteVoiceControlToMaybeEvent channel (BalanceControl       balance)       = Just $ genMidiBalanceControlEvent         channel balance
+discreteVoiceControlToMaybeEvent channel (PanControl           pan)           = Just $ genDiscreteMidiPanControlEvent     channel pan
+discreteVoiceControlToMaybeEvent channel (InstrumentControl    instrument)    = Just $ genMidiInstrumentControlEvent      channel instrument
+discreteVoiceControlToMaybeEvent _       (TextControl          text)          = Just $ genMidiTextMetaEvent               text
+discreteVoiceControlToMaybeEvent _       (KeySignatureControl  keySignature)  = Just $ genMidiKeySignatureMetaEvent       keySignature
+discreteVoiceControlToMaybeEvent _       (TimeSignatureControl timeSignature) = Just $ genMidiTimeSignatureMetaEvent      timeSignature
+discreteVoiceControlToMaybeEvent _       (ArticulationControl  _)             = Nothing
+discreteVoiceControlToMaybeEvent _       (AccentControl        _)             = Nothing
 
 -- | If an AccentControl exists in controls, answer Accent, else answer Normal
 lookupAccent :: Set.Set VoiceControl -> Accent
@@ -258,11 +262,12 @@ articulate articulation duration =
 
 -- | A discrete control can be converted to a single unique Midi control event.
 discreteControl :: VoiceControl -> Bool
-discreteControl (DynamicControl Crescendo)      = False
-discreteControl (DynamicControl Decrescendo)    = False
-discreteControl (PanControl PanUp)              = False
-discreteControl (PanControl PanDown)            = False
-discreteControl _                               = True
+discreteControl (DynamicControl (DiscreteDynamic Crescendo))   = False
+discreteControl (DynamicControl (DiscreteDynamic Decrescendo)) = False
+discreteControl (DynamicControl (FractionalDynamic _))         = False
+discreteControl (PanControl PanUp)                             = False
+discreteControl (PanControl PanDown)                           = False
+discreteControl _                                              = True
 
 -- | Create two element list, each with pair containing duration and Sound event
 --   with at least first element of delay and note on (e.g. for preceding rest)
@@ -284,7 +289,7 @@ genMidiDiscreteEvents delay channel pitch duration controls
     noteOnEvent           = genMidiNoteOn  channel pitch accent
     noteOffEvent          = genMidiNoteOff channel pitch accent
     discreteControls      = Set.filter discreteControl controls
-    discreteControlEvents = mapMaybe (voiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
+    discreteControlEvents = mapMaybe (discreteVoiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
     events                = discreteControlEvents ++ [noteOnEvent, noteOffEvent]
     (noteDur, restDur)    = articulate articulation duration
     durations             = [delay] ++ replicate (length discreteControlEvents) (Dur 0) ++ [noteDur]
@@ -295,7 +300,7 @@ genMidiDiscreteControlEvents channel controls =
   zip [Dur 0..] discreteControlEvents
   where
     discreteControls      = Set.filter discreteControl controls
-    discreteControlEvents = mapMaybe (voiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
+    discreteControlEvents = mapMaybe (discreteVoiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
 
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
 durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
@@ -313,13 +318,17 @@ midiNoteToDiscreteEvents ch (MidiRest rhythm controls) =
      return $ (EventList.fromPairList . map durEventToNumEvent) (genMidiDiscreteControlEvents ch controls)
 
 equalExplicitDynamic :: VoiceControl -> Bool
-equalExplicitDynamic (DynamicControl Pianissimo)     = True 
-equalExplicitDynamic (DynamicControl Piano)          = True 
-equalExplicitDynamic (DynamicControl MezzoPiano)     = True 
-equalExplicitDynamic (DynamicControl MezzoForte)     = True 
-equalExplicitDynamic (DynamicControl Forte)          = True 
-equalExplicitDynamic (DynamicControl Fortissimo)     = True
-equalExplicitDynamic _                               = False
+equalExplicitDynamic (DynamicControl (DiscreteDynamic Pianissimo)) = True 
+equalExplicitDynamic (DynamicControl (DiscreteDynamic Piano))      = True 
+equalExplicitDynamic (DynamicControl (DiscreteDynamic MezzoPiano)) = True 
+equalExplicitDynamic (DynamicControl (DiscreteDynamic MezzoForte)) = True 
+equalExplicitDynamic (DynamicControl (DiscreteDynamic Forte))      = True 
+equalExplicitDynamic (DynamicControl (DiscreteDynamic Fortissimo)) = True
+equalExplicitDynamic _                                             = False
+
+equalFractionalDynamic :: VoiceControl -> Bool
+equalFractionalDynamic (DynamicControl (FractionalDynamic _)) = True
+equalFractionalDynamic _                                      = False                                                   
 
 -- | Distribute control val 'd' over count 'c' buckets.
 --   Sum of values in each bucket must equal 'd'.  Smaller
@@ -374,7 +383,7 @@ bindIntSpanVars start stop dur =
 --   Stop values must be equal to Volume translation for start and stop inputs, intermediate
 --   values must be consistently increasing (repetitions allowed).   Initial value is equal to
 --   start less increment.
-synthesizeCrescendoSpan :: Dynamic -> Dynamic -> Duration -> ([Int],[Duration])
+synthesizeCrescendoSpan :: DiscreteDynamicValue -> DiscreteDynamicValue -> Duration -> ([Int],[Duration])
 synthesizeCrescendoSpan start stop (Dur dur)
   | dur == 0        = error $ "synthesizeCrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
   | start >= stop   = error $ "synthesizeCrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
@@ -387,7 +396,7 @@ synthesizeCrescendoSpan start stop (Dur dur)
 --   Stop values must be equal to Volume translation for start and stop inputs, intermediate
 --   values must be consistently decreasing (repetitions allowed).   Initial value is equal to
 --   start plus increment.
-synthesizeDecrescendoSpan :: Dynamic -> Dynamic -> Duration -> ([Int],[Duration])
+synthesizeDecrescendoSpan :: DiscreteDynamicValue -> DiscreteDynamicValue -> Duration -> ([Int],[Duration])
 synthesizeDecrescendoSpan start stop (Dur dur)
   | dur == 0            = error $ "synthesizeDecrescendoSpan zero dur for dynamics start " ++ show start ++ " and stop " ++ show stop
   | stop >= start       = error $ "synthesizeDecrescendoSpan target dynamic " ++ show stop ++ " is not softer than source dynamic " ++ show start
@@ -401,64 +410,132 @@ data ControlBufferingState = ControlBufferingNone | ControlBufferingUp | Control
 -- | State when traversing span of continuous controls.
 --   First Duration is for accumulating Rest.
 --   Second Duration is for accumulating total Span.
-data MidiControlContext control = MidiControlContext ControlBufferingState control Duration Duration 
-type MidiDynamicControlContext  = MidiControlContext Dynamic  
+data MidiControlContext control = MidiControlContext { ctrlCtxtState::ControlBufferingState, ctrlCtxtCtrl::control, ctrlCtxtRest::Duration, ctrlCtxtLen::Duration }
+type MidiDynamicControlContext  = MidiControlContext DiscreteDynamicValue
 type MidiPanControlContext      = MidiControlContext Pan
 type MidiTempoControlContext    = MidiControlContext Tempo
 
 startDynamicControlContext :: MidiDynamicControlContext
 startDynamicControlContext = MidiControlContext ControlBufferingNone MezzoForte (Dur 0) (Dur 0)
 
-genMidiContinuousDynamicEvents :: (Dynamic -> Dynamic -> Duration -> ([Int],[Duration])) -> ChannelMsg.Channel -> Duration -> Duration -> Dynamic -> Dynamic -> EventList.T Event.ElapsedTime Event.T
+genMidiContinuousDynamicEvents :: (DiscreteDynamicValue -> DiscreteDynamicValue -> Duration -> ([Int],[Duration])) -> ChannelMsg.Channel -> Duration -> Duration -> DiscreteDynamicValue -> DiscreteDynamicValue -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousDynamicEvents synth ch rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthDynamicEventPairs
   where
     (volSpan, durSpan)     = synth start stop dur
     synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) (rest:durSpan) (dynamicToVolume start:volSpan)
+
+-- Assume:  alternate discrete, crescendo/decrescendo, discrete (enforced before and at tail), sequential cresc/decresc are not allowed.
+-- Allow: sequential discrete, means sudden change in dynamic.
+updateFractionalControlContext :: ChannelMsg.Channel -> Integer -> (DiscreteDynamicValue, Int) -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
+updateFractionalControlContext _ unit (Crescendo, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
+  (MidiControlContext ControlBufferingUp dynamic rest (Dur (unit * toInteger fraction)), EventList.empty)
+updateFractionalControlContext _ unit (Decrescendo, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
+  (MidiControlContext ControlBufferingDown dynamic rest (Dur (unit * toInteger fraction)), EventList.empty)
+updateFractionalControlContext _ _ (Crescendo, _) (MidiControlContext ControlBufferingUp _ _ _) =
+  error "updateFractionalControlContext sequential crescendos"
+updateFractionalControlContext _ _ (Decrescendo, _) (MidiControlContext ControlBufferingUp _ _ _) =
+  error "updateFractionalControlContext sequential crescendo and decrescendo"
+updateFractionalControlContext _ _ (Decrescendo, _) (MidiControlContext ControlBufferingDown _ _ _) =
+  error "updateFractionalControlContext sequential decrescendos"
+updateFractionalControlContext _ _ (Crescendo, _) (MidiControlContext ControlBufferingDown _ _ _) =
+  error "updateFractionalControlContext sequential decrescendo and crescendo"
+updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
+  (controlContext, discreteEvents)
+  where
+    controlContext = MidiControlContext ControlBufferingNone target (Dur 0) (Dur (unit * toInteger fraction))
+    discreteEvents = EventList.singleton ((fromInteger . getDur) rest) (genMidiVolumeEvent chan (dynamicToVolume dynamic))
+updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingUp dynamic rest len) =
+  (controlContext, EventList.append crescendoEvents targetDynamicEvents)
+  where
+    controlContext      = MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0)
+    crescendoEvents     = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
+    targetDynamicEvents = EventList.singleton (fromInteger (unit * toInteger fraction)) (genMidiVolumeEvent chan (dynamicToVolume target))
+updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingDown dynamic rest len) =
+  (controlContext, EventList.append decrescendoEvents targetDynamicEvents)
+  where
+    controlContext      = MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0)
+    decrescendoEvents   = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
+    targetDynamicEvents = EventList.singleton (fromInteger (unit * toInteger fraction)) (genMidiVolumeEvent chan (dynamicToVolume target))
+
+fractionalDynamicToContinuousDynamicEvents :: ChannelMsg.Channel -> Integer -> (DiscreteDynamicValue, Int) -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
+fractionalDynamicToContinuousDynamicEvents chan unit fraction =
+  get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateFractionalControlContext chan unit fraction ctrlCtxt in put ctrlCtxt' >> return events
+
+bindFractionalDynamicVars :: [(DiscreteDynamicValue, Int)] -> Rhythm -> Duration -> (Integer, Integer, Duration)
+bindFractionalDynamicVars fractions rhythm rest =
+  (unit, remain, rest')
+  where
+    total   = toInteger $ sum $ map snd fractions
+    unit    = getDur (rhythmToDuration rhythm) `div` total
+    remain  = getDur (rhythmToDuration rhythm) `rem` total
+    rest'   = rest + Dur remain
     
-dynamicFromControl :: VoiceControl -> Dynamic
-dynamicFromControl (DynamicControl dynamic) = dynamic
+-- Generate event list for rhythm length for midiNote using dynamics from FractionalDynamic, don't forget to include the carried-over rest.
+genMidiContinuousFractionalDynamicEvents :: ChannelMsg.Channel -> Duration -> Rhythm -> VoiceControl -> DiscreteDynamicValue -> (EventList.T Event.ElapsedTime Event.T, DiscreteDynamicValue)
+genMidiContinuousFractionalDynamicEvents chan rest rhythm (DynamicControl (FractionalDynamic fractions)) dynamic
+  | target == Crescendo || target == Decrescendo = error $ "genMidiFractionalDynamicEvents concluding fractional dynamic is " ++ show target
+  | otherwise = (EventList.append startEvents (EventList.concat endEvents), target)
+  where
+    (unit, _, rest')           = bindFractionalDynamicVars fractions rhythm rest
+    startEvent                 = genMidiVolumeEvent chan (dynamicToVolume dynamic)
+    startEvents                = if rest' == Dur 0 then EventList.empty else EventList.singleton (fromInteger (getDur rest)) startEvent
+    startContext               = MidiControlContext ControlBufferingNone dynamic (Dur 0) (Dur 0)
+    (endEvents, targetContext) = runState (traverse (fractionalDynamicToContinuousDynamicEvents chan unit) fractions) startContext
+    target                     = ctrlCtxtCtrl targetContext
+genMidiContinuousFractionalDynamicEvents _ _ _ (DynamicControl (DiscreteDynamic dynamic)) _ =
+  error $ "genMidiContinuousFractionalDynamicEvents called with discrete dynamic " ++ show dynamic
+genMidiContinuousFractionalDynamicEvents _ _ _ control _ =
+  error $ "genMidiContinuousFractionalDynamicEvents called with control other than dynamic " ++ show control
+  
+dynamicFromControl :: VoiceControl -> DiscreteDynamicValue
+dynamicFromControl (DynamicControl (DiscreteDynamic dynamic)) = dynamic
 dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
 
 -- | Refactor
-bindDynamicControlVars :: MidiNote -> Dynamic -> (Rhythm, Set.Set VoiceControl, Bool, Set.Set VoiceControl, Set.Set VoiceControl, Dynamic)
+bindDynamicControlVars :: MidiNote -> DiscreteDynamicValue -> (Rhythm, Set.Set VoiceControl, Bool, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, DiscreteDynamicValue)
 bindDynamicControlVars midiNote dynamic
   | Set.size ctrlsDyn > 1 = error $ "bindDynamicControlVars count of explicit dynamic controls " ++ show (Set.size ctrlsDyn) ++ " > 1"
-  | otherwise             = (rhythm, controls, not (Set.null ctrlsDyn), ctrlsCresc, ctrlsDecresc, target) 
+  | otherwise             = (rhythm, controls, not (Set.null ctrlsDyn), ctrlsCresc, ctrlsDecresc, ctrlsFract, target) 
   where
     rhythm        = midiNoteToRhythm midiNote  
     controls      = midiNoteToControls midiNote  
     ctrlsDyn      = Set.filter equalExplicitDynamic controls
-    ctrlsCresc    = Set.filter (== DynamicControl Crescendo) controls
-    ctrlsDecresc  = Set.filter (== DynamicControl Decrescendo) controls
+    ctrlsCresc    = Set.filter (== DynamicControl (DiscreteDynamic Crescendo)) controls
+    ctrlsDecresc  = Set.filter (== DynamicControl (DiscreteDynamic Decrescendo)) controls
+    ctrlsFract    = Set.filter equalFractionalDynamic controls
     target        = if Set.null ctrlsDyn then dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
 
 -- NB:  add to EventList only stream of control messages approximating continous change!
 -- Isolated discrete controls are emitted separately, see genMidiDiscreteEvents and genMidiDiscreteControlEvents.
 updateDynamicControlContext :: ChannelMsg.Channel -> MidiNote -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
-updateDynamicControlContext _ midiNote (MidiControlContext ControlBufferingNone dynamic rest len)
+updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingNone dynamic rest len)
   | Set.null ctrlsCresc       && Set.null ctrlsDecresc       = (MidiControlContext ControlBufferingNone target (rest + rhythmToDuration rhythm) len, EventList.empty)
   | not (Set.null ctrlsCresc) && Set.null ctrlsDecresc       = (MidiControlContext ControlBufferingUp   target rest (len + rhythmToDuration rhythm), EventList.empty)
   | Set.null ctrlsCresc       && not (Set.null ctrlsDecresc) = (MidiControlContext ControlBufferingDown target rest (len + rhythmToDuration rhythm), EventList.empty)
+  | not (Set.null ctrlsFract)                                = (MidiControlContext ControlBufferingNone target' (Dur 0) (Dur 0), fractionalEvents)
   | otherwise                                                = error $ "updateDynamicControlContext note with both cresc and decresc controls " ++ show controls
   where
-    (rhythm, controls, _, ctrlsCresc, ctrlsDecresc, target) = bindDynamicControlVars midiNote dynamic
+    (rhythm, controls, _, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
+    (fractionalEvents, target')                                         = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp dynamic rest len) 
   | not (Set.null ctrlsCresc)   = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDecresc) = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
-  | isExplDyn                   = (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), crescendoEvents)
+  | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
+  | isExplDyn                   = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), crescendoEvents)
   | otherwise                   = (MidiControlContext ControlBufferingUp   dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
-    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, target) = bindDynamicControlVars midiNote dynamic
-    crescendoEvents                                          = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
+    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
+    crescendoEvents                                                      = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len)
   | not (Set.null ctrlsCresc)   = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDecresc) = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
-  | isExplDyn                   = (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), decrescendoEvents)
+  | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
+  | isExplDyn                   = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), decrescendoEvents)
   | otherwise                   = (MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
-    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, target) = bindDynamicControlVars midiNote dynamic
-    decrescendoEvents                                        = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
+    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
+    decrescendoEvents                                                    = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
 
 midiNoteToContinuousDynamicEvents :: ChannelMsg.Channel -> MidiNote -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
 midiNoteToContinuousDynamicEvents chan midiNote =
@@ -502,7 +579,7 @@ genMidiContinuousPanEvents synth chan rest dur start stop  =
   EventList.fromPairList $ map durEventToNumEvent synthPanEventPairs
   where
     (panSpan,durSpan)  = synth start stop dur
-    synthPanEventPairs = zipWith (\dur' pan -> (dur', genMidiPanControlEvent chan pan)) (rest:durSpan) (start:panSpan)
+    synthPanEventPairs = zipWith (\dur' pan -> (dur', genDiscreteMidiPanControlEvent chan pan)) (rest:durSpan) (start:panSpan)
 
 -- | Refactor
 bindPanControlVars :: MidiNote -> Pan -> (Rhythm, Set.Set VoiceControl, Bool, Set.Set VoiceControl, Set.Set VoiceControl, Pan)

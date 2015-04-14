@@ -59,7 +59,7 @@ data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 -- | Dynamic (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering makes
 --   sense.
-data Dynamic =
+data DiscreteDynamicValue =
   Pianissimo
   | Piano
   | MezzoPiano
@@ -76,25 +76,16 @@ data Dynamic =
 -- is 25% crescendo from Piano to Forte followed by immediate 75% 
 -- decrescendo to Piano.  Stage by first decomposing DynamicControl 
 -- Dynamic into DiscreteDynamic value and processing as is and
--- giving an error for FractionalDynamic.  Then add error handling
+-- giving an error for FractionalDynamic (done).  Then add error handling
 -- to make sure Set VoiceControl doesn't contain multiple instances
 -- of DiscreteDynamic or a mix of DiscreteDynamic and FractionalDynamic
 -- seeing as Set will admit anything that doesn't answer EQ to compare.
 -- Finally, interpret (single) FractionalDynamic by emitting stream
 -- of Midi controls within span of single note.
-data DiscreteDynamic =
-  Pianissimo'
-  | Piano'
-  | MezzoPiano'
-  | MezzoForte'
-  | Forte'
-  | Fortissimo'
-  | Crescendo'
-  | Decrescendo' deriving (Bounded, Enum, Show, Ord, Eq)
 
-data Dynamic' =
-  DiscreteDynamic
-  | FractionalDynamic [(DiscreteDynamic, Int)]
+data Dynamic =
+  DiscreteDynamic DiscreteDynamicValue
+  | FractionalDynamic [(DiscreteDynamicValue, Int)] deriving (Ord, Eq, Show)
 
 -- | Balance (static)
 data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
@@ -120,14 +111,14 @@ newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, 
 -- | Time Signature, numerator and denominator
 data TimeSignature = TimeSignature { timeSigNum :: Integer , timeSigDenom :: Integer } deriving (Show)
 
-toRatio :: TimeSignature -> Rational
-toRatio ts = timeSigNum ts % timeSigDenom ts
+timeSignatureToRatio :: TimeSignature -> Rational
+timeSignatureToRatio ts = timeSigNum ts % timeSigDenom ts
 
 instance Ord TimeSignature where
-  x `compare` y = toRatio x `compare` toRatio y
+  x `compare` y = timeSignatureToRatio x `compare` timeSignatureToRatio y
   
 instance Eq TimeSignature where
-  (==) x y = toRatio x == toRatio y
+  (==) x y = timeSignatureToRatio x == timeSignatureToRatio y
 
 -- | Articulation
 data Articulation = NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo deriving (Bounded, Enum, Show, Ord, Eq)
@@ -168,6 +159,16 @@ newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, 
 --   a rest with only a rhythm, a percussion note with
 --   a rhythm, or an accented percussion note with rhythm
 --   and accent.
+--   TBD:  what value does Set provide?  Equality comparison
+--   means VoiceControl DynamicControl Piano /= VoiceControl DynmicControl Forte
+--   and I want it that way so I can have Piano and Crescendo together anyway.
+--   The only space savings happens if I store DynamicControl Piano and
+--   another DynamicControl Piano.
+--   Items are stored in order, but I never rely on the ordering for anything,
+--   (even though there's a comment in the enum declarations saying I do.)
+--   Switch to list?  Set methods used (member, filter, toAscList, null, elemAt,
+--   size) all have list equivalents.
+--   Replace with List.
 data Note =
   Note Pitch Rhythm (Set.Set VoiceControl)
   | Rest Rhythm (Set.Set VoiceControl)

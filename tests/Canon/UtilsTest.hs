@@ -36,14 +36,14 @@ fjAccents = accentsPt1 ++ accentsPt1 ++ accentsPt2 ++ accentsPt2 ++ accentsPt3 +
 fjAccentsSets :: [Set.Set VoiceControl]
 fjAccentsSets = map Set.singleton fjAccents
 
-dynamicssPt1, dynamicssPt2, dynamicssPt3, dynamicssPt4, fjDynamicss :: [[Dynamic]]
+dynamicssPt1, dynamicssPt2, dynamicssPt3, dynamicssPt4, fjDynamicss :: [[DiscreteDynamicValue]]
 dynamicssPt1 = [[Piano, Crescendo], [], [Forte], [Piano]]
 dynamicssPt2 = [[MezzoPiano, Crescendo], [], [Fortissimo]]
 dynamicssPt3 = [[Forte, Decrescendo], [], [], [], [], [Piano]]
 dynamicssPt4 = [[MezzoForte, Decrescendo], [], [Piano]]
 fjDynamicss  = dynamicssPt1 ++ dynamicssPt1 ++ dynamicssPt2 ++ dynamicssPt2 ++ dynamicssPt3 ++ dynamicssPt3 ++ dynamicssPt4 ++ dynamicssPt4
 fjDynamicss' :: [[VoiceControl]]
-fjDynamicss' = (map . map) DynamicControl fjDynamicss
+fjDynamicss' = (map . map) (DynamicControl . DiscreteDynamic) fjDynamicss
 fjDynamicsSets :: [Set.Set VoiceControl]
 fjDynamicsSets = map Set.fromList fjDynamicss'
 
