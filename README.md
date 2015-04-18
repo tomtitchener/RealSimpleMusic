@@ -163,7 +163,10 @@ For program examples generally, see the files in `./tests`, including
 
 #### Unfinished Business
 
-* ScoreToLilypond for fractional dynamics.
+* Fractional dynamics sequencing:  a fractional dynamic with an
+  initial discrete dynamic may terminate a crescendo or decrescendo.
+* Fractional Pan.
+* Set key signature per voice for score examples.
 
 #### Cleanup:
 
@@ -173,8 +176,10 @@ For program examples generally, see the files in `./tests`, including
 
 #### Tests:
 
-* Fractional dynamics behave (canon example by inspection with GarageBand).
-* Pan changes render in midi (canon examples, by inspection with GarageBand).
+* Fractional dynamics behave.  Needs new test example as longest Canon
+  notes are still too short.
+* Pan changes render in midi.  Canon examples, by inspection with
+  GarageBand.
 
 #### Features
 
@@ -207,5 +212,4 @@ For program examples generally, see the files in `./tests`, including
 * Look at travis-ci.org.  See if I can run Linux builds and tests.
 
 * Look at Overtone in Clojure, Chris Ford keynote, Clojure/Conj 2012.
-
 

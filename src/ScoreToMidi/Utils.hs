@@ -462,9 +462,11 @@ fractionalDynamicToContinuousDynamicEvents :: ChannelMsg.Channel -> Integer -> (
 fractionalDynamicToContinuousDynamicEvents chan unit fraction =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateFractionalControlContext chan unit fraction ctrlCtxt in put ctrlCtxt' >> return events
 
-bindFractionalDynamicVars :: [(DiscreteDynamicValue, Int)] -> Rhythm -> Duration -> (Integer, Integer, Duration)
+-- TBD: what's the best place for the remainder?  I put it with the rest, which goes at the
+-- beginning by the caller, so there's a chance the fractional dynamics are off by that value.
+bindFractionalDynamicVars :: [(DiscreteDynamicValue, Int)] -> Rhythm -> Duration -> (Integer, Duration)
 bindFractionalDynamicVars fractions rhythm rest =
-  (unit, remain, rest')
+  (unit, rest')
   where
     total   = toInteger $ sum $ map snd fractions
     unit    = getDur (rhythmToDuration rhythm) `div` total
@@ -477,7 +479,7 @@ genMidiContinuousFractionalDynamicEvents chan rest rhythm (DynamicControl (Fract
   | target == Crescendo || target == Decrescendo = error $ "genMidiFractionalDynamicEvents concluding fractional dynamic is " ++ show target
   | otherwise = (EventList.append startEvents (EventList.concat endEvents), target)
   where
-    (unit, _, rest')           = bindFractionalDynamicVars fractions rhythm rest
+    (unit, rest')              = bindFractionalDynamicVars fractions rhythm rest
     startEvent                 = genMidiVolumeEvent chan (dynamicToVolume dynamic)
     startEvents                = if rest' == Dur 0 then EventList.empty else EventList.singleton (fromInteger (getDur rest)) startEvent
     startContext               = MidiControlContext ControlBufferingNone dynamic (Dur 0) (Dur 0)
@@ -493,6 +495,7 @@ dynamicFromControl (DynamicControl (DiscreteDynamic dynamic)) = dynamic
 dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
 
 -- | Refactor
+-- TBD: isolate target from either ctrlsDyn or ctrlsFract, 
 bindDynamicControlVars :: MidiNote -> DiscreteDynamicValue -> (Rhythm, Set.Set VoiceControl, Bool, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, DiscreteDynamicValue)
 bindDynamicControlVars midiNote dynamic
   | Set.size ctrlsDyn > 1 = error $ "bindDynamicControlVars count of explicit dynamic controls " ++ show (Set.size ctrlsDyn) ++ " > 1"
@@ -518,24 +521,27 @@ updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingNo
   where
     (rhythm, controls, _, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
     (fractionalEvents, target')                                         = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
+-- TBD: what if fractional dynamic terminates crescendo?  Snatch first item from fractional dynamic as terminating dynamic for crescendo,
+-- error if it's another crescendo or decrescendo.  Then compute list of fractional events and append those to ones created for crescendo.
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp dynamic rest len) 
   | not (Set.null ctrlsCresc)   = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDecresc) = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
+-- | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
   | isExplDyn                   = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), crescendoEvents)
   | otherwise                   = (MidiControlContext ControlBufferingUp   dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
-    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
-    crescendoEvents                                                      = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
+    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, _, target) = bindDynamicControlVars midiNote dynamic
+    crescendoEvents                                             = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
+-- TBD: what if fractional dynamic terminates decrescendo?  See re: crescendo, above.
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len)
   | not (Set.null ctrlsCresc)   = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
   | not (Set.null ctrlsDecresc) = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
+-- | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
   | isExplDyn                   = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), decrescendoEvents)
   | otherwise                   = (MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
-    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
-    decrescendoEvents                                                    = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
+    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, _, target) = bindDynamicControlVars midiNote dynamic
+    decrescendoEvents                                           = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
 
 midiNoteToContinuousDynamicEvents :: ChannelMsg.Channel -> MidiNote -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
 midiNoteToContinuousDynamicEvents chan midiNote =

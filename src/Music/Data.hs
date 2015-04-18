@@ -69,20 +69,6 @@ data DiscreteDynamicValue =
   | Crescendo
   | Decrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
--- WIP:  toward fractional dynamic, Int in FractionalDynamic
--- is proportion summed across all elements in list, e.g.
--- [(Piano,1),(MezzoPiano,1)] is 50% Piano, 50% MezzoPiano, and
--- [(Piano,0),(Crescendo,1),(Forte,0),(Decrescendo,3),(Piano,0)]
--- is 25% crescendo from Piano to Forte followed by immediate 75% 
--- decrescendo to Piano.  Stage by first decomposing DynamicControl 
--- Dynamic into DiscreteDynamic value and processing as is and
--- giving an error for FractionalDynamic (done).  Then add error handling
--- to make sure Set VoiceControl doesn't contain multiple instances
--- of DiscreteDynamic or a mix of DiscreteDynamic and FractionalDynamic
--- seeing as Set will admit anything that doesn't answer EQ to compare.
--- Finally, interpret (single) FractionalDynamic by emitting stream
--- of Midi controls within span of single note.
-
 data Dynamic =
   DiscreteDynamic DiscreteDynamicValue
   | FractionalDynamic [(DiscreteDynamicValue, Int)] deriving (Ord, Eq, Show)
@@ -137,10 +123,11 @@ data ScoreControls =
     , scoreTempos        :: [(Tempo, Rhythm)]
     } deriving (Show)
            
--- | VoiceControls
+-- | VoiceControls:  order dependent!  DynamicControl
+--   must be last to satisfy Lilypond parse of fractional
+--   dynamic.
 data VoiceControl =
-  DynamicControl Dynamic
-  | BalanceControl Balance
+  BalanceControl Balance
   | PanControl Pan
   | ArticulationControl Articulation
   | TextControl String
@@ -148,6 +135,7 @@ data VoiceControl =
   | AccentControl Accent
   | KeySignatureControl KeySignature
   | TimeSignatureControl TimeSignature
+  | DynamicControl Dynamic
   deriving (Ord, Eq, Show)
                                   
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.

@@ -47,6 +47,17 @@ fjDynamicss' = (map . map) (DynamicControl . DiscreteDynamic) fjDynamicss
 fjDynamicsSets :: [Set.Set VoiceControl]
 fjDynamicsSets = map Set.fromList fjDynamicss'
 
+dynamicssPt1', dynamicssPt2', dynamicssPt3', dynamicssPt4', fjDynamicss'' :: [[Dynamic]]
+dynamicssPt1' = [[DiscreteDynamic Piano, DiscreteDynamic Crescendo],[],[DiscreteDynamic Forte], [DiscreteDynamic Piano]]
+dynamicssPt2' = [[DiscreteDynamic MezzoPiano, DiscreteDynamic Crescendo],[],[DiscreteDynamic Fortissimo]]
+dynamicssPt3' = [[DiscreteDynamic Forte, DiscreteDynamic Decrescendo],[],[],[],[],[DiscreteDynamic Piano]]
+dynamicssPt4' = [[DiscreteDynamic MezzoForte, DiscreteDynamic Decrescendo],[],[DiscreteDynamic Piano]]
+fjDynamicss'' = dynamicssPt1' ++ dynamicssPt1' ++ dynamicssPt2' ++ dynamicssPt2' ++ dynamicssPt3' ++ dynamicssPt3' ++ dynamicssPt4' ++ dynamicssPt4'
+fjDynamicss''' :: [[VoiceControl]]
+fjDynamicss''' = (map . map) DynamicControl fjDynamicss''
+fjDynamicsSets' :: [Set.Set VoiceControl]
+fjDynamicsSets' = map Set.fromList fjDynamicss'''
+
 articulationsPt1, articulationsPt2, articulationsPt3, articulationsPt4, fjArticulations :: [VoiceControl]
 articulationsPt1 = [ArticulationControl Staccato,ArticulationControl Staccato,ArticulationControl Tenuto,ArticulationControl Marcato]
 articulationsPt2 = [ArticulationControl Staccato,ArticulationControl Staccato,ArticulationControl Portato]
@@ -58,7 +69,7 @@ fjArticulationsSets = map Set.singleton fjArticulations
 
 -- Combine fjAccents and fjArticulations into fjControls which is list of Set.Set composed of two controls each.
 fjControls :: [Set.Set VoiceControl]
-fjControls = zipWith3 (\accents dynamics articulations -> Set.unions [accents, dynamics, articulations]) fjAccentsSets fjDynamicsSets fjArticulationsSets
+fjControls = zipWith3 (\accents dynamics articulations -> Set.unions [accents, dynamics, articulations]) fjAccentsSets fjDynamicsSets' fjArticulationsSets
 
 -- Want a list of sets, where each set is per note
 fjIxNotes :: [IndexedNote]
