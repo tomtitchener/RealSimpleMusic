@@ -161,10 +161,16 @@ For program examples generally, see the files in `./tests`, including
 
 ### TBD:
 
+#### Bugs
+
+* Midi synthesis of fractional dynamics starts crescendo, never
+  renders decrescendo when the fractional dynamic is crescendo up,
+  decrescendo down.
+* Midi synthesis of fractional dynamics collapses a series of discrete
+  dynamics into simultaneous dynamic events.
+
 #### Unfinished Business
 
-* Fractional dynamics sequencing:  a fractional dynamic with an
-  initial discrete dynamic may terminate a crescendo or decrescendo.
 * Fractional Pan.
 * Set key signature per voice for score examples.
 

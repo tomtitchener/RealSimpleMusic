@@ -192,6 +192,13 @@ renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f"
 -- e.g. from {s2\ff\> s1\p\< s2\ff}, just "s2\ff\> ", s1\p\< ", or "s2\ff ".
 -- Buffer 0 duration events to follow space keyword for first non-zero duration event.
 -- Not allowed to have two 0 duration events in a row.
+-- Note that FractionalDynamic cannot end with zero-duration event, e.g.:
+-- [(Crescendo,1),(Fortissimo,0),(Decrescendo,2),(Piano,0)].  Just like it'll
+-- have to be ok to terminate a discrete, continuous dynamic with a fractional
+-- dynamic that begins with a non-continuous, discrete value, it'll also be ok
+-- to terminate a continuous, discrete dynamic that concludes a fractional dynamic
+-- with a new non-continuous discrete dynamic, or, I suppose, with a new fractional
+-- dynamic that begins with a non-continuous discrete dynamic.  Ugh.
 renderFractionalDynamic' :: Rational -> Builder -> (DiscreteDynamicValue, Int) -> (Builder,Builder)
 renderFractionalDynamic' unit oldRenderedDynamic (dynamic, fraction) 
   | fraction == 0 && notNothing oldRenderedDynamic = error errorText
@@ -204,9 +211,11 @@ renderFractionalDynamic' unit oldRenderedDynamic (dynamic, fraction)
     renderedFraction    = renderSpace (Rhythm (unit * (fromIntegral fraction))) <> oldRenderedDynamic <> newRenderedDynamic <> renderedSpace
 
 renderFractionalDynamic :: Rational -> (DiscreteDynamicValue, Int) -> State Builder Builder
-renderFractionalDynamic unit fraction = 
+renderFractionalDynamic unit fraction =
   get >>= \old -> let (old', new) = renderFractionalDynamic' unit old fraction in put old' >> return new
 
+-- | Ignore trailing zero-duration event, e.g. termination of crescendo or decrescendo.
+--   Lilypond doesn't allow e.g. {s1*2\< s2\ff\>\p}, which seems like a bug.
 renderFractionalDynamics :: Rhythm -> [(DiscreteDynamicValue, Int)] -> Builder
 renderFractionalDynamics (Rhythm rhythm) fractions =
   renderedOpen <> mconcat renderedFractions <> renderedClose

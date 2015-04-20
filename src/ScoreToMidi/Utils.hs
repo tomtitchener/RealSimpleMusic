@@ -317,18 +317,25 @@ midiNoteToDiscreteEvents ch (MidiRest rhythm controls) =
      put $ rest + rhythmToDuration rhythm
      return $ (EventList.fromPairList . map durEventToNumEvent) (genMidiDiscreteControlEvents ch controls)
 
-equalExplicitDynamic :: VoiceControl -> Bool
-equalExplicitDynamic (DynamicControl (DiscreteDynamic Pianissimo)) = True 
-equalExplicitDynamic (DynamicControl (DiscreteDynamic Piano))      = True 
-equalExplicitDynamic (DynamicControl (DiscreteDynamic MezzoPiano)) = True 
-equalExplicitDynamic (DynamicControl (DiscreteDynamic MezzoForte)) = True 
-equalExplicitDynamic (DynamicControl (DiscreteDynamic Forte))      = True 
-equalExplicitDynamic (DynamicControl (DiscreteDynamic Fortissimo)) = True
-equalExplicitDynamic _                                             = False
+equalExplicitDiscreteDynamic :: DiscreteDynamicValue -> Bool
+equalExplicitDiscreteDynamic Pianissimo = True 
+equalExplicitDiscreteDynamic Piano      = True 
+equalExplicitDiscreteDynamic MezzoPiano = True 
+equalExplicitDiscreteDynamic MezzoForte = True 
+equalExplicitDiscreteDynamic Forte      = True 
+equalExplicitDiscreteDynamic Fortissimo = True
+equalExplicitDiscreteDynamic _            = False
 
+equalExplicitDynamic :: VoiceControl -> Bool
+equalExplicitDynamic (DynamicControl (DiscreteDynamic val)) = equalExplicitDiscreteDynamic val
+equalExplicitDynamic _                                      = False
 equalFractionalDynamic :: VoiceControl -> Bool
 equalFractionalDynamic (DynamicControl (FractionalDynamic _)) = True
-equalFractionalDynamic _                                      = False                                                   
+equalFractionalDynamic _                                      = False
+
+fractionalDynamicToDiscreteDynamics :: VoiceControl -> [DiscreteDynamicValue]
+fractionalDynamicToDiscreteDynamics (DynamicControl (FractionalDynamic fractions)) = map fst fractions
+fractionalDynamicToDiscreteDynamics _                                              = []
 
 -- | Distribute control val 'd' over count 'c' buckets.
 --   Sum of values in each bucket must equal 'd'.  Smaller
@@ -426,7 +433,6 @@ genMidiContinuousDynamicEvents synth ch rest dur start stop  =
     synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) (rest:durSpan) (dynamicToVolume start:volSpan)
 
 -- Assume:  alternate discrete, crescendo/decrescendo, discrete (enforced before and at tail), sequential cresc/decresc are not allowed.
--- Allow: sequential discrete, means sudden change in dynamic.
 updateFractionalControlContext :: ChannelMsg.Channel -> Integer -> (DiscreteDynamicValue, Int) -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
 updateFractionalControlContext _ unit (Crescendo, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
   (MidiControlContext ControlBufferingUp dynamic rest (Dur (unit * toInteger fraction)), EventList.empty)
@@ -440,11 +446,11 @@ updateFractionalControlContext _ _ (Decrescendo, _) (MidiControlContext ControlB
   error "updateFractionalControlContext sequential decrescendos"
 updateFractionalControlContext _ _ (Crescendo, _) (MidiControlContext ControlBufferingDown _ _ _) =
   error "updateFractionalControlContext sequential decrescendo and crescendo"
-updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
+updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingNone _ rest _) =
   (controlContext, discreteEvents)
   where
-    controlContext = MidiControlContext ControlBufferingNone target (Dur 0) (Dur (unit * toInteger fraction))
-    discreteEvents = EventList.singleton ((fromInteger . getDur) rest) (genMidiVolumeEvent chan (dynamicToVolume dynamic))
+    controlContext = MidiControlContext ControlBufferingNone target (Dur (unit * toInteger fraction)) (Dur 0) 
+    discreteEvents = EventList.singleton ((fromInteger . getDur) rest) (genMidiVolumeEvent chan (dynamicToVolume target))
 updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingUp dynamic rest len) =
   (controlContext, EventList.append crescendoEvents targetDynamicEvents)
   where
@@ -474,10 +480,11 @@ bindFractionalDynamicVars fractions rhythm rest =
     rest'   = rest + Dur remain
     
 -- Generate event list for rhythm length for midiNote using dynamics from FractionalDynamic, don't forget to include the carried-over rest.
-genMidiContinuousFractionalDynamicEvents :: ChannelMsg.Channel -> Duration -> Rhythm -> VoiceControl -> DiscreteDynamicValue -> (EventList.T Event.ElapsedTime Event.T, DiscreteDynamicValue)
+-- BUG:  only carrying target dynamic out of contet answered by runState.  What about rest?  Shouldn't this answer entire context?
+genMidiContinuousFractionalDynamicEvents :: ChannelMsg.Channel -> Duration -> Rhythm -> VoiceControl -> DiscreteDynamicValue -> (EventList.T Event.ElapsedTime Event.T, DiscreteDynamicValue, Duration)
 genMidiContinuousFractionalDynamicEvents chan rest rhythm (DynamicControl (FractionalDynamic fractions)) dynamic
   | target == Crescendo || target == Decrescendo = error $ "genMidiFractionalDynamicEvents concluding fractional dynamic is " ++ show target
-  | otherwise = (EventList.append startEvents (EventList.concat endEvents), target)
+  | otherwise = (EventList.append startEvents (EventList.concat endEvents), target, rest'')
   where
     (unit, rest')              = bindFractionalDynamicVars fractions rhythm rest
     startEvent                 = genMidiVolumeEvent chan (dynamicToVolume dynamic)
@@ -485,6 +492,7 @@ genMidiContinuousFractionalDynamicEvents chan rest rhythm (DynamicControl (Fract
     startContext               = MidiControlContext ControlBufferingNone dynamic (Dur 0) (Dur 0)
     (endEvents, targetContext) = runState (traverse (fractionalDynamicToContinuousDynamicEvents chan unit) fractions) startContext
     target                     = ctrlCtxtCtrl targetContext
+    rest''                     = ctrlCtxtRest targetContext
 genMidiContinuousFractionalDynamicEvents _ _ _ (DynamicControl (DiscreteDynamic dynamic)) _ =
   error $ "genMidiContinuousFractionalDynamicEvents called with discrete dynamic " ++ show dynamic
 genMidiContinuousFractionalDynamicEvents _ _ _ control _ =
@@ -513,35 +521,40 @@ bindDynamicControlVars midiNote dynamic
 -- Isolated discrete controls are emitted separately, see genMidiDiscreteEvents and genMidiDiscreteControlEvents.
 updateDynamicControlContext :: ChannelMsg.Channel -> MidiNote -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingNone dynamic rest len)
+  | not (Set.null ctrlsFract)                                = (MidiControlContext ControlBufferingNone target' rest' (Dur 0), fractionalEvents)
   | Set.null ctrlsCresc       && Set.null ctrlsDecresc       = (MidiControlContext ControlBufferingNone target (rest + rhythmToDuration rhythm) len, EventList.empty)
   | not (Set.null ctrlsCresc) && Set.null ctrlsDecresc       = (MidiControlContext ControlBufferingUp   target rest (len + rhythmToDuration rhythm), EventList.empty)
   | Set.null ctrlsCresc       && not (Set.null ctrlsDecresc) = (MidiControlContext ControlBufferingDown target rest (len + rhythmToDuration rhythm), EventList.empty)
-  | not (Set.null ctrlsFract)                                = (MidiControlContext ControlBufferingNone target' (Dur 0) (Dur 0), fractionalEvents)
   | otherwise                                                = error $ "updateDynamicControlContext note with both cresc and decresc controls " ++ show controls
   where
     (rhythm, controls, _, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
-    (fractionalEvents, target')                                         = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
--- TBD: what if fractional dynamic terminates crescendo?  Snatch first item from fractional dynamic as terminating dynamic for crescendo,
--- error if it's another crescendo or decrescendo.  Then compute list of fractional events and append those to ones created for crescendo.
+    (fractionalEvents, target', rest')                                  = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp dynamic rest len) 
-  | not (Set.null ctrlsCresc)   = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsDecresc) = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
--- | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
-  | isExplDyn                   = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), crescendoEvents)
-  | otherwise                   = (MidiControlContext ControlBufferingUp   dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
+  | not (Set.null ctrlsCresc)                     = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
+  | not (Set.null ctrlsDecresc)                   = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
+  | not (Set.null ctrlsFract) && not isOkFractDyn = error $ "updateDynamicControlContext fractional dynamic does not start with explicit dynamic for MidiNote " ++ show midiNote
+  | isOkFractDyn                                  = (MidiControlContext ControlBufferingNone target' rest' (Dur 0), fractionalEvents)
+  | isExplDyn                                     = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), crescendoEvents)
+  | otherwise                                     = (MidiControlContext ControlBufferingUp   dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
-    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, _, target) = bindDynamicControlVars midiNote dynamic
-    crescendoEvents                                             = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
--- TBD: what if fractional dynamic terminates decrescendo?  See re: crescendo, above.
+    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
+    fractionalDiscreteDynamics                                           = if not (Set.null ctrlsFract) then fractionalDynamicToDiscreteDynamics (Set.elemAt 0 ctrlsFract) else []
+    isOkFractDyn                                                         = not (null fractionalDiscreteDynamics) && equalExplicitDiscreteDynamic (fractionalDiscreteDynamics !! 0)
+    (fractionalEvents, target', rest')                                   = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
+    crescendoEvents                                                      = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len)
-  | not (Set.null ctrlsCresc)   = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
-  | not (Set.null ctrlsDecresc) = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
--- | not (Set.null ctrlsFract)   = error $ "updateDynamicControlContext overlapping fractional dynamic for MidiNote " ++ show midiNote
-  | isExplDyn                   = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), decrescendoEvents)
-  | otherwise                   = (MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
+  | not (Set.null ctrlsCresc)                     = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
+  | not (Set.null ctrlsDecresc)                   = error $ "updateDynamicControlContext overlapping decrescendo for MidiNote " ++ show midiNote
+  | not (Set.null ctrlsFract) && not isOkFractDyn = error $ "updateDynamicControlContext fractional dynamic does not start with explicit dynamic for MidiNote " ++ show midiNote
+  | isOkFractDyn                                  = (MidiControlContext ControlBufferingNone target' rest' (Dur 0), fractionalEvents)
+  | isExplDyn                                     = (MidiControlContext ControlBufferingNone target  (rhythmToDuration rhythm) (Dur 0), decrescendoEvents)
+  | otherwise                                     = (MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
-    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, _, target) = bindDynamicControlVars midiNote dynamic
-    decrescendoEvents                                           = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
+    (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
+    fractionalDiscreteDynamics                                           = if not (Set.null ctrlsFract) then fractionalDynamicToDiscreteDynamics (Set.elemAt 0 ctrlsFract) else []
+    isOkFractDyn                                                         = not (null fractionalDiscreteDynamics) && equalExplicitDiscreteDynamic (fractionalDiscreteDynamics !! 0)
+    (fractionalEvents, target', rest')                                   = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
+    decrescendoEvents                                                    = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
 
 midiNoteToContinuousDynamicEvents :: ChannelMsg.Channel -> MidiNote -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
 midiNoteToContinuousDynamicEvents chan midiNote =
