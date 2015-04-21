@@ -69,6 +69,20 @@ data DiscreteDynamicValue =
   | Crescendo
   | Decrescendo deriving (Bounded, Enum, Show, Ord, Eq)
 
+-- | Special rules for FractionalDynamic pairs:
+--   * Int in second half is proportion, relative to
+--     sum of all other proportions.  So a list 1,1,1,1
+--     turns into 25% of total rhythm per discrete dynamic.
+--   * Leading crescendo or decrescendo picks up running
+--     dynamic.
+--   * Penultimate crescendo or decrescendo must terminate
+--     with zero-unit, explicit dynamic (Pianissimo..Fortissimo).
+--   * Zero-unit initial dynamic overrides running dynamic to
+--     start from a new dynamic.
+--   Lilypond lacks encoding of trailing fractional dynamic.
+--   You can't indicate a decrescendo or a crescendo to one
+--   dynamic and have a new dynamic for the note that follows.
+--   For now, the Lilypond conversion drops trailing dynamics.
 data Dynamic =
   DiscreteDynamic DiscreteDynamicValue
   | FractionalDynamic [(DiscreteDynamicValue, Int)] deriving (Ord, Eq, Show)

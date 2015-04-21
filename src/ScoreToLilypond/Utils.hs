@@ -208,7 +208,7 @@ renderFractionalDynamic' unit oldRenderedDynamic (dynamic, fraction)
     notNothing rendered = toLazyByteString rendered /= toLazyByteString renderedNothing
     newRenderedDynamic  = renderedDynamicValues !! fromEnum dynamic 
     errorText           = "renderFractionalDynamic sequential zero duration dynamics " ++ show (toLazyByteString oldRenderedDynamic) ++ " , " ++ show dynamic
-    renderedFraction    = renderSpace (Rhythm (unit * (fromIntegral fraction))) <> oldRenderedDynamic <> newRenderedDynamic <> renderedSpace
+    renderedFraction    = renderSpace (Rhythm (unit * fromIntegral fraction)) <> oldRenderedDynamic <> newRenderedDynamic <> renderedSpace
 
 renderFractionalDynamic :: Rational -> (DiscreteDynamicValue, Int) -> State Builder Builder
 renderFractionalDynamic unit fraction =
@@ -221,7 +221,7 @@ renderFractionalDynamics (Rhythm rhythm) fractions =
   renderedOpen <> mconcat renderedFractions <> renderedClose
   where
     total             = sum $ map snd fractions
-    unit              = rhythm / (fromIntegral total)
+    unit              = rhythm / fromIntegral total
     renderedFractions = evalState (traverse (renderFractionalDynamic unit) fractions) renderedNothing
     
 -- | Match of enum values to list above.  First Bool is flag to tell if
@@ -405,7 +405,7 @@ noteToControls (PercussionNote _ controls)   = controls
 
 renderNoteFrame :: (Bool, Bool) -> Note -> (Bool, Bool, Builder)
 renderNoteFrame pr note =
-  if (containsFractionalDynamicControl (noteToControls note))
+  if containsFractionalDynamicControl (noteToControls note)
   then
     (c, p, renderedOpenArrow <> renderedNote <> renderedCloseArrow)
   else

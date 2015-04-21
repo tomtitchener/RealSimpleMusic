@@ -36,9 +36,9 @@ tests =
   , testProperty       "major scale"                       propMajorScaleId
   , testProperty       "natural minor scale"               propNaturalMinorScaleId
   -- ScoreToMidi
-  , testCase           "mapVoicessToChannelss"             testMapVoicessToChannelss
-  , testCase           "mapManyVoicessToChannelss"         testMapManyVoicessToChannelss
-  , testCase           "mapVoicessToPercussionChannelss"   testMapVoicessToPercussionChannelss
+  , testCase           "mapVoicessToDifferentChannelss"    testMapVoicessToDifferentChannelss
+  , testCase           "mapManyVoicessToDifferentChannelss"testMapManyVoicessToDifferentChannelss
+  , testCase           "mapVoicessToUniformChannelss"      testMapVoicessToUniformChannelss
   , testProperty       "testSynthesizeDurationSpan"        testSynthesizeDurationSpan
   , testProperty       "testSynthesizeCrescendoSpan"       testSynthesizeCrescendoSpan
   , testProperty       "testSynthesizeDecrescendoSpan"     testSynthesizeDecrescendoSpan

@@ -468,8 +468,6 @@ fractionalDynamicToContinuousDynamicEvents :: ChannelMsg.Channel -> Integer -> (
 fractionalDynamicToContinuousDynamicEvents chan unit fraction =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateFractionalControlContext chan unit fraction ctrlCtxt in put ctrlCtxt' >> return events
 
--- TBD: what's the best place for the remainder?  I put it with the rest, which goes at the
--- beginning by the caller, so there's a chance the fractional dynamics are off by that value.
 bindFractionalDynamicVars :: [(DiscreteDynamicValue, Int)] -> Rhythm -> Duration -> (Integer, Duration)
 bindFractionalDynamicVars fractions rhythm rest =
   (unit, rest')
@@ -480,7 +478,6 @@ bindFractionalDynamicVars fractions rhythm rest =
     rest'   = rest + Dur remain
     
 -- Generate event list for rhythm length for midiNote using dynamics from FractionalDynamic, don't forget to include the carried-over rest.
--- BUG:  only carrying target dynamic out of contet answered by runState.  What about rest?  Shouldn't this answer entire context?
 genMidiContinuousFractionalDynamicEvents :: ChannelMsg.Channel -> Duration -> Rhythm -> VoiceControl -> DiscreteDynamicValue -> (EventList.T Event.ElapsedTime Event.T, DiscreteDynamicValue, Duration)
 genMidiContinuousFractionalDynamicEvents chan rest rhythm (DynamicControl (FractionalDynamic fractions)) dynamic
   | target == Crescendo || target == Decrescendo = error $ "genMidiFractionalDynamicEvents concluding fractional dynamic is " ++ show target
@@ -503,7 +500,6 @@ dynamicFromControl (DynamicControl (DiscreteDynamic dynamic)) = dynamic
 dynamicFromControl control = error $ "accentFromControl expected Dynamic, got " ++ show control
 
 -- | Refactor
--- TBD: isolate target from either ctrlsDyn or ctrlsFract, 
 bindDynamicControlVars :: MidiNote -> DiscreteDynamicValue -> (Rhythm, Set.Set VoiceControl, Bool, Set.Set VoiceControl, Set.Set VoiceControl, Set.Set VoiceControl, DiscreteDynamicValue)
 bindDynamicControlVars midiNote dynamic
   | Set.size ctrlsDyn > 1 = error $ "bindDynamicControlVars count of explicit dynamic controls " ++ show (Set.size ctrlsDyn) ++ " > 1"
@@ -516,6 +512,15 @@ bindDynamicControlVars midiNote dynamic
     ctrlsDecresc  = Set.filter (== DynamicControl (DiscreteDynamic Decrescendo)) controls
     ctrlsFract    = Set.filter equalFractionalDynamic controls
     target        = if Set.null ctrlsDyn then dynamic else dynamicFromControl $ Set.elemAt 0 ctrlsDyn
+
+-- | Refactor
+bindFractionalDynamicControlVars :: ChannelMsg.Channel -> Duration -> Rhythm -> DiscreteDynamicValue -> Set.Set VoiceControl -> (Bool, DiscreteDynamicValue, Duration, EventList.T Event.ElapsedTime Event.T)
+bindFractionalDynamicControlVars chan rest rhythm dynamic ctrlsFract  = 
+  (isOkFractDyn, target, rest', fractionalEvents)
+  where
+    fractionalDiscreteDynamics        = if not (Set.null ctrlsFract) then fractionalDynamicToDiscreteDynamics (Set.elemAt 0 ctrlsFract) else []
+    isOkFractDyn                      = not (null fractionalDiscreteDynamics) && equalExplicitDiscreteDynamic (head fractionalDiscreteDynamics)
+    (fractionalEvents, target, rest') = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
 
 -- NB:  add to EventList only stream of control messages approximating continous change!
 -- Isolated discrete controls are emitted separately, see genMidiDiscreteEvents and genMidiDiscreteControlEvents.
@@ -538,9 +543,7 @@ updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingUp
   | otherwise                                     = (MidiControlContext ControlBufferingUp   dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
     (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
-    fractionalDiscreteDynamics                                           = if not (Set.null ctrlsFract) then fractionalDynamicToDiscreteDynamics (Set.elemAt 0 ctrlsFract) else []
-    isOkFractDyn                                                         = not (null fractionalDiscreteDynamics) && equalExplicitDiscreteDynamic (fractionalDiscreteDynamics !! 0)
-    (fractionalEvents, target', rest')                                   = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
+    (isOkFractDyn, target', rest', fractionalEvents)                     = bindFractionalDynamicControlVars chan rest rhythm dynamic ctrlsFract
     crescendoEvents                                                      = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
 updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDown dynamic rest len)
   | not (Set.null ctrlsCresc)                     = error $ "updateDynamicControlContext overlapping crescendo for MidiNote " ++ show midiNote
@@ -551,9 +554,7 @@ updateDynamicControlContext chan midiNote (MidiControlContext ControlBufferingDo
   | otherwise                                     = (MidiControlContext ControlBufferingDown dynamic rest (len + rhythmToDuration rhythm), EventList.empty)
   where
     (rhythm, _, isExplDyn, ctrlsCresc, ctrlsDecresc, ctrlsFract, target) = bindDynamicControlVars midiNote dynamic
-    fractionalDiscreteDynamics                                           = if not (Set.null ctrlsFract) then fractionalDynamicToDiscreteDynamics (Set.elemAt 0 ctrlsFract) else []
-    isOkFractDyn                                                         = not (null fractionalDiscreteDynamics) && equalExplicitDiscreteDynamic (fractionalDiscreteDynamics !! 0)
-    (fractionalEvents, target', rest')                                   = genMidiContinuousFractionalDynamicEvents chan rest rhythm (Set.elemAt 0 ctrlsFract) dynamic
+    (isOkFractDyn, target', rest', fractionalEvents)                     = bindFractionalDynamicControlVars chan rest rhythm dynamic ctrlsFract
     decrescendoEvents                                                    = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
 
 midiNoteToContinuousDynamicEvents :: ChannelMsg.Channel -> MidiNote -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
@@ -856,8 +857,8 @@ validateTempoPair (tempo, rhythm) = (validateTempo tempo, rhythm)
 --   It should contain all meta-events of the types Time Signature, and Set Tempo.
 --   The meta-events Sequence/Track Name, Sequence Number, Marker, and SMTPE Offset
 --   should also be on the first track of a Format 1 file.
-scoreToMetaEvents :: Score -> EventList.T Event.ElapsedTime Event.T
-scoreToMetaEvents (Score _ _ (ScoreControls keySignature timeSignature tempos) _) = 
+controlsToMetaEvents :: ScoreControls -> EventList.T Event.ElapsedTime Event.T
+controlsToMetaEvents (ScoreControls keySignature timeSignature tempos) = 
   EventList.merge controlEventList tempoEventList
   where
     tempos'            = map validateTempoPair tempos
@@ -867,7 +868,7 @@ scoreToMetaEvents (Score _ _ (ScoreControls keySignature timeSignature tempos) _
     tempoEventList     = EventList.concat $ evalState (traverse tempoToContinuousTempoEvents tempos') startTempoControlContext
     controlEvents      = prefixEvent : keySignatureEvent : [timeSignatureEvent]
     controlEventList   = EventList.fromPairList $ map durEventToNumEvent controlEvents
-    
+
 -- | Given title, voice, and part number, generate
 --   title, convert voice to create midi file byte
 --   string and write file.
@@ -877,7 +878,7 @@ scoreAndMidiVoiceToMidiFile score voice@(MidiVoice (Instrument instr) _ _) part 
   where
     title      = scoreTitle score
     fileName   = title ++ "-" ++ instr ++ "-" ++ show part ++ ".mid"
-    metaEvents = scoreToMetaEvents score 
+    metaEvents = controlsToMetaEvents $ scoreControls score 
     midiFile   = midiVoiceToMidiFile metaEvents voice
 
 -- | Given title and list of voices, create midi file per voice.
@@ -919,8 +920,8 @@ collectVoicesByInstrumentWithPercussionLast voices =
 --   using drum channel for percussion voices, otherwise channel
 --   zero.  Use when emitting Midi file per voice to be assembled
 --   later on, e.g. with Logic or GarageBand.
-mapVoicessToPercussionChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
-mapVoicessToPercussionChannelss voicess = 
+mapVoicessToUniformChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
+mapVoicessToUniformChannelss voicess = 
   zipWith voiceAndLenToChans (map head voicess) (map length voicess)
   where
     voiceAndLenToChans voice len =
@@ -933,67 +934,6 @@ voicesToNotMidiInstruments voices =
   filter (not . isMidiInstrumentOrPercussion) $ map voiceInstrument voices
   where
     isMidiInstrumentOrPercussion instr = isMidiInstrument instr || isMidiPercussionInstrument instr
-
-{--
-  RealSimpleMusic API: scoreToMidiFiles
---}
-
--- | Refactor:  always called when generating a single file with multiple channels.
-bindScoreToVoicessAndChannelss :: Score -> ([Instrument], [[Voice]])
-bindScoreToVoicessAndChannelss score =
-  (notMidiInstruments, voicess)
-  where
-    voices             = scoreVoices score
-    notMidiInstruments = voicesToNotMidiInstruments voices
-    voicess            = collectVoicesByInstrumentWithPercussionLast voices
-    
--- | Collect list of voices into list of list
---   of voices with same instrument, then
---   create a parallel list of list of Midi
---   channels for each voices and use the
---   title, list of list of voices, and list
---   of list of channels to create individual
---   Midi files, one per voice, with name e.ag.
---   "<title>-<instrument>-1.mid".
-scoreToMidiFiles :: Score -> IO ()
-scoreToMidiFiles score 
-  | not (null notMidiInstruments) = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
-  | otherwise                     = zipWithM_ (scoreVoicesAndChannelsToMidiFiles score) voicess channelss
-  where
-    channelss                     = mapVoicessToPercussionChannelss voicess
-    (notMidiInstruments, voicess) = bindScoreToVoicessAndChannelss score
-
--- | Collect list of voices into list of list
---   of voices with same instrument, then
---   create a parallel list of list of the
---   same Midi channel for each voices and use 
---   the title, list of list of voices, and list
---   of list of channels to create as a Midi
---   file for each voice.  Unlimited by Midi
---   track count constraints.  But files must
---   be assembled one-by-one into editor like
---   Logic or GarageBand.
-scoreVoicessAndChannelssToByteString :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> LazyByteString.ByteString
-scoreVoicessAndChannelssToByteString score voicess channelss
-  | length voicess /= length channelss = error $ "scoreVoicessAndChannelssToByteString mismatched lengths voicess: " ++ show (length voicess) ++ " channelss: " ++ show (length channelss)
-  | null channelss                     = error "scoreVoicessAndChannelssToByteString empty channelss"
-  | null midiVoices                    = error "scoreVoicessAndChannelssToByteString empty midiVoicess"
-  | null voiceEventLists               = error "scoreVoicessAndChannelssToByteString empty voiceEventLists"
-  | null voicess                       = error "scoreVoicessAndChannelssToByteString empty voicess"
-  | otherwise                          = SaveFile.toByteString midiFile
-  where
-    midiVoices      = concat $ (zipWith . zipWith) voiceAndChannelToMidiVoice voicess channelss
-    voiceEventLists = map midiVoiceToEventList midiVoices
-    metaEvents      = scoreToMetaEvents score 
-    midiFile        = MidiFile.Cons MidiFile.Mixed standardTicks [EventList.merge metaEvents (foldl1 EventList.merge voiceEventLists)] 
-
-scoreVoicessAndChannelssToOneMidiFile :: Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> IO ()
-scoreVoicessAndChannelssToOneMidiFile score voicess channelss =
-  LazyByteString.writeFile fileName byteStream
-  where
-    title      = scoreTitle score
-    fileName   = title ++ ".mid"
-    byteStream = scoreVoicessAndChannelssToByteString score voicess channelss
 
 -- | For each Voice in [[Voice]] (given that Instrument is the same),
 --   for non-percussion voices, allocate the next Midi channel, else
@@ -1030,48 +970,77 @@ mapVoicessToUniqueChannelss voicess =
 --   is fewer than the maximum count of Midi channels, then allocate a new
 --   channel per voice (allowing for the traditional association of for the
 --   percussion channel).  Else, allocate unique channels per list of voice.
-mapVoicessToChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
-mapVoicessToChannelss voicess 
+mapVoicessToDifferentChannelss :: [[Voice]] -> [[ChannelMsg.Channel]]
+mapVoicessToDifferentChannelss voicess 
   | countAllVoices < maxMidiTrack = mapVoicessToUniqueChannelss voicess
   | otherwise                     = mapVoicessToRepeatedChannelss voicess
   where
     countAllVoices = sum $ map length voicess
-      
--- | Refactor:  convertScore always called when converting to single file.
-convertScore :: (Score -> [[Voice]] -> [[ChannelMsg.Channel]] -> a) -> Score -> a
-convertScore convert score 
-  | countVoices > maxMidiTrack      = error $ "convertScore, count of voices: " ++ show countVoices ++ " exceeds count of Midi channels: " ++ show maxMidiTrack
-  | not (null notMidiInstruments)   = error $ "convertScore, found non-midi instrument(s) " ++ show notMidiInstruments
-  | otherwise                       = convert score voicess channelss
-  where
-    countVoices                   = length voicess
-    channelss                     = mapVoicessToChannelss voicess
-    (notMidiInstruments, voicess) = bindScoreToVoicessAndChannelss score
-    
+
 {--
   RealSimpleMusic APIs: scoreToMidiFile, scoreToByteString (for test)
 --}
                                          
--- | Collect list of voices into list of list
---   of voices with same instrument, then
---   create a parallel list of list of Midi
---   channels for each voices and use the
---   title, list of list of voices, and list
---   of list of channels to create one Midi
---   file with all the voices together, name
---   e.g. "<title>.mid". Limited by Midi constraint
---   of 1 percussion track and 15 non-percussion
---   tracks.
-scoreToMidiFile :: Score -> IO ()
-scoreToMidiFile = convertScore scoreVoicessAndChannelssToOneMidiFile
+data MidiScore =
+  MidiScore
+  {
+    midiScoreTitle :: Title
+  , midiScoreComposer :: String
+  , midiScoreControls :: ScoreControls
+  , midiScoreVoices   :: [(Voice,ChannelMsg.Channel)]
+  } deriving (Show)
 
--- | Short-circuit write to MidiFile with output to byte string for test.
+voiceChannelPairToMidiVoice :: (Voice, ChannelMsg.Channel) -> MidiVoice
+voiceChannelPairToMidiVoice (Voice instr notes, channel) =
+  MidiVoice instr channel midiNotes
+  where
+    midiNotes = map (noteToMidiNote instr) notes
+
+midiScoreToMidiTracks :: MidiScore -> [MidiFile.Track]
+midiScoreToMidiTracks (MidiScore _ _ controls voices) =
+  metaEvents:voiceEventLists
+  where
+    midiVoices      = map voiceChannelPairToMidiVoice voices
+    voiceEventLists = map midiVoiceToEventList midiVoices
+    metaEvents      = controlsToMetaEvents controls
+
+scoreToMidiScore :: ([[Voice]] -> [[ChannelMsg.Channel]]) -> Score-> MidiScore
+scoreToMidiScore voicessToChannelssMapper (Score title composer controls voices) 
+  | not (null notMidi) = error $ "scoreToMidiScore, found non-midi instrument(s) " ++ show notMidi
+  | otherwise          = MidiScore title composer controls $ concat (zipWith zip voicess channelss)
+  where
+    voicess   = collectVoicesByInstrumentWithPercussionLast voices
+    channelss = voicessToChannelssMapper voicess
+    notMidi   = voicesToNotMidiInstruments voices
+    
 scoreToByteString :: Score -> LazyByteString.ByteString
-scoreToByteString = convertScore scoreVoicessAndChannelssToByteString
+scoreToByteString = SaveFile.toByteString . scoreToMidiFileT
 
+tracksToMidiFileT :: [MidiFile.Track] -> MidiFile.T
+tracksToMidiFileT = MidiFile.Cons MidiFile.Parallel standardTicks
+
+scoreToMidiFileT :: Score -> MidiFile.T
+scoreToMidiFileT score = tracksToMidiFileT $ (midiScoreToMidiTracks . scoreToMidiScore mapVoicessToDifferentChannelss) score
+
+scoreToMidiFile :: Score -> IO ()
+scoreToMidiFile score@(Score title _ _ _) = SaveFile.toFile (title ++ ".mid") (scoreToMidiFileT score)
+
+scoreToMidiFiles :: Score -> IO ()
+scoreToMidiFiles score@(Score title _ _ _) =
+  zipWithM_ SaveFile.toFile titles files
+  where
+    titles      = [title ++ show n ++ ".mid" | n <- [(1::Integer)..]]
+    tracks      = (midiScoreToMidiTracks . scoreToMidiScore mapVoicessToUniformChannelss) score
+    metaTrack   = head tracks
+    voiceTracks = tail tracks
+    files       = map (tracksToMidiFileT . (metaTrack:) . replicate 1) voiceTracks
+                                            
 {--
 bash$ cabal repl
 λ: :m +Sound.MIDI.General
 λ: Sound.MIDI.General.drums
 [AcousticBassDrum,BassDrum1,SideStick,AcousticSnare,HandClap,ElectricSnare,LowFloorTom,ClosedHiHat,HighFloorTom,PedalHiHat,LowTom,OpenHiHat,LowMidTom,HiMidTom,CrashCymbal1,HighTom,RideCymbal1,ChineseCymbal,RideBell,Tambourine,SplashCymbal,Cowbell,CrashCymbal2,Vibraslap,RideCymbal2,HiBongo,LowBongo,MuteHiConga,OpenHiConga,LowConga,HighTimbale,LowTimbale,HighAgogo,LowAgogo,Cabasa,Maracas,ShortWhistle,LongWhistle,ShortGuiro,LongGuiro,Claves,HiWoodBlock,LowWoodBlock,MuteCuica,OpenCuica,MuteTriangle,OpenTriangle]
+
+*RealSimpleMusic Sound.MIDI.General> instrumentNames
+["Acoustic Grand Piano","Bright Acoustic Piano","Electric Grand Piano","Honky Tonk Piano","Rhodes Piano","Chorused Piano","Harpsichord","Clavinet","Celesta","Glockenspiel","Music Box","Vibraphone","Marimba","Xylophone","Tubular Bells","Dulcimer","Hammond Organ","Percussive Organ","Rock Organ","Church Organ","Reed Organ","Accordion","Harmonica","Tango Accordion","Acoustic Guitar (nylon)","Acoustic Guitar (steel)","Electric Guitar (jazz)","Electric Guitar (clean)","Electric Guitar (muted)","Overdriven Guitar","Distortion Guitar","Guitar Harmonics","Acoustic Bass","Electric Bass (fingered)","Electric Bass (picked)","Fretless Bass","Slap Bass 1","Slap Bass 2","Synth Bass 1","Synth Bass 2","Violin","Viola","Cello","Contrabass","Tremolo Strings","Pizzicato Strings","Orchestral Harp","Timpani","String Ensemble 1","String Ensemble 2","Synth Strings 1","Synth Strings 2","Choir Aahs","Voice Oohs","Synth Voice","Orchestra Hit","Trumpet","Trombone","Tuba","Muted Trumpet","French Horn","Brass Section","Synth Brass 1","Synth Brass 2","Soprano Sax","Alto Sax","Tenor Sax","Baritone Sax","Oboe","Bassoon","English Horn","Clarinet","Piccolo","Flute","Recorder","Pan Flute","Blown Bottle","Shakuhachi","Whistle","Ocarina","Lead 1 (square)","Lead 2 (sawtooth)","Lead 3 (calliope)","Lead 4 (chiff)","Lead 5 (charang)","Lead 6 (voice)","Lead 7 (fifths)","Lead 8 (bass+lead)","Pad 1 (new age)","Pad 2 (warm)","Pad 3 (polysynth)","Pad 4 (choir)","Pad 5 (bowed)","Pad 6 (metallic)","Pad 7 (halo)","Pad 8 (sweep)","FX1 (train)","FX2 (soundtrack)","FX3 (crystal)","FX4 (atmosphere)","FX5 (brightness)","FX6 (goblins)","FX7 (echoes)","FX8 (sci-fi)","Sitar","Banjo","Shamisen","Koto","Kalimba","Bagpipe","Fiddle","Shanai","Tinkle Bell","Agogo","Steel Drums","Woodblock","Taiko Drum","Melodic Drum","Synth Drum","Reverse Cymbal","Guitar Fret Noise","Breath Noise","Seashore","Bird Tweet","Telephone Ring","Helicopter","Applause","Gunshot"]
 --}

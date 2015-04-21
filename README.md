@@ -161,34 +161,16 @@ For program examples generally, see the files in `./tests`, including
 
 ### TBD:
 
-#### Bugs
-
-* Midi synthesis of fractional dynamics starts crescendo, never
-  renders decrescendo when the fractional dynamic is crescendo up,
-  decrescendo down.
-* Midi synthesis of fractional dynamics collapses a series of discrete
-  dynamics into simultaneous dynamic events.
-
-#### Unfinished Business
-
-* Fractional Pan.
-* Set key signature per voice for score examples.
-
 #### Cleanup:
 
 * Switch from Set to List for Note, IndexedNote, MidiNote.
 * Validate rhythm denominator is power of 2 or hide type and add
   constructor that does validation.
 
-#### Tests:
-
-* Fractional dynamics behave.  Needs new test example as longest Canon
-  notes are still too short.
-* Pan changes render in midi.  Canon examples, by inspection with
-  GarageBand.
-
 #### Features
 
+* Fractional Pan.
+* Set key signature per voice for score examples.
 * Multi-note instruments, e.g. piano, marimaba, vibes, etc. Music
   types need for any Note to also be a Chord of multiple simultaneous
   Notes of equal duration.  Ugh, that's not strictly true.  With

@@ -12,18 +12,18 @@ import qualified Sound.MIDI.Message.Channel as ChannelMsg
 import           Test.HUnit
 import           Test.QuickCheck
 
-testMapVoicessToChannelss :: Assertion
-testMapVoicessToChannelss =
+testMapVoicessToDifferentChannelss :: Assertion
+testMapVoicessToDifferentChannelss =
   [[0,1], [2], [3], [4], [9]] @=? channels
   where
     voicess = 
       [[Voice (Instrument "trumpet") [],Voice (Instrument "trumpet") []],
        [Voice (Instrument "piano") []], [Voice (Instrument "flute") []], [Voice (Instrument "Marimba") []], [Voice (Instrument "Cowbell") []]]
     channels =
-      (map . map) ChannelMsg.fromChannel $ mapVoicessToChannelss voicess
+      (map . map) ChannelMsg.fromChannel $ mapVoicessToDifferentChannelss voicess
 
-testMapManyVoicessToChannelss :: Assertion
-testMapManyVoicessToChannelss =
+testMapManyVoicessToDifferentChannelss :: Assertion
+testMapManyVoicessToDifferentChannelss =
   [[0,0,0,0], [1,1,1,1], [2,2,2,2], [3,3,3,3], [9,9,9,9]] @=? channels
   where
     voicess = 
@@ -33,17 +33,17 @@ testMapManyVoicessToChannelss =
        replicate 4 (Voice (Instrument "Marimba") []),
        replicate 4 (Voice (Instrument "Cowbell") [])]
     channels =
-      (map . map) ChannelMsg.fromChannel $ mapVoicessToChannelss voicess
+      (map . map) ChannelMsg.fromChannel $ mapVoicessToDifferentChannelss voicess
 
-testMapVoicessToPercussionChannelss :: Assertion
-testMapVoicessToPercussionChannelss =
+testMapVoicessToUniformChannelss :: Assertion
+testMapVoicessToUniformChannelss =
   [[0, 0], [0], [0], [0], [9]] @=? channels 
   where
     voicess = 
       [[Voice (Instrument "trumpet") [],Voice (Instrument "trumpet") []],
        [Voice (Instrument "piano") []], [Voice (Instrument "flute") []], [Voice (Instrument "Marimba") []], [Voice (Instrument "Cowbell") []]]
     channels =
-      (map . map) ChannelMsg.fromChannel $ mapVoicessToPercussionChannelss voicess
+      (map . map) ChannelMsg.fromChannel $ mapVoicessToUniformChannelss voicess
 
 -- Reduce upper limit to avoid allocating enormous amounts of memory when
 -- testing generation of duration span.  Raise lower limit to avoid zero
