@@ -227,8 +227,8 @@ renderFractionalDynamic unit fraction =
 --   power of 2, don't even try to render a fractional dynamic.
 renderFractionalDynamics :: Rhythm -> [(DiscreteDynamicValue, Int)] -> Builder
 renderFractionalDynamics (Rhythm rhythm) fractions
-  | elem unit [2,4,8,16,32] = renderedNothing
-  | otherwise               = renderedOpen <> mconcat renderedFractions <> renderedClose
+  | unit `elem` [2,4,8,16,32] = renderedNothing
+  | otherwise                 = renderedOpen <> mconcat renderedFractions <> renderedClose
   where
     total             = sum $ map snd fractions
     unit              = rhythm / fromIntegral total

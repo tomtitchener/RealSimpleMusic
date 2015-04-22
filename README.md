@@ -125,7 +125,7 @@ middle `C` that's one whole-note long:
     Score
       "Minimal" -- Title
 	  "Me"         -- Title
-	  []              -- ScoreControls
+	  (ScoreControls (KeySignature 0) (TimeSignature 4 4) [(Tempo (Rhythm (1%4)) 60, Rhythm (0%4))])
       [Voice
         (Instrument "Marimba")                          -- Instrument
         [Note (Pitch C 0) (Rhythm (1%1)) empty] -- Notes
@@ -141,7 +141,7 @@ Midi file:
     λ::m +Data.Ratio
     λ: :m +RealSimpleMusic 
     λ: :m +Data.Set
-    λ: let score = Score "Minimal" "Me" [Voice (Instrument "Marimba") [Note (Pitch C 0) (Rhythm (1%1)) empty]]
+    λ: let score = Score "Minimal" "Me"  (ScoreControls (KeySignature 0) (TimeSignature 4 4) [(Tempo (Rhythm (1%4)) 60, Rhythm (0%4))])  [Voice (Instrument "Marimba") [Note (Pitch C 0) (Rhythm (1%1)) empty]]
 	λ: scoreToMidiFile score
 	
 See the file `tests/Canon/UtilsTest.hs` for examples showing the use
