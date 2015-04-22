@@ -216,9 +216,19 @@ renderFractionalDynamic unit fraction =
 
 -- | Ignore trailing zero-duration event, e.g. termination of crescendo or decrescendo.
 --   Lilypond doesn't allow e.g. {s1*2\< s2\ff\>\p}, which seems like a bug.
+--   NB:  unit has to have a divisor that's a power of 2!  But here we divide rhythm,
+--   with a denominator we know to be a power of 2 by some random value.  For example,
+--   (1%1)/3 == 1%3, which isn't allowed.  Or (1%4)/3 == 1%12.  To turn e.g. 1%12 into
+--   X%(some power of 2) requires finding a power of 2 that can be exactly divided by 12!
+--   And hoping that Lilypond won't barf when you tell it something totally wacky like
+--   s2048*4.  For Midi rendering, we've already moved into the land of durations, where
+--   it's much easier to handle this.  But when it comes to Lilypond, that total value had
+--   better be a power of 2 or there's just no hope.  So when we see a unit that's not a
+--   power of 2, don't even try to render a fractional dynamic.
 renderFractionalDynamics :: Rhythm -> [(DiscreteDynamicValue, Int)] -> Builder
-renderFractionalDynamics (Rhythm rhythm) fractions =
-  renderedOpen <> mconcat renderedFractions <> renderedClose
+renderFractionalDynamics (Rhythm rhythm) fractions
+  | elem unit [2,4,8,16,32] = renderedNothing
+  | otherwise               = renderedOpen <> mconcat renderedFractions <> renderedClose
   where
     total             = sum $ map snd fractions
     unit              = rhythm / fromIntegral total
