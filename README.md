@@ -9,11 +9,6 @@ Folder hierarchy:
              RealSimpleMusic.hs -- module definition for music types and
                                    conversion functions, implementation
                                    files in Music and ScoreToMidi folders
-             Canon.hs -- module definition for canon types and conversion
-                         functions
-             ./Canon +
-                     Data.hs -- Canon types
-                     Utils.hs -- Functions to convert Canon types to Score
              ./Music +
                      Data.hs -- Music types
                      Utils.hs -- Functions, majorScale, transposeNote, 
@@ -25,10 +20,7 @@ Folder hierarchy:
                      Utils.hs -- scoreToLilypond function for converting a
                                  score to a Lilypond text file 
        ./tests + -- test files
-               MainTestSuite.hs -- tests for Music, ScoreToMidi, and Canon
-                                   functions
-               ./Canon +
-                       UtilsTest.hs -- HUnit tests for Canon functions
+               MainTestSuite.hs -- tests for Music and ScoreToMidi functions
                ./Music +
                        UtilsTest.hs -- HUnit and QuickCheck tests for Music
                                        functions
@@ -36,16 +28,6 @@ Folder hierarchy:
                        UtilsTest.hs -- HUnit tests for ScoreToMidi functions
                ./ScoreToLilypond +
                        UtilsTest.hs -- HUnit tests for ScoreToLilypond functions
-               ./data
-                       Frere Jacques Simple.ly   -- simple canon Lilypond 
-                       Frere Jacques Simple.mid  -- simple canon reference 
-                       Frere Jacques Simple.pdf  -- simple canon Score
-                       Frere Jacques Scales.ly   -- scales canon Lilypond
-                       Frere Jacques Scales.mid  -- scales canon reference 
-                       Frere Jacques Scales.pdf  -- scales canon score
-                       Frere Jacques Canon.ly    -- canon Lilypond
-                       Frere Jacques Canon.mid   -- canon reference  
-                       Frere Jacques Canon.pdf   -- canon score
 					   
 #### Music Files
 
@@ -144,17 +126,11 @@ Midi file:
     λ: let score = Score "Minimal" "Me"  (ScoreControls (KeySignature 0) (TimeSignature 4 4) [(Tempo (Rhythm (1%4)) 60, Rhythm (0%4))])  [Voice (Instrument "Marimba") [Note (Pitch C 0) (Rhythm (1%1)) empty]]
 	λ: scoreToMidiFile score
 	
-See the file `tests/Canon/UtilsTest.hs` for examples showing the use
-of simple types, score, and conversion routines.  
-
-For more complete examples, see `./src/Canon/Canon.hs`, the
-implemetation files `Data.hs` and `Utils.hs` in `./src/Canon/Canon/`
-and the test files in `./src/tests/Canon/UtilsTest.hs`.
+For more complete examples, see [`Canon`](//github.com/tomtitchener/Canon.git).
 
 For program examples generally, see the files in `./tests`, including
 
 * `MainTestSuite.hs` - test driver
-* `Canon/UtilsTest.hs` - test `Canon.hs` types and methods
 * `Music/UtilsTest.hs` - test `Music` types and methods
 * `ScoreToLilypond/UtilsTest.hs` - test `Lilypond` methods
 * `ScoreToMidi/UtilsTest.hs` - test `ScoreToMidi` methods
