@@ -55,6 +55,7 @@ module RealSimpleMusic (
    , scoreToMidiFile
    , scoreToMidiFiles
    , scoreToLilypondFile
+   , scoreToByteString
   ) where
 
 import Music.Data

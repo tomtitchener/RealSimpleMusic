@@ -25,8 +25,8 @@ source-repository head
 
 library
   hs-source-dirs:   src, tests
-  exposed-modules:  RealSimpleMusic, Canon
-  other-modules:    Music.Data Music.Utils ScoreToMidi.Utils Canon.Utils ScoreToLilypond.Utils
+  exposed-modules:  RealSimpleMusic
+  other-modules:    Music.Data Music.Utils ScoreToMidi.Utils ScoreToLilypond.Utils
   other-extensions: GeneralizedNewtypeDeriving
   build-depends:    base,
                     bytestring,

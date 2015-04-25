@@ -3,7 +3,6 @@ module Main (
     main
   ) where
 
-import Canon.UtilsTest
 import Music.UtilsTest
 import ScoreToLilypond.UtilsTest
 import ScoreToMidi.UtilsTest
@@ -63,10 +62,6 @@ tests =
   , testCase           "testRenderAccentedPercussionNote"  testRenderAccentedPercussionNote
   , testCase           "testRenderTiedNote"                testRenderTiedNote
   , testCase           "testRenderNotes"                   testRenderNotes
-  -- canons
-  , testCase           "simple canon"                      testSimpleCanon
-  , testCase           "scales canon"                      testScalesCanon
-  , testCase           "canon"                             testCanon
   ]
 
 
