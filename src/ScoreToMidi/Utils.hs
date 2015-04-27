@@ -81,12 +81,12 @@ pitchClassToOffset Cf  = 11
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => DiscreteDynamicValue -> a
-dynamicToVolume Pianissimo     = 10
+dynamicToVolume Pianissimo     = 5
 dynamicToVolume Piano          = 30
 dynamicToVolume MezzoPiano     = 50
 dynamicToVolume MezzoForte     = 80
 dynamicToVolume Forte          = 100
-dynamicToVolume Fortissimo     = 120
+dynamicToVolume Fortissimo     = 125
 dynamicToVolume Crescendo      = error "dynamicToVolume Crescendo"
 dynamicToVolume Decrescendo    = error "dynamicToVolume Decrescendo"
 
@@ -174,7 +174,7 @@ genMidiBalanceControlEvent chan balance =
   genEvent chan (VoiceMsg.Control VoiceMsg.panorama $ balanceToBalance balance)
 
 genDiscreteMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
-genDiscreteMidiPanControlEvent chan (Pan pan)
+genDiscreteMidiPanControlEvent chan (Pan (PanVal pan))
   | 0 > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum 0"
   | 127 < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum 127"
   | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
@@ -572,27 +572,23 @@ panFromControl :: VoiceControl -> Pan
 panFromControl (PanControl pan) = pan
 panFromControl control          = error $ "panFromControl expected Pan, got " ++ show control
 
-getPanVal :: Pan -> Int
-getPanVal (Pan val) = val
-getPanVal pan       = error $ "getPan called for continuous instance " ++ show pan
-
 synthesizeUpPanSpan :: Pan -> Pan -> Duration -> ([Pan],[Duration])
 synthesizeUpPanSpan start stop (Dur dur)
   | dur == 0        = error $ "synthesizeUpPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | start >= stop   = error $ "synthesizeUpPanSpan target pan " ++ show stop ++ " is not greater than source pan " ++ show start
-  | panSpan <= dur' = (map Pan [startPan..(stopPan-1)], synthesizeDurationSpan panSpan dur)
-  | otherwise       = (map Pan pans, durs)
+  | panSpan <= dur' = (map (Pan . PanVal) [startPan..(stopPan-1)], synthesizeDurationSpan panSpan dur)
+  | otherwise       = (map (Pan . PanVal) pans, durs)
   where
-    (dur', startPan, stopPan, panSpan, pans, durs) = bindIntSpanVars (getPan start) (getPan stop) dur
+    (dur', startPan, stopPan, panSpan, pans, durs) = bindIntSpanVars ((getPanVal . getPan) start) ((getPanVal . getPan) stop) dur
     
 synthesizeDownPanSpan :: Pan -> Pan -> Duration -> ([Pan],[Duration])
 synthesizeDownPanSpan start stop (Dur dur)
   | dur == 0            = error $ "synthesizeDownPanSpan zero dur for pans start " ++ show start ++ " and stop " ++ show stop
   | stop >= start       = error $ "synthesizeDownPanSpan target pan " ++ show stop ++ " is not less than source pan " ++ show start
-  | abs panSpan <= dur' = (map Pan [startPan,(startPan-1)..(stopPan+1)], synthesizeDurationSpan (abs panSpan) dur)
-  | otherwise           = (map Pan pans, durs)
+  | abs panSpan <= dur' = (map (Pan . PanVal) [startPan,(startPan-1)..(stopPan+1)], synthesizeDurationSpan (abs panSpan) dur)
+  | otherwise           = (map (Pan . PanVal) pans, durs)
   where
-    (dur', startPan, stopPan, panSpan, pans, durs) = bindIntSpanVars (getPan start) (getPan stop) dur
+    (dur', startPan, stopPan, panSpan, pans, durs) = bindIntSpanVars ((getPanVal . getPan) start) ((getPanVal . getPan) stop) dur
 
 genMidiContinuousPanEvents :: (Pan -> Pan -> Duration -> ([Pan],[Duration])) -> ChannelMsg.Channel -> Duration -> Duration -> Pan -> Pan -> EventList.T Event.ElapsedTime Event.T
 genMidiContinuousPanEvents synth chan rest dur start stop  =

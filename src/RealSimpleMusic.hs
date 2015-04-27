@@ -29,6 +29,7 @@ module RealSimpleMusic (
    ,  DiscreteDynamicValue(..)
    ,  Balance(..)
    ,  Pan(..)
+   ,  PanVal(..)
    ,  Tempo(..)
    ,  KeySignature(..)
    ,  TimeSignature(..)

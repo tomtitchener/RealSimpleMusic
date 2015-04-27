@@ -94,9 +94,16 @@ data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | 
 --   be LT enum for continuous controls so that Lilypond rendering
 --   makes sense.
 data Pan =
-  Pan { getPan :: Int }
+  Pan { getPan :: PanVal }
   | PanUp
   | PanDown deriving (Read, Show, Ord, Eq)
+
+newtype PanVal = PanVal { getPanVal :: Int } deriving (Eq, Show, Num, Enum, Ord, Read)
+
+-- | Octave bounds roughly by piano range
+instance Bounded PanVal where
+    minBound = PanVal 0   --  Midi-ism
+    maxBound = PanVal 127 --  Midi-ism
 
 -- | Tempo data, unit is e.g. Rhythm (1%4), beats per minute.
 --   Ritardando and Accelerando are continuous.

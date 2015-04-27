@@ -262,9 +262,9 @@ renderPanValue val = stringEncoding "_\\markup" <> renderedOpen <> stringEncodin
 -- | First Bool is flag to tell if continuous dynamic control (cresc, decresc) is engaged,
 --   gets passed through unchanged.  Second is for continuous pan control.
 renderPan :: (Bool, Bool, Pan) -> (Bool, Bool, Builder)
-renderPan (d, p, Pan pan) = if p then (d, p, renderedStopTextSpan <> renderPanValue pan) else (d, p, renderPanValue pan)
-renderPan (d, _, PanUp)   = (d, True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
-renderPan (d, _, PanDown) = (d, True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
+renderPan (d, p, Pan (PanVal pan)) = if p then (d, p, renderedStopTextSpan <> renderPanValue pan) else (d, p, renderPanValue pan)
+renderPan (d, _, PanUp)            = (d, True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan up\"\\startTextSpan")
+renderPan (d, _, PanDown)          = (d, True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"pan down\"\\startTextSpan")
 
 renderTempo' :: Rhythm -> Integer -> Builder
 renderTempo' (Rhythm rhythm) bpm =
