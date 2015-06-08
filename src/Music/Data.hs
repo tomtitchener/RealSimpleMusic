@@ -163,11 +163,9 @@ data VoiceControl =
 --   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
 newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional)
 
--- | A note is either an ordinary note with pitch and rhythm,
---   an accented note with pitch, rhythm, and accent,
---   a rest with only a rhythm, a percussion note with
---   a rhythm, or an accented percussion note with rhythm
---   and accent.
+-- | A note is either an ordinary note with pitch, rhythm, and a list of controls, 
+--   a rest with only a rhythm and a set of controls, or a percussion note with
+--   a rhythm with a set of controls.
 --   TBD:  what value does Set provide?  Equality comparison
 --   means VoiceControl DynamicControl Piano /= VoiceControl DynmicControl Forte
 --   and I want it that way so I can have Piano and Crescendo together anyway.
@@ -177,10 +175,13 @@ newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, 
 --   (even though there's a comment in the enum declarations saying I do.)
 --   Switch to list?  Set methods used (member, filter, toAscList, null, elemAt,
 --   size) all have list equivalents.
---   Replace with List.
+--   Only advantage is traversal sorts by Enum order in VoiceControl, so e.g. all
+--   AccentControl show up together, then DynamicControl, etc.  But to deal with
+--   individual control types I always apply a filter anyway, and that's the same
+--   API as for a list.
 data Note =
   Note Pitch Rhythm (Set.Set VoiceControl)
-  | Rest Rhythm (Set.Set VoiceControl)
+  | Rest Rhythm (Set.Set VoiceControl) -- Text, Instrument, KeySignature, TimeSignature, Dynamic
   | PercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show)
 
 -- | An indexed note follows the shape of a note but with

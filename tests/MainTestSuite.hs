@@ -17,11 +17,16 @@ tests :: TestTree
 tests =
   testGroup "Example"
   [
+  -- Music
     testCase           "mid slice"                         testSliceInMiddle
   , testProperty       "slice all is id"                   propSliceAllIsOriginalList
   , testProperty       "slice one is head"                 propSliceFirstIsHead
   , testCase           "rotateTo"                          testRotateTo
+  , testProperty       "rotateToErr ok"                    testRotateToErrContains
+  , testProperty       "rotateToErr not ok"                testRotateToErrContainsNot
   , testProperty       "rotateTo head is id"               propRotateToFirstIsSame
+  , testCase           "isSharpErrSuccess"                 testIsSharpErrSuccess
+  , testCase           "isSharpErrFail"                    testIsSharpErrFail
   , testCase           "cycle of fifths length"            testCycleOfFifthsLength
   , testCase           "cycle of fifths vals"              testCycleOfFifthsValues
   , testCase           "enh chromatic pitch class vals"    testEnhChromPitchClassValues

@@ -145,6 +145,8 @@ For program examples generally, see the files in `./tests`, including
 
 #### Features
 
+* Eliminate partial functions:  78 instances of "error" in non-test code. 
+Make top-level functions scoreToMidiFile etc. provide error paths.
 * Fractional Pan.
 * Set key signature per voice for score examples.
 * Multi-note instruments, e.g. piano, marimaba, vibes, etc. Music

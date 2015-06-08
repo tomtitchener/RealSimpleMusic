@@ -3,6 +3,7 @@ module Music.UtilsTest where
 import Control.Monad
 import Data.List (findIndex, elemIndex, sort, group)
 import Data.Maybe (fromJust, isJust)
+import Data.Either.Combinators
 import Music.Data
 import Music.Utils
 import Test.HUnit
@@ -37,6 +38,26 @@ testRotateTo :: Assertion
 testRotateTo =
   [5::Integer,6..10] ++ [1..4] @=?  rotateTo 5 [1..10]
 
+testRotateToErrContains :: [Int] -> Property
+testRotateToErrContains xs =
+  not (null xs) ==>
+    and (map (isRight . flip rotateToErr xs) xs)
+    
+testRotateToErrContainsNot :: [Int] -> Property
+testRotateToErrContainsNot xs =
+  not (null xs) ==>
+    and (map (isLeft . flip rotateToErr ys) zs)
+    where
+      pivot = xs !! 0
+      ys = filter (< pivot) xs
+      zs = filter (>= pivot) xs
+
+testIsSharpErrSuccess :: Assertion
+testIsSharpErrSuccess = True @=? fromRight False (isSharpErr Cs)
+
+testIsSharpErrFail :: Assertion
+testIsSharpErrFail = False @=? fromRight True (isSharpErr Cf)
+    
 propRotateToFirstIsSame :: [Int] -> Property
 propRotateToFirstIsSame xs =
   not (null xs) ==>

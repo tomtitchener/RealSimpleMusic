@@ -3,9 +3,11 @@ module Music.Utils where
 
 import           Data.List
 import           Data.Maybe
+import           Data.Either.Utils
 import qualified Data.Set as Set
 import qualified Data.Vector as DV
 import           Music.Data
+import           Control.Error.Safe
 
 -- | Answer a subrange, or slice, from an array
 --   expressed as range [from-to], inclusive
@@ -18,6 +20,10 @@ rotate x xs =
   drop x' xs ++ take x' xs
   where
     x' = x `mod` length xs
+
+rotateToErr :: (Show a, Eq a) => a -> [a] -> Either String [a]
+rotateToErr x xs =
+  maybe (Left $ "rotateToErr element " ++ show x ++ " is not in list " ++ show xs) (Right . flip rotate xs) (elemIndex x xs)
 
 -- | Rotate a list, taking element from start
 --   and putting it at end, until you reach
@@ -36,23 +42,41 @@ cycleOfFifths = [Fff, Cff, Gff, Dff, Aff, Eff, Bff, Ff, Cf, Gf, Df, Af, Ef, Bf, 
 fifthsEnhDegrees :: [Int]
 fifthsEnhDegrees = [-2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]  
 
+-- | Success only by virtue of inclusion of all PitchClass in cycleOfFifths
 cycleOfFifthsIdx :: PitchClass -> Int
 cycleOfFifthsIdx pc =
   fromMaybe
-    (error $ "cycleOfFifths pitch class " ++ show pc ++ " not an elment of cycle of fifths " ++ show cycleOfFifths)
+    (error $ "cycleOfFifths pitch class " ++ show pc ++ " not an element of cycle of fifths " ++ show cycleOfFifths)
     (elemIndex pc cycleOfFifths)
+
+-- | Allow for programmer error
+cycleOfFifthsIdxErr :: PitchClass -> Either String Int
+cycleOfFifthsIdxErr pc =
+  maybe (Left $ "cycleOfFifths pitch class " ++ show pc ++ " not an element of cycle of fifths " ++ show cycleOfFifths) Right (elemIndex pc cycleOfFifths)
 
 pitchClass2AccidentalDegree :: PitchClass -> Int
 pitchClass2AccidentalDegree pc =
   fifthsEnhDegrees !! cycleOfFifthsIdx pc
-
+  
+pitchClass2AccidentalDegreeErr :: PitchClass -> Either String Int
+pitchClass2AccidentalDegreeErr pc =
+  cycleOfFifthsIdxErr pc >>= \idx -> atErr (message idx) fifthsEnhDegrees idx >>= \degree -> return degree
+  where
+    message idx = "pitchClass2AccidentalDegreeErr bad index " ++ show idx ++ " for fifthsEnhDegrees " ++ show fifthsEnhDegrees ++ " for pc " ++ show pc
+    
 isSharp :: PitchClass -> Bool
 isSharp pc =
-  pitchClass2AccidentalDegree pc  > 0
+  pitchClass2AccidentalDegree pc > 0
   
 isFlat :: PitchClass -> Bool
 isFlat pc =
-  pitchClass2AccidentalDegree pc  < 0
+  pitchClass2AccidentalDegree pc < 0
+
+isSharpErr :: PitchClass -> Either String Bool
+isSharpErr pc = pitchClass2AccidentalDegreeErr pc >>= return . (<) 0
+  
+isFlatErr :: PitchClass -> Either String Bool
+isFlatErr pc = pitchClass2AccidentalDegreeErr pc >>= return . (>) 0 
 
 fifthsDistance :: PitchClass -> PitchClass -> Int
 fifthsDistance pc1 pc2 =
@@ -60,6 +84,10 @@ fifthsDistance pc1 pc2 =
   where
     idx1 = cycleOfFifthsIdx pc1
     idx2 = cycleOfFifthsIdx pc2
+
+fifthsDistanceErr :: PitchClass -> PitchClass -> Either String Int
+fifthsDistanceErr pc1 pc2 =
+  cycleOfFifthsIdxErr pc1 >>= \idx1 -> cycleOfFifthsIdxErr pc2 >>= \idx2 -> return $ abs $ idx2 - idx1
 
 findAdjByFifths :: PitchClass -> [PitchClass] -> PitchClass
 findAdjByFifths pc pcs =
@@ -70,9 +98,30 @@ findAdjByFifths pc pcs =
     (fstPc,fstDst) = head sorted
     (sndPc,sndDst) = sorted !! 1
 
+findAdjByFifthsErr :: PitchClass -> [PitchClass] -> Either String PitchClass
+findAdjByFifthsErr pc pcs =
+  do
+    dsts           <- mapM (fifthsDistanceErr pc) pcs
+    let
+      prs    = zip pcs dsts
+      sorted = sortBy (\(_, d1) (_, d2) -> compare d1 d2) prs
+    (fstPc,fstDst) <- headErr ("findAdjByFifthsErr empty sorted list for pc " ++ show pc ++ " pcs " ++ show pcs) sorted
+    (sndPc,sndDst) <- atErr ("findAdjByFifthsErr single item sorted list for pc " ++ show pc ++ " pcs " ++ show pcs) sorted 1
+    flatPc         <- isFlatErr pc
+    flatFstPc      <- isFlatErr fstPc
+    return $ if fstDst < sndDst || flatPc && flatFstPc then fstPc else sndPc
+    
 transposeByAdjFifths :: PitchClass -> Interval -> PitchClass
 transposeByAdjFifths pc interval =
   findAdjByFifths pc enhPcs
+  where
+    idx1   = pitchClass2EnhEquivIdx pc enhChromPitchClasses
+    idx2   = (idx1 + interval) `mod` length enhChromPitchClasses
+    enhPcs = enhChromPitchClasses !! idx2
+
+transposeByAdjFifthsErr :: PitchClass -> Interval -> Either String PitchClass
+transposeByAdjFifthsErr pc interval =
+  findAdjByFifthsErr pc enhPcs
   where
     idx1   = pitchClass2EnhEquivIdx pc enhChromPitchClasses
     idx2   = (idx1 + interval) `mod` length enhChromPitchClasses
@@ -117,6 +166,21 @@ lowestMinorScalePitchClass = cycleOfFifths !! lowestMinorScaleOffset
 highestMinorScalePitchClass :: PitchClass
 highestMinorScalePitchClass = cycleOfFifths !! (length cycleOfFifths - highestMinorScaleOffset - 1)
 
+boundaryScalePitchClassErr :: String -> Int -> Either String PitchClass
+boundaryScalePitchClassErr name index = atErr (name ++ " bad index " ++ show index ++ " for list " ++ show cycleOfFifths) cycleOfFifths index
+
+lowestMajorScalePitchClassErr :: Either String PitchClass
+lowestMajorScalePitchClassErr = boundaryScalePitchClassErr "lowestMajorScalePitchClassErr" lowestMajorScaleOffset
+
+highestMajorScalePitchClassErr :: Either String PitchClass
+highestMajorScalePitchClassErr = boundaryScalePitchClassErr "highestMajorScalePitchClassErr" (length cycleOfFifths - highestMajorScaleOffset - 1)
+
+lowestMinorScalePitchClassErr :: Either String PitchClass 
+lowestMinorScalePitchClassErr = boundaryScalePitchClassErr "lowestMinorScalePitchClassErr" lowestMinorScaleOffset
+
+highestMinorScalePitchClassErr :: Either String PitchClass
+highestMinorScalePitchClassErr = boundaryScalePitchClassErr "highestMinorScalePitchClass" (length cycleOfFifths - highestMinorScaleOffset - 1)
+
 pitchClass2MaybeCycleOfFifthsIndex :: PitchClass -> Int -> Int -> Maybe Int
 pitchClass2MaybeCycleOfFifthsIndex tonic low high =
   elemIndex tonic cycleOfFifths >>= testIdx
@@ -130,6 +194,21 @@ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic =
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic =
   pitchClass2MaybeCycleOfFifthsIndex tonic lowestMinorScaleOffset highestMinorScaleOffset
+
+pitchClass2CycleOfFifthsIndexErr :: PitchClass -> Int -> Int -> Either String Int
+pitchClass2CycleOfFifthsIndexErr tonic low high =
+  do
+    idx <- maybeToEither ("pitchClass2CycleOfFIfthsIndexErr bad element " ++ show tonic ++ " for list " ++ show cycleOfFifths) $ elemIndex tonic cycleOfFifths
+    let message = "pitchClass2CycleOfFifthsIndexErr idx " ++ show idx ++ " out of range for low " ++ show low ++ " or high " ++ show high
+    if idx - low < 0 || idx + high >= length cycleOfFifths then Left message else return idx
+    
+pitchClass2CycleOfFifthsMajorScaleIndexErr :: PitchClass -> Either String Int
+pitchClass2CycleOfFifthsMajorScaleIndexErr tonic =
+  pitchClass2CycleOfFifthsIndexErr tonic lowestMajorScaleOffset highestMajorScaleOffset
+  
+pitchClass2CycleOfFifthsMinorScaleIndexErr :: PitchClass -> Either String Int
+pitchClass2CycleOfFifthsMinorScaleIndexErr tonic =
+  pitchClass2CycleOfFifthsIndexErr tonic lowestMinorScaleOffset highestMinorScaleOffset
 
 -- | Given a starting pitch class (tonic), a list of ascending chromatic
 --   intervals, and a list of descending chromatic intervals, answer a
@@ -151,6 +230,12 @@ genScale tonic name up down genInt low high =
     scaleFromEnhChromaticScale tonic up down
   else
     error $ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
+
+genScaleErr :: PitchClass -> String -> [Int] -> [Int] -> (PitchClass -> Maybe Int) -> PitchClass -> PitchClass -> Either String Scale
+genScaleErr tonic name up down genInt low high =
+  maybe (Left message) (const $ Right $ scaleFromEnhChromaticScale tonic up down) (genInt tonic)
+  where
+    message = "genScaleErr " ++ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
                   
 -- | Given a pitch class answer the major scale, up to two accidentals.
 majorScale :: PitchClass -> Scale
@@ -173,6 +258,27 @@ commonMinorScale name down tonic =
     low    = lowestMinorScalePitchClass
     high   = highestMinorScalePitchClass
 
+-- | Given a pitch class answer the major scale, up to two accidentals.
+majorScaleErr :: PitchClass -> Either String Scale
+majorScaleErr tonic =
+  genScaleErr tonic "major" up down genInt low high
+  where
+    up     = [2,2,1,2,2,2]
+    down   = [-1,-2,-2,-2,-1,-2]
+    genInt = pitchClass2MaybeCycleOfFifthsMajorScaleIndex
+    low    = lowestMajorScalePitchClass 
+    high   = highestMajorScalePitchClass
+
+-- | Refactored 
+commonMinorScaleErr :: String -> [Int] -> PitchClass -> Either String Scale
+commonMinorScaleErr name down tonic =
+  genScaleErr tonic name up down genInt low high
+  where
+    up     = [2,1,2,2,1,2]
+    genInt = pitchClass2MaybeCycleOfFifthsMinorScaleIndex
+    low    = lowestMinorScalePitchClass
+    high   = highestMinorScalePitchClass
+
 -- | Given a pitch class answer the natural minor scale, up to two accidentals.
 naturalMinorScale :: PitchClass -> Scale
 naturalMinorScale  =
@@ -189,21 +295,39 @@ melodicMinorScale =
 
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch.
-transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
+transposePitch' :: [PitchClass] -> Interval -> Pitch -> Pitch
+transposePitch' pcs interval (Pitch pc (Octave oct)) =
+  case elemIndex pc pcs of
+   Nothing -> error $ "transposePitch scale " ++ show pcs ++ " does not contain pitch class " ++ show pc
+   Just idx -> Pitch pc' (Octave oct')
+     where
+       len  = length pcs
+       pc'  = pcs !! ((idx + interval) `mod` len)
+       idx' = fromJust $ elemIndex pc (sort pcs)
+       oct' = oct + ((idx' + interval) `div` len)
+    
+transposePitch :: Scale -> Interval -> Pitch -> Pitch
 transposePitch scale interval
-  | interval >= 0 = transpose' (ascendingScale scale) 
-  | otherwise     = transpose' (reverse (descendingScale scale)) 
+  | interval >= 0 = transposePitch' (ascendingScale scale) interval
+  | otherwise     = transposePitch' (reverse (descendingScale scale)) interval
+
+-- | Given a scale, an interval, and a pitch, answer
+--   a new pitch interval steps away from the old pitch.
+transposePitchErr :: Scale -> Interval -> Pitch -> Either String Pitch
+transposePitchErr scale interval 
+  | interval >= 0 = transposePitchErr' (ascendingScale scale) 
+  | otherwise     = transposePitchErr' (reverse (descendingScale scale)) 
   where
-    transpose' pcs (Pitch pc (Octave oct)) =
+    transposePitchErr' pcs (Pitch pc (Octave oct)) =
       case elemIndex pc pcs of
-        Nothing -> error $ "transposePitch scale " ++ show pcs ++ " does not contain pitch class " ++ show pc
-        Just idx -> Pitch pc' (Octave oct')
+        Nothing  -> Left $ "transposePitch scale " ++ show pcs ++ " does not contain pitch class " ++ show pc
+        Just idx -> Right $ Pitch pc' (Octave oct')
           where
             len  = length pcs
             pc'  = pcs !! ((idx + interval) `mod` len)
             idx' = fromJust $ elemIndex pc (sort pcs)
             oct' = oct + ((idx' + interval) `div` len)
-        
+
 -- | Given a scale, an interval, and an octave answer 
 --   the Pitch "interval" steps frome the first note of
 --   "scale" at "octave".  Used to map a list of intervals
@@ -231,7 +355,7 @@ transposeNote :: Scale -> Interval -> Note -> Note
 transposeNote scale interval (Note pitch rhythm controls) =
   Note (transposePitch scale interval pitch) rhythm controls
 transposeNote _ _ rest@(Rest _ _) = rest
-transposeNote _ _ note@(PercussionNote _ _) = note
+transposeNote _ _ note'@(PercussionNote _ _) = note'
   
 -- | Given a scale, an interval, and a list of Notes, answer
 --   a new list of Notes with all the Pitches transposed 
@@ -258,6 +382,16 @@ ixPitchToPitch (IndexedPitch ix octave) scale
     up      = ascendingScale scale
     down    = descendingScale scale
     octave' = adjustOctave up ix octave
+    
+ixPitchToPitchErr :: IndexedPitch -> Scale -> Either String Pitch
+ixPitchToPitchErr (IndexedPitch ix octave) scale
+  | length up /= length down = Left $ "ixPitchToPitch ascending and descending scales of different lengths " ++ show scale
+  | ix < 0 || ix > length up = Left $ "ixPitchToPitch index " ++ show ix ++ " out of range for scale " ++ show scale
+  | otherwise = Right $ Pitch (up !! ix) octave'
+  where
+    up      = ascendingScale scale
+    down    = descendingScale scale
+    octave' = adjustOctave up ix octave
 
 indexedNoteToNote :: Scale -> IndexedNote -> Note
 indexedNoteToNote scale (IndexedNote ixPitch rhythm controls)   = Note (ixPitchToPitch ixPitch scale) rhythm controls
@@ -266,3 +400,14 @@ indexedNoteToNote _     (IndexedPercussionNote rhythm controls) = PercussionNote
 
 indexedNotesToNotes :: Scale -> [IndexedNote] -> [Note]
 indexedNotesToNotes scale = map (indexedNoteToNote scale)
+
+----
+
+indexedNoteToNoteErr :: Scale -> IndexedNote -> Either String Note
+indexedNoteToNoteErr scale (IndexedNote ixPitch rhythm controls)   = ixPitchToPitchErr ixPitch scale >>= \pitch -> return $ Note pitch rhythm controls
+indexedNoteToNoteErr _     (IndexedRest rhythm controls)           = return $ Rest rhythm controls
+indexedNoteToNoteErr _     (IndexedPercussionNote rhythm controls) = return $ PercussionNote rhythm controls
+
+indexedNotesToNotesErr :: Scale -> [IndexedNote] -> Either String [Note]
+indexedNotesToNotesErr scale = mapM (indexedNoteToNoteErr scale)
+
