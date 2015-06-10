@@ -3,6 +3,7 @@ module ScoreToLilypond.UtilsTest where
 import           Data.ByteString.Builder
 import           Data.List (sort)
 import           Data.Ratio
+import           Data.Either.Combinators (fromRight')
 import qualified Data.Set as Set
 import           RealSimpleMusic
 import           ScoreToLilypond.Utils
@@ -76,7 +77,7 @@ testRenderTiedNote =
 
 testRenderNotes :: Assertion
 testRenderNotes =
-  (toLazyByteString . stringEncoding) "c8 d16 e32 f64 g128 a64 b32" @=? (toLazyByteString . renderNotes) (zipWith (\pc dur -> Note (Pitch pc (Octave (-1))) (Rhythm dur) Set.empty) (ascendingScale (majorScale C)) [1%8, 1%16, 1%32, 1%64, 1%128, 1%64, 1%32])
+  (toLazyByteString . stringEncoding) "c8 d16 e32 f64 g128 a64 b32" @=? (toLazyByteString . renderNotes) (zipWith (\pc dur -> Note (Pitch pc (Octave (-1))) (Rhythm dur) Set.empty) (ascendingScale (fromRight' (majorScale C))) [1%8, 1%16, 1%32, 1%64, 1%128, 1%64, 1%32])
 
 -- Fractional Dynamic Voice.  Mix of 
 -- a) tied whole notes of varying durations with fractional dynamics that include crescendo and decrescendo

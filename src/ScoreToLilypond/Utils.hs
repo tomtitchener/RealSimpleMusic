@@ -287,7 +287,7 @@ renderKeySignature :: KeySignature -> Builder
 renderKeySignature (KeySignature accidentals') =
   stringEncoding "\\key " <> renderPitchName tonicPitch <> renderedSpace <> stringEncoding "\\major" <> renderedSpace
   where
-    cIndex        = cycleOfFifthsIdx C
+    cIndex        = fromEnum C
     tonicPitch    = cycleOfFifths !! (cIndex + accidentals')
 
 -- | Lilypond time signature is just e.g. "\time 2/4"

@@ -3,6 +3,7 @@ module Music.UtilsTest where
 import Control.Monad
 import Data.List (findIndex, elemIndex, sort, group)
 import Data.Maybe (fromJust, isJust)
+import Data.Either.Combinators (fromRight')
 import Music.Data
 import Music.Utils
 import Test.HUnit
@@ -33,6 +34,12 @@ propSliceFirstIsHead xs =
     not (null xs) ==>
         slice 0 0 xs == [head xs]
 
+rotateTo :: (Ord a, Show a) => a -> [a] -> [a]
+rotateTo x xs =
+  case elemIndex x xs of
+    Nothing -> error $ "rotateTo element " ++ show x ++ " is not in list " ++ show xs
+    Just i  -> rotate i xs
+    
 testRotateTo :: Assertion
 testRotateTo =
   [5::Integer,6..10] ++ [1..4] @=?  rotateTo 5 [1..10]
@@ -42,26 +49,10 @@ propRotateToFirstIsSame xs =
   not (null xs) ==>
     rotateTo (head xs) xs == xs
 
-testCycleOfFifthsLength :: Assertion
-testCycleOfFifthsLength =
-  length allPitchClasses @=? length cycleOfFifths
-  
-testCycleOfFifthsValues :: Assertion
-testCycleOfFifthsValues =
-  map (`elem` cycleOfFifths) allPitchClasses @=? replicate (length allPitchClasses) True
-
 testEnhChromPitchClassValues :: Assertion
 testEnhChromPitchClassValues =
  allPitchClasses @=? (sort . concat) enhChromPitchClasses
 
-testFifthsEnhDegreesLen :: Assertion 
-testFifthsEnhDegreesLen =
-  length cycleOfFifths @=? length fifthsEnhDegrees
-
-testFifthsEnhDegreesValues :: Assertion 
-testFifthsEnhDegreesValues =
-  map head (group fifthsEnhDegrees) @=? [-2,-1,0,1,2]
-    
 getChromaticScaleIndex :: PitchClass -> Int
 getChromaticScaleIndex pc  =
   fromJust $ findIndex (\pcs -> pc `elem` pcs) scale
@@ -91,7 +82,7 @@ testMajorScaleIntervals scale =
     
 testMajorScaleInterval :: Assertion
 testMajorScaleInterval =
-  True @=? testMajorScaleIntervals (majorScale C)
+  True @=? testMajorScaleIntervals (fromRight' (majorScale C))
   
 instance Arbitrary PitchClass where
   arbitrary = arbitraryBoundedEnum
@@ -103,7 +94,7 @@ pitchClassInMajorScaleRange tonic =
 propMajorScaleIntervals :: PitchClass -> Property
 propMajorScaleIntervals tonic = 
   pitchClassInMajorScaleRange tonic ==>
-    testMajorScaleIntervals (majorScale tonic)
+    testMajorScaleIntervals (fromRight' (majorScale tonic))
 
 getIntervalForScale :: Scale -> Pitch -> Pitch -> Interval
 getIntervalForScale scale (Pitch pc1 _) (Pitch pc2 _) =
@@ -124,7 +115,7 @@ testTransposePitch =
   where
     pitchClass        = C 
     transposeInterval = 5
-    scale             = majorScale pitchClass
+    scale             = fromRight' $ majorScale pitchClass
     startPitch        = Pitch pitchClass (Octave 5)
     transposedPitch   = transposePitch scale transposeInterval startPitch
 
@@ -156,7 +147,13 @@ propTransposePitchId scale pitch@(Pitch pc _) interval =
     pitch'  = transposePitch scale interval pitch
     pitch'' = transposePitch scale (-interval) pitch'
 
+    
 -- | Given a pitch class answer the major scale, up to two accidentals.
+--   Sort is by order in enum of pcs as cycle of fifths order whereaas
+--   I need stepwise order.  Cycle concatenated fifths order by twos:
+--   [Ff,Cf,Gf,Df,Af,Ef,Bff, Ff,Cf,Gf,Df,Af,Ef,Bff]
+--     X     X     X     X       X     X     X
+--     0     2     4     6       8    10    12
 majorScaleFromCycleOfFifths :: PitchClass -> Scale
 majorScaleFromCycleOfFifths tonic =
   case pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic of
@@ -166,12 +163,13 @@ majorScaleFromCycleOfFifths tonic =
         start     = idx - lowestMajorScaleOffset
         stop      = idx + highestMajorScaleOffset
         pcs       = slice start stop cycleOfFifths
-        ascending = rotateTo tonic $ sort pcs
+        ascendingFifths = rotateTo tonic $ sort pcs
+        ascending = map (\x -> (ascendingFifths ++ ascendingFifths) !! x) [0,2..12] 
 
 propMajorScaleId :: PitchClass -> Property
 propMajorScaleId tonic =
   pitchClassInMajorScaleRange tonic ==>
-    majorScale tonic == majorScaleFromCycleOfFifths tonic
+    majorScale tonic == Right (majorScaleFromCycleOfFifths tonic)
 
 -- | Given a pitch class answer the natural minor scale, up to two accidentals.
 naturalMinorScaleFromCycleOfFifths :: PitchClass -> Scale
@@ -190,4 +188,4 @@ pitchClassInNaturalMinorScaleRange tonic =
 propNaturalMinorScaleId :: PitchClass -> Property
 propNaturalMinorScaleId tonic =
   pitchClassInNaturalMinorScaleRange tonic ==>
-    naturalMinorScale tonic == naturalMinorScaleFromCycleOfFifths tonic
+    naturalMinorScale tonic == Right (naturalMinorScaleFromCycleOfFifths tonic)

@@ -9,24 +9,24 @@ import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set      as Set
 
--- | Pitch classes with two accidentals enharmonic equivalents
-data PitchClass = Bs|C|Dff|Bss|Cs|Df|Css|D|Eff|Ds|Ef|Fff|Dss|E|Ff|Es|F|Gff|Ess|Fs|Gf|Fss|G|Aff|Gs|Af|Gss|A|Bff|As|Bf|Cff|Ass|B| Cf deriving (Bounded, Enum, Show, Eq, Ord)
+-- | Pitch classes with two accidentals enharmonic equivalents, ordered in ascending fifths where order is significant.
+data PitchClass = Fff | Cff | Gff | Dff | Aff | Eff | Bff | Ff | Cf | Gf | Df | Af | Ef | Bf | F | C | G | D | A | E | B | Fs | Cs | Gs | Ds | As | Es | Bs | Fss | Css | Gss | Dss | Ass | Ess | Bss deriving (Bounded, Enum, Show, Eq, Ord)
 
--- | List of list of enharmonically equivalent pitch classes.
+-- | List of list of enharmonically equivalent pitch classes, in chromatic order.
 enhChromPitchClasses :: [[PitchClass]]
 enhChromPitchClasses = [[Bs, C, Dff], [Bss, Cs, Df], [Css, D, Eff], [Ds, Ef, Fff], [Dss, E, Ff], [Es, F, Gff], [Ess, Fs, Gf], [Fss, G, Aff], [Gs, Af], [Gss, A, Bff], [As, Bf, Cff], [Ass, B, Cf]]
 
 -- | Find index in list of enharmonically equivalent pitch classes.
-pitchClass2EnhEquivIdx :: PitchClass -> [[PitchClass]] -> Int
-pitchClass2EnhEquivIdx pc pcs =
+pitchClass2EnhEquivIdx :: PitchClass -> Int
+pitchClass2EnhEquivIdx pc =
   fromMaybe
-    (error $ "pitchClass2Index no match for PitchClass " ++ show pc ++ " in " ++ show pcs)
-    (findIndex (elem pc) pcs)
+    (error $ "pitchClass2Index no match for PitchClass " ++ show pc ++ " in " ++ show enhChromPitchClasses) -- enhChromPitchClasses must include all PitchClass
+    (findIndex (elem pc) enhChromPitchClasses)
 
 -- | Test pitch classes are enharmonically equivalent.
 equivPitchClasses :: PitchClass -> PitchClass -> Bool
 equivPitchClasses pc1 pc2 =
-  pitchClass2EnhEquivIdx pc1 enhChromPitchClasses == pitchClass2EnhEquivIdx pc2 enhChromPitchClasses
+  pitchClass2EnhEquivIdx pc1  == pitchClass2EnhEquivIdx pc2
 
 -- | Scale is two lists of pitch classes
 data Scale =
@@ -50,8 +50,8 @@ data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
 instance Ord Pitch where
   (Pitch pc1 (Octave oct1)) `compare` (Pitch pc2 (Octave oct2)) = if oct1 == oct2 then pc1Idx `compare` pc2Idx else oct1 `compare` oct2
     where
-      pc1Idx = pitchClass2EnhEquivIdx pc1 enhChromPitchClasses
-      pc2Idx = pitchClass2EnhEquivIdx pc2 enhChromPitchClasses    
+      pc1Idx = pitchClass2EnhEquivIdx pc1
+      pc2Idx = pitchClass2EnhEquivIdx pc2
 
 -- | Indexed pitch requires index into a Scale and Octave
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)

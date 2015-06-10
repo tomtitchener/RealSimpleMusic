@@ -19,47 +19,29 @@ rotate x xs =
   where
     x' = x `mod` length xs
 
--- | Rotate a list, taking element from start
---   and putting it at end, until you reach
---   the target.
-rotateTo :: (Ord a, Show a) => a -> [a] -> [a]
-rotateTo x xs =
-  case elemIndex x xs of
-    Nothing -> error $ "rotateTo element " ++ show x ++ " is not in list " ++ show xs
-    Just i  -> rotate i xs
-    
 -- | Cycle extending through a count of two flats and sharps.
 cycleOfFifths :: [PitchClass]
-cycleOfFifths = [Fff, Cff, Gff, Dff, Aff, Eff, Bff, Ff, Cf, Gf, Df, Af, Ef, Bf, F, C, G, D, A, E, B, Fs, Cs, Gs, Ds, As, Es, Bs, Fss, Css, Gss, Dss, Ass, Ess, Bss]
+cycleOfFifths = [(minBound::PitchClass)..(maxBound::PitchClass)]
 
--- | Count of flats (<0) or sharps (>0) for matching PitchClass in cycleOfFifths.
-fifthsEnhDegrees :: [Int]
-fifthsEnhDegrees = [-2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]  
-
-cycleOfFifthsIdx :: PitchClass -> Int
-cycleOfFifthsIdx pc =
-  fromMaybe
-    (error $ "cycleOfFifths pitch class " ++ show pc ++ " not an elment of cycle of fifths " ++ show cycleOfFifths)
-    (elemIndex pc cycleOfFifths)
-
-pitchClass2AccidentalDegree :: PitchClass -> Int
-pitchClass2AccidentalDegree pc =
-  fifthsEnhDegrees !! cycleOfFifthsIdx pc
-
+-- | Given PitchClass enum is ordered by fifths, count of flats vs. sharps maps directly from number of named pitches (7)
+--   and enum value in range.
+--                                                  <-- flat                      sharp -->
+--     0   1   2   3   4   5   6   7   8   9  10  11  12  13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34
+--   [-2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]  
 isSharp :: PitchClass -> Bool
 isSharp pc =
-  pitchClass2AccidentalDegree pc  > 0
+  fromEnum pc < 14
   
 isFlat :: PitchClass -> Bool
 isFlat pc =
-  pitchClass2AccidentalDegree pc  < 0
+  fromEnum pc > 20
 
 fifthsDistance :: PitchClass -> PitchClass -> Int
 fifthsDistance pc1 pc2 =
   abs $ idx2 - idx1
   where
-    idx1 = cycleOfFifthsIdx pc1
-    idx2 = cycleOfFifthsIdx pc2
+    idx1 = fromEnum pc1
+    idx2 = fromEnum pc2
 
 findAdjByFifths :: PitchClass -> [PitchClass] -> PitchClass
 findAdjByFifths pc pcs =
@@ -74,7 +56,7 @@ transposeByAdjFifths :: PitchClass -> Interval -> PitchClass
 transposeByAdjFifths pc interval =
   findAdjByFifths pc enhPcs
   where
-    idx1   = pitchClass2EnhEquivIdx pc enhChromPitchClasses
+    idx1   = pitchClass2EnhEquivIdx pc
     idx2   = (idx1 + interval) `mod` length enhChromPitchClasses
     enhPcs = enhChromPitchClasses !! idx2
 
@@ -144,16 +126,21 @@ scaleFromEnhChromaticScale tonic up down =
     up' = foldl accUp [tonic] up
     down' = foldl accDown [tonic] down
 
-genScale :: PitchClass -> String -> [Int] -> [Int] -> (PitchClass -> Maybe Int) -> PitchClass -> PitchClass -> Scale
+genScale :: PitchClass -> String -> [Int] -> [Int] -> (PitchClass -> Maybe Int) -> PitchClass -> PitchClass -> Either String Scale
 genScale tonic name up down genInt low high =
-  if isJust $ genInt tonic
-  then
-    scaleFromEnhChromaticScale tonic up down
-  else
-    error $ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
+  maybe (Left message) (const $ Right success) (genInt tonic)
+  where
+    message = name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
+    success = scaleFromEnhChromaticScale tonic up down
+  
+--  if isJust $ genInt tonic
+--  then
+--    scaleFromEnhChromaticScale tonic up down
+--  else
+--    error $ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
                   
 -- | Given a pitch class answer the major scale, up to two accidentals.
-majorScale :: PitchClass -> Scale
+majorScale :: PitchClass -> Either String Scale
 majorScale tonic =
   genScale tonic "major" up down genInt low high
   where
@@ -164,7 +151,7 @@ majorScale tonic =
     high   = highestMajorScalePitchClass
 
 -- | Refactored 
-commonMinorScale :: String -> [Int] -> PitchClass -> Scale
+commonMinorScale :: String -> [Int] -> PitchClass -> Either String Scale
 commonMinorScale name down tonic =
   genScale tonic name up down genInt low high
   where
@@ -174,18 +161,33 @@ commonMinorScale name down tonic =
     high   = highestMinorScalePitchClass
 
 -- | Given a pitch class answer the natural minor scale, up to two accidentals.
-naturalMinorScale :: PitchClass -> Scale
+naturalMinorScale :: PitchClass -> Either String Scale
 naturalMinorScale  =
   commonMinorScale "natural minor" down
   where
     down = [-2,-2,-1,-2,-2,-1]
 
 -- | Given a pitch class answer the melodic minor scale, up to two accidentals.
-melodicMinorScale :: PitchClass -> Scale
+melodicMinorScale :: PitchClass -> Either String Scale
 melodicMinorScale =
   commonMinorScale "melodic minor" down
   where
     down = [-2,-2,-1,-2,-2,-1]
+
+-- | Given a list of ascending PitchClass from a scale, find the lowest 
+--   PitchClass in the chromatic scale starting at C (or it's enharmonic
+--   equivalent).  Used to organize the ascending scale within the range
+--   [C..C'] to know when to transition octave boundary, which is absolute
+--   based on PitchClass C.
+findLowestChromaticIndex :: [PitchClass] -> Int
+findLowestChromaticIndex pitches =
+  head $ elemIndices lowestIndex chromaticIndices -- head [2] -> 2 (safe)
+  where
+    chromaticIndices = map pitchClass2EnhEquivIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
+    lowestIndex = head $ sort chromaticIndices            -- head [0,1,3,5,7,8,10] -> 0
+    
+octaveOrder :: [PitchClass] -> [PitchClass]
+octaveOrder pitches = rotate (findLowestChromaticIndex pitches) pitches
 
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch.
@@ -201,7 +203,7 @@ transposePitch scale interval
           where
             len  = length pcs
             pc'  = pcs !! ((idx + interval) `mod` len)
-            idx' = fromJust $ elemIndex pc (sort pcs)
+            idx' = fromJust $ elemIndex pc (octaveOrder pcs)
             oct' = oct + ((idx' + interval) `div` len)
         
 -- | Given a scale, an interval, and an octave answer 
@@ -238,6 +240,10 @@ transposeNote _ _ note@(PercussionNote _ _) = note
 transposeNotes :: Scale -> Interval -> [Note] -> [Note]
 transposeNotes scale interval = map (transposeNote scale interval)
 
+-- Problem is with pitch classes in fifths I can't rely on a sort of pitch class 
+-- to answer a "C-normal" ordering--it'll answer a "Fifth-normal" ordering instead.
+-- What I need is for the scale to be arranged with Bs, C, Dff, Cs, or Df first.
+
 -- Given the ascending part of a scale, an index for a pitch in that scale,
 -- and an octave relative to the tonic of that scale, answer the absolute 
 -- octave, e.g. for the major scale starting at G and index 3 and relative
@@ -247,7 +253,7 @@ adjustOctave up ix (Octave octave) =
   Octave $ ((ix + off) `div` len) + octave
   where
     len   = length up
-    off   = fromJust $ elemIndex (head up) (sort up)
+    off   = fromJust $ elemIndex (head up) (octaveOrder up)
 
 ixPitchToPitch :: IndexedPitch -> Scale -> Pitch
 ixPitchToPitch (IndexedPitch ix octave) scale
