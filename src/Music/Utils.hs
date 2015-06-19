@@ -133,12 +133,6 @@ genScale tonic name up down genInt low high =
     message = name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
     success = scaleFromEnhChromaticScale tonic up down
   
---  if isJust $ genInt tonic
---  then
---    scaleFromEnhChromaticScale tonic up down
---  else
---    error $ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
-                  
 -- | Given a pitch class answer the major scale, up to two accidentals.
 majorScale :: PitchClass -> Either String Scale
 majorScale tonic =
@@ -181,16 +175,104 @@ melodicMinorScale =
 --   based on PitchClass C.
 findLowestChromaticIndex :: [PitchClass] -> Int
 findLowestChromaticIndex pitches =
-  head $ elemIndices lowestIndex chromaticIndices -- head [2] -> 2 (safe)
+  head $ elemIndices lowestIndex chromaticIndices         -- head [2] -> 2 (safe)
   where
     chromaticIndices = map pitchClass2EnhEquivIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
-    lowestIndex = head $ sort chromaticIndices            -- head [0,1,3,5,7,8,10] -> 0
+    lowestIndex = minimum chromaticIndices                -- [0,1,3,5,7,8,10] -> 0
     
 octaveOrder :: [PitchClass] -> [PitchClass]
 octaveOrder pitches = rotate (findLowestChromaticIndex pitches) pitches
 
 -- | Given a scale, an interval, and a pitch, answer
 --   a new pitch interval steps away from the old pitch.
+--   Invariant to avoid error:  PitchClass from Pitch has 
+--   to be member of ascending pitches in Scale for positive
+--   interval or has to be a member of descending pitches in
+--   Scale for negative interval.
+--   Transposition presumes a Scale.  Pitch comprises both
+--   PitchClass and Octave.  The way to do this without error
+--   would be to transpose an IndexedPitch and map the IndexedPitch
+--   from the Scale the same way as below.
+--   Or maybe the thing to do is to just eliminate this entirely
+--   in favor of mapping the same transforms as translations of
+--   a list of IndexedPitch?  What I really want here is a way
+--   to map a contour in a given context (Scale) to a different
+--   offset within the same context (Scale).  In that sense, the
+--   order of arguments is at least goofy.  It should start with
+--   the Pitch you want to transform and then supply the transform
+--   operatives, interval and Scale.  But really, given the way
+--   IndexedPitch is interpreted, why not just take that as the
+--   canonical representation of a contour and manipulate the
+--   index portion?  No negative indexes in current representation,
+--   and IndexedPitch comprises Octave as well as index, which
+--   would have to be repeated, whereas if I really want things
+--   to be minimal then I should just have a series of intervals
+--   as signed values that I run through a generator that takes
+--   Scale and Octave as a start with implicit tonic as point of
+--   departure, and the rest is a series of transforms, pitch by
+--   pitch, just a map.  So maybe IndexedPitch is a false start
+--   and what I really want to represent a contour is just a
+--   list of Interval.  To fix a contour, you need additionally
+--   a Scale and an initial Note.  To transpose a contour you
+--   really just need a different initial Note.  Means reworking
+--   all the stuff I have built around IndexedNote, ugh. 
+
+--  Need way to produce [Note] from  Octave, Index, Scale, [Interval]
+--  To avoid possibility of error, instead of providing Pitch, which
+--  could have a PitchClass that's not contained in the Scale, provide
+--  instead IndexedPitch (aha, a use after all), i.e.
+
+-- Ugh, but is that really all?  This doesn't allow for rests or for
+-- percussion notes!  Of course, transposing non-pitched instruments
+-- is not an issue.  But rests seems like something I might want.
+
+-- Revisit.  Maybe you have [Note] and you want to tranpose it.  Ugh.
+-- Just not the right level of abstraction! Need something that encompasses
+-- Interval and Rest?  Just doesn't seem right.  Only attribute of Rest is
+-- Duration, and so far, we haven't dealt with Duration at all. 
+
+-- Seems that, to remain pure and error free, transposition is something
+-- that happens abstracted from Duration, which means all Rest.  Which
+-- gets back to foo, above.
+
+-- No reason not to start pure and see if it becomes unworkable.
+
+-- Insufficiently abstract!  
+
+-- Interval can be negative.  IndexedPitch has Word and Octave.
+-- How can I tell when to adjust Octave if I don't know count
+-- of pitches in Scale?  But I was hoping to avoid influence of
+-- Scale entirely!  But that was because of possibility of error
+-- matching pitch classes.  I could catch count of pitch classes
+-- per octave here and only problems would be 1) possibility of
+-- mismatch between Scale from which count is derived and 2) what
+-- if ascending count is different from descending count per
+-- octave?  Just seems ugly.  There has to be a better way to
+-- compute a transposition!  Or really to abstract a contour
+-- for a sequence of pitches.  All I'm trying to do here is to
+-- map a list of Interval to something to which I can eventually
+-- extract a list of Note.
+
+-- Target is to replace current tune in Canon example which uses
+-- list of IndexedPitch to use list of Interval instead.
+
+transposeIndexedPitch :: IndexedPitch -> Interval -> IndexedPitch
+transposeIndexedPitch ixPitch interval =
+  undefined
+
+foo' :: Scale -> IndexedPitch -> State IndexedPitch IndexedPitch
+foo' scale interval =
+  do prev <- get
+     let next = transposeIndexedPitch prev interval prev
+     put next
+     return next
+
+-- | Map from an initial IndexedPitch over a 
+--   list of Interval to a list of IndexedPitch
+foo :: IndexedPitch -> [Interval] -> [IndexedPitch]
+foo ixPitch scale intervals =
+  ixPitch : evalState $ traverse (foo' intervals) ixPitch
+
 transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
 transposePitch scale interval
   | interval >= 0 = transpose' (ascendingScale scale) 
@@ -205,16 +287,7 @@ transposePitch scale interval
             pc'  = pcs !! ((idx + interval) `mod` len)
             idx' = fromJust $ elemIndex pc (octaveOrder pcs)
             oct' = oct + ((idx' + interval) `div` len)
-        
--- | Given a scale, an interval, and an octave answer 
---   the Pitch "interval" steps frome the first note of
---   "scale" at "octave".  Used to map a list of intervals
---   to a list of pitches given the same scale and starting
---   octave.    
-getPitch :: Scale -> Octave -> Interval -> Pitch
-getPitch scale octave step =
-  transposePitch scale step $ Pitch (head (ascendingScale scale)) octave
-  
+
 -- | Parse rhythm common to all Notes.
 noteToRhythm :: Note -> Rhythm
 noteToRhythm (Note _ rhythm _)         = rhythm
@@ -240,10 +313,6 @@ transposeNote _ _ note@(PercussionNote _ _) = note
 transposeNotes :: Scale -> Interval -> [Note] -> [Note]
 transposeNotes scale interval = map (transposeNote scale interval)
 
--- Problem is with pitch classes in fifths I can't rely on a sort of pitch class 
--- to answer a "C-normal" ordering--it'll answer a "Fifth-normal" ordering instead.
--- What I need is for the scale to be arranged with Bs, C, Dff, Cs, or Df first.
-
 -- Given the ascending part of a scale, an index for a pitch in that scale,
 -- and an octave relative to the tonic of that scale, answer the absolute 
 -- octave, e.g. for the major scale starting at G and index 3 and relative
@@ -255,15 +324,27 @@ adjustOctave up ix (Octave octave) =
     len   = length up
     off   = fromJust $ elemIndex (head up) (octaveOrder up)
 
+-- Map an IndexedPitch and a Scale to a Pitch.
+-- Resolves an abstracted sense of a pitch to
+-- a concrete one.  Used to render a contour as
+-- a list of IndexedPitch to differing contexts,
+-- as different Scales.  In that regard, resilient
+-- for a Scales of differing count of notes by just
+-- wrapping to next octave in face of target scale
+-- with smaller gamut.  Also, chooses fine-grained
+-- in the face of a Scale with a different count of
+-- ascending vs. descending pitches by picking the
+-- one with the highest count, else arbitrarily
+-- favoring the ascending pitches.
 ixPitchToPitch :: IndexedPitch -> Scale -> Pitch
-ixPitchToPitch (IndexedPitch ix octave) scale
-  | length up /= length down = error $ "ixPitchToPitch ascending and descending scales of different lengths " ++ show scale
-  | ix < 0 || ix > length up = error $ "ixPitchToPitch index " ++ show ix ++ " out of range for scale " ++ show scale
-  | otherwise = Pitch (up !! ix) octave'
+ixPitchToPitch (IndexedPitch ix octave) scale =
+  Pitch (pitches !! i) octave'
   where
+    i       = fromInteger $ toInteger ix
     up      = ascendingScale scale
     down    = descendingScale scale
-    octave' = adjustOctave up ix octave
+    pitches = if length up > length down then up else down
+    octave' = adjustOctave up i octave
 
 indexedNoteToNote :: Scale -> IndexedNote -> Note
 indexedNoteToNote scale (IndexedNote ixPitch rhythm controls)   = Note (ixPitchToPitch ixPitch scale) rhythm controls

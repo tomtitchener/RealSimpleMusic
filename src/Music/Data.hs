@@ -5,6 +5,7 @@
 module Music.Data where
 
 import           Data.List
+import           Data.Word
 import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set      as Set
@@ -53,8 +54,8 @@ instance Ord Pitch where
       pc1Idx = pitchClass2EnhEquivIdx pc1
       pc2Idx = pitchClass2EnhEquivIdx pc2
 
--- | Indexed pitch requires index into a Scale and Octave
-data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
+-- | Indexed pitch requires positive only index (into a Scale, provided later) and an Octave
+data IndexedPitch = IndexedPitch Word Octave deriving (Eq, Show)
 
 -- | Dynamic (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering makes
@@ -183,6 +184,7 @@ data Note =
   | Rest Rhythm (Set.Set VoiceControl)
   | PercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show)
 
+-- TBD: remove?
 -- | An indexed note follows the shape of a note but with
 --   an indexed pitch replacing Pitch.
 data IndexedNote =
@@ -190,10 +192,10 @@ data IndexedNote =
   | IndexedRest Rhythm (Set.Set VoiceControl)
   | IndexedPercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show)
 
--- | Intervals may be negative or positive and are computed as steps in a Scale
+-- | Intervals may be negative or positive and are computed as steps in a Scale.
 type Interval = Int
 
--- | List of intervals for a Chord.
+-- | List of intervals for a Chord or a motive.
 type Intervals = [Interval]
 
 -- | Data to render a Chord in many different ways.

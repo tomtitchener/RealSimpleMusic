@@ -7,7 +7,7 @@
 --   1) generate scales: majorScale,
 --   naturalMinorScale, melodicMinorScale, and
 --   scaleFromEnhChromaticScale, 2) manipulate Pitch
---   transposePitch, getPitch, 3) manipulate Note:
+--   3) manipulate Note:
 --   indexedNoteToNote, indexedNoteToNotes, tranposeNote,
 --   transposeNotes, noteToRhythm.
 --   Workhorse functions to convert Score to Midi file or
@@ -23,8 +23,6 @@ module RealSimpleMusic (
    ,  Octave(..)
    ,  Pitch(..)
    ,  IndexedPitch(..)
-   ,  transposePitch
-   ,  getPitch
    ,  Dynamic(..)
    ,  DiscreteDynamicValue(..)
    ,  Balance(..)
