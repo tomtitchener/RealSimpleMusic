@@ -15,6 +15,7 @@
 --   convert Score to Lilypond file:  scoreToLilypondFile
 module RealSimpleMusic (
    PitchClass(..)
+   ,  pitchClassToEnhIdx
    ,  Scale(..)
    ,  majorScale
    ,  naturalMinorScale
@@ -24,7 +25,6 @@ module RealSimpleMusic (
    ,  Pitch(..)
    ,  IndexedPitch(..)
    ,  transposePitch
-   ,  getPitch
    ,  Dynamic(..)
    ,  DiscreteDynamicValue(..)
    ,  Balance(..)

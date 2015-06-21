@@ -43,23 +43,6 @@ fifthsDistance pc1 pc2 =
     idx1 = fromEnum pc1
     idx2 = fromEnum pc2
 
-findAdjByFifths :: PitchClass -> [PitchClass] -> PitchClass
-findAdjByFifths pc pcs =
-  if fstDst < sndDst || (isFlat pc && isFlat fstPc) then fstPc else sndPc
-  where
-    prs            = zip pcs $ map (fifthsDistance pc) pcs
-    sorted         = sortBy (\(_, d1) (_, d2) -> compare d1 d2) prs
-    (fstPc,fstDst) = head sorted
-    (sndPc,sndDst) = sorted !! 1
-
-transposeByAdjFifths :: PitchClass -> Interval -> PitchClass
-transposeByAdjFifths pc interval =
-  findAdjByFifths pc enhPcs
-  where
-    idx1   = pitchClass2EnhEquivIdx pc
-    idx2   = (idx1 + interval) `mod` length enhChromPitchClasses
-    enhPcs = enhChromPitchClasses !! idx2
-
 -- | Offset from start of cycle of fifths for pitch class
 --   from which you can form a major scale while remaining
 --   within the range of pitch classes in a uniform cycle of
@@ -113,6 +96,29 @@ pitchClass2MaybeCycleOfFifthsMinorScaleIndex :: PitchClass -> Maybe Int
 pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic =
   pitchClass2MaybeCycleOfFifthsIndex tonic lowestMinorScaleOffset highestMinorScaleOffset
 
+findAdjByFifths :: PitchClass -> [PitchClass] -> PitchClass
+findAdjByFifths pc pcs =
+  if fstDst < sndDst || (isFlat pc && isFlat fstPc) then fstPc else sndPc
+  where
+    prs            = zip pcs $ map (fifthsDistance pc) pcs
+    sorted         = sortBy (\(_, d1) (_, d2) -> compare d1 d2) prs
+    (fstPc,fstDst) = head sorted
+    (sndPc,sndDst) = sorted !! 1
+
+-- | Construct list of ascending chromatic scale in enharmonic equivalents from PitchClass
+enhChromPitchClasses :: [[PitchClass]]
+enhChromPitchClasses = (map . map) snd pairs
+  where
+    pairs = groupBy (\ (x1, _) (x2, _) -> x1 == x2) $ sortBy (\ (x1, _) (x2, _) -> x1 `compare` x2) $ map (\pc -> (pitchClassToEnhIdx pc,pc)) [(minBound::PitchClass)..(maxBound::PitchClass)]
+
+transposeByAdjFifths :: PitchClass -> Interval -> PitchClass
+transposeByAdjFifths pc interval = 
+  findAdjByFifths pc enhPcs
+  where
+    idx1   = fromInteger $ pitchClassToEnhIdx pc
+    idx2   = (idx1 + interval) `mod` length enhChromPitchClasses
+    enhPcs = enhChromPitchClasses !! idx2
+
 -- | Given a starting pitch class (tonic), a list of ascending chromatic
 --   intervals, and a list of descending chromatic intervals, answer a
 --   scale by successively transposing the intervals, picking among
@@ -133,12 +139,6 @@ genScale tonic name up down genInt low high =
     message = name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
     success = scaleFromEnhChromaticScale tonic up down
   
---  if isJust $ genInt tonic
---  then
---    scaleFromEnhChromaticScale tonic up down
---  else
---    error $ name ++ " scale tonic " ++ show tonic ++ " is out of range " ++ show  low ++ " to " ++ show high ++ " in cycle of fifths " ++ show cycleOfFifths
-                  
 -- | Given a pitch class answer the major scale, up to two accidentals.
 majorScale :: PitchClass -> Either String Scale
 majorScale tonic =
@@ -181,10 +181,10 @@ melodicMinorScale =
 --   based on PitchClass C.
 findLowestChromaticIndex :: [PitchClass] -> Int
 findLowestChromaticIndex pitches =
-  head $ elemIndices lowestIndex chromaticIndices -- head [2] -> 2 (safe)
+  head $ elemIndices lowestIndex chromaticIndices     -- head [2] -> 2 (safe)
   where
-    chromaticIndices = map pitchClass2EnhEquivIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
-    lowestIndex = head $ sort chromaticIndices            -- head [0,1,3,5,7,8,10] -> 0
+    chromaticIndices = map pitchClassToEnhIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
+    lowestIndex = head $ sort chromaticIndices        -- head [0,1,3,5,7,8,10] -> 0
     
 octaveOrder :: [PitchClass] -> [PitchClass]
 octaveOrder pitches = rotate (findLowestChromaticIndex pitches) pitches
@@ -205,16 +205,18 @@ transposePitch scale interval
             pc'  = pcs !! ((idx + interval) `mod` len)
             idx' = fromJust $ elemIndex pc (octaveOrder pcs)
             oct' = oct + ((idx' + interval) `div` len)
-        
--- | Given a scale, an interval, and an octave answer 
---   the Pitch "interval" steps frome the first note of
---   "scale" at "octave".  Used to map a list of intervals
---   to a list of pitches given the same scale and starting
---   octave.    
-getPitch :: Scale -> Octave -> Interval -> Pitch
-getPitch scale octave step =
-  transposePitch scale step $ Pitch (head (ascendingScale scale)) octave
-  
+
+-- | Given a scale, an interval, and an indexed pitch, 
+--   answer a new indexed pitch interval steps away from
+--   the old indexed pitch.
+transposeIndexedPitch :: Scale -> Interval -> IndexedPitch -> IndexedPitch
+transposeIndexedPitch scale interval (IndexedPitch ix (Octave oct)) =
+  IndexedPitch ix' (Octave (oct' + oct))
+  where
+    len  = if ix > 0 then length (ascendingScale scale) else length (descendingScale scale)
+    ix'  = (interval + ix) `mod` len
+    oct' = (interval + ix) `div` len
+    
 -- | Parse rhythm common to all Notes.
 noteToRhythm :: Note -> Rhythm
 noteToRhythm (Note _ rhythm _)         = rhythm
@@ -256,14 +258,9 @@ adjustOctave up ix (Octave octave) =
     off   = fromJust $ elemIndex (head up) (octaveOrder up)
 
 ixPitchToPitch :: IndexedPitch -> Scale -> Pitch
-ixPitchToPitch (IndexedPitch ix octave) scale
-  | length up /= length down = error $ "ixPitchToPitch ascending and descending scales of different lengths " ++ show scale
-  | ix < 0 || ix > length up = error $ "ixPitchToPitch index " ++ show ix ++ " out of range for scale " ++ show scale
-  | otherwise = Pitch (up !! ix) octave'
-  where
-    up      = ascendingScale scale
-    down    = descendingScale scale
-    octave' = adjustOctave up ix octave
+ixPitchToPitch (IndexedPitch ix (Octave oct)) (Scale up down) 
+  | ix >= 0   = Pitch (up !! (ix `mod` length up)) (Octave (oct + (ix `div` length up)))
+  | otherwise = Pitch (down !! ((-ix) `mod` length down)) (Octave (oct - ((-ix) `div` length down)))
 
 indexedNoteToNote :: Scale -> IndexedNote -> Note
 indexedNoteToNote scale (IndexedNote ixPitch rhythm controls)   = Note (ixPitchToPitch ixPitch scale) rhythm controls

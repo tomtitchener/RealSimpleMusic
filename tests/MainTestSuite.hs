@@ -58,6 +58,5 @@ tests =
   , testCase           "testRenderAccentedPercussionNote"  testRenderAccentedPercussionNote
   , testCase           "testRenderTiedNote"                testRenderTiedNote
   , testCase           "testRenderNotes"                   testRenderNotes
+--}
   ]
-
-

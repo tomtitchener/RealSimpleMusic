@@ -4,29 +4,49 @@
 
 module Music.Data where
 
-import           Data.List
-import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set      as Set
 
 -- | Pitch classes with two accidentals enharmonic equivalents, ordered in ascending fifths where order is significant.
 data PitchClass = Fff | Cff | Gff | Dff | Aff | Eff | Bff | Ff | Cf | Gf | Df | Af | Ef | Bf | F | C | G | D | A | E | B | Fs | Cs | Gs | Ds | As | Es | Bs | Fss | Css | Gss | Dss | Ass | Ess | Bss deriving (Bounded, Enum, Show, Eq, Ord)
 
--- | List of list of enharmonically equivalent pitch classes, in chromatic order.
-enhChromPitchClasses :: [[PitchClass]]
-enhChromPitchClasses = [[Bs, C, Dff], [Bss, Cs, Df], [Css, D, Eff], [Ds, Ef, Fff], [Dss, E, Ff], [Es, F, Gff], [Ess, Fs, Gf], [Fss, G, Aff], [Gs, Af], [Gss, A, Bff], [As, Bf, Cff], [Ass, B, Cf]]
-
--- | Find index in list of enharmonically equivalent pitch classes.
-pitchClass2EnhEquivIdx :: PitchClass -> Int
-pitchClass2EnhEquivIdx pc =
-  fromMaybe
-    (error $ "pitchClass2Index no match for PitchClass " ++ show pc ++ " in " ++ show enhChromPitchClasses) -- enhChromPitchClasses must include all PitchClass
-    (findIndex (elem pc) enhChromPitchClasses)
-
--- | Test pitch classes are enharmonically equivalent.
-equivPitchClasses :: PitchClass -> PitchClass -> Bool
-equivPitchClasses pc1 pc2 =
-  pitchClass2EnhEquivIdx pc1  == pitchClass2EnhEquivIdx pc2
+-- | Ordering of PitchClass for ordering comparisons, enharmonic equivalent tests.
+pitchClassToEnhIdx :: PitchClass -> Integer
+pitchClassToEnhIdx Bs  = 0
+pitchClassToEnhIdx C   = 0
+pitchClassToEnhIdx Dff = 0
+pitchClassToEnhIdx Bss = 1
+pitchClassToEnhIdx Cs  = 1
+pitchClassToEnhIdx Df  = 1
+pitchClassToEnhIdx Css = 2
+pitchClassToEnhIdx D   = 2
+pitchClassToEnhIdx Eff = 2
+pitchClassToEnhIdx Ds  = 3
+pitchClassToEnhIdx Ef  = 3
+pitchClassToEnhIdx Fff = 3
+pitchClassToEnhIdx Dss = 4
+pitchClassToEnhIdx E   = 4
+pitchClassToEnhIdx Ff  = 4
+pitchClassToEnhIdx Es  = 5
+pitchClassToEnhIdx F   = 5
+pitchClassToEnhIdx Gff = 5
+pitchClassToEnhIdx Ess = 6
+pitchClassToEnhIdx Fs  = 6
+pitchClassToEnhIdx Gf  = 6
+pitchClassToEnhIdx Fss = 7
+pitchClassToEnhIdx G   = 7
+pitchClassToEnhIdx Aff = 7
+pitchClassToEnhIdx Gs  = 8
+pitchClassToEnhIdx Af  = 8
+pitchClassToEnhIdx Gss = 9
+pitchClassToEnhIdx A   = 9
+pitchClassToEnhIdx Bff = 9
+pitchClassToEnhIdx As  = 10
+pitchClassToEnhIdx Bf  = 10
+pitchClassToEnhIdx Cff = 10
+pitchClassToEnhIdx Ass = 11
+pitchClassToEnhIdx B   = 11
+pitchClassToEnhIdx Cf  = 11
 
 -- | Scale is two lists of pitch classes
 data Scale =
@@ -37,7 +57,7 @@ data Scale =
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
 --   exceeds all instrument ranges, unless guarded by minBound and maxBound.
-newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num, Enum)
+newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num, Enum, Ord)
 
 -- | Octave bounds roughly by piano range
 instance Bounded Octave where
@@ -46,14 +66,12 @@ instance Bounded Octave where
 
 -- | Pitch requires PitchClass and Octave.
 data Pitch = Pitch PitchClass Octave deriving (Eq, Show)
-
 instance Ord Pitch where
-  (Pitch pc1 (Octave oct1)) `compare` (Pitch pc2 (Octave oct2)) = if oct1 == oct2 then pc1Idx `compare` pc2Idx else oct1 `compare` oct2
-    where
-      pc1Idx = pitchClass2EnhEquivIdx pc1
-      pc2Idx = pitchClass2EnhEquivIdx pc2
+  (Pitch pc1 (Octave oct1)) `compare` (Pitch pc2 (Octave oct2)) = if oct1 == oct2 then pitchClassToEnhIdx pc1 `compare` pitchClassToEnhIdx pc2 else oct1 `compare` oct2
 
 -- | Indexed pitch requires index into a Scale and Octave
+--   Positive values index into ascending scale.
+--   Negative values index into descending scale.
 data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
 
 -- | Dynamic (may be continuous).  Note: enum for discrete control must

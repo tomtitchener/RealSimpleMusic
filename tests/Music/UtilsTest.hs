@@ -146,7 +146,6 @@ propTransposePitchId scale pitch@(Pitch pc _) interval =
   where
     pitch'  = transposePitch scale interval pitch
     pitch'' = transposePitch scale (-interval) pitch'
-
     
 -- | Given a pitch class answer the major scale, up to two accidentals.
 --   Sort is by order in enum of pcs as cycle of fifths order whereaas
