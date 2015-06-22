@@ -26,8 +26,6 @@ tests =
   , testCase           "chromatic scale index"             testGetChromaticScaleIndex
   , testCase           "major scale interval"              testMajorScaleInterval
   , testProperty       "major scale intervals"             propMajorScaleIntervals
-  , testCase           "transpose pitch"                   testTransposePitch
-  , testProperty       "transpose pitch id"                propTransposePitchId
   , testProperty       "major scale"                       propMajorScaleId
   , testProperty       "natural minor scale"               propNaturalMinorScaleId
   -- ScoreToMidi

@@ -109,16 +109,6 @@ getIntervalForScale scale (Pitch pc1 _) (Pitch pc2 _) =
     p2Idx    = fromJust $ elemIndex pc2 scale'
     scaleLen = length scale'
 
-testTransposePitch :: Assertion    
-testTransposePitch =
-  transposeInterval @=? getIntervalForScale scale startPitch transposedPitch
-  where
-    pitchClass        = C 
-    transposeInterval = 5
-    scale             = fromRight' $ majorScale pitchClass
-    startPitch        = Pitch pitchClass (Octave 5)
-    transposedPitch   = transposePitch scale transposeInterval startPitch
-
 instance Arbitrary Octave where
   arbitrary = elements [(minBound::Octave)..(maxBound::Octave)]
 
@@ -139,14 +129,6 @@ instance Arbitrary Scale where
         in
           return $ Scale pcs $ reverse pcs
 
-propTransposePitchId :: Scale -> Pitch -> Interval -> Property
-propTransposePitchId scale pitch@(Pitch pc _) interval =
-  length (ascendingScale scale) >= 2 && interval > 0 && elem pc (ascendingScale scale) ==>
-    pitch == pitch''
-  where
-    pitch'  = transposePitch scale interval pitch
-    pitch'' = transposePitch scale (-interval) pitch'
-    
 -- | Given a pitch class answer the major scale, up to two accidentals.
 --   Sort is by order in enum of pcs as cycle of fifths order whereaas
 --   I need stepwise order.  Cycle concatenated fifths order by twos:

@@ -189,23 +189,6 @@ findLowestChromaticIndex pitches =
 octaveOrder :: [PitchClass] -> [PitchClass]
 octaveOrder pitches = rotate (findLowestChromaticIndex pitches) pitches
 
--- | Given a scale, an interval, and a pitch, answer
---   a new pitch interval steps away from the old pitch.
-transposePitch :: Scale -> Interval -> Pitch -> Pitch                          
-transposePitch scale interval
-  | interval >= 0 = transpose' (ascendingScale scale) 
-  | otherwise     = transpose' (reverse (descendingScale scale)) 
-  where
-    transpose' pcs (Pitch pc (Octave oct)) =
-      case elemIndex pc pcs of
-        Nothing -> error $ "transposePitch scale " ++ show pcs ++ " does not contain pitch class " ++ show pc
-        Just idx -> Pitch pc' (Octave oct')
-          where
-            len  = length pcs
-            pc'  = pcs !! ((idx + interval) `mod` len)
-            idx' = fromJust $ elemIndex pc (octaveOrder pcs)
-            oct' = oct + ((idx' + interval) `div` len)
-
 -- | Given a scale, an interval, and an indexed pitch, 
 --   answer a new indexed pitch interval steps away from
 --   the old indexed pitch.
@@ -216,6 +199,12 @@ transposeIndexedPitch scale interval (IndexedPitch ix (Octave oct)) =
     len  = if ix > 0 then length (ascendingScale scale) else length (descendingScale scale)
     ix'  = (interval + ix) `mod` len
     oct' = (interval + ix) `div` len
+
+-- | TBD: SYB
+transposeIndexedNote :: Scale -> Interval -> IndexedNote -> IndexedNote
+transposeIndexedNote _ _ rest@(IndexedRest _ _)                       = rest
+transposeIndexedNote _ _ perc@(IndexedPercussionNote _ _)             = perc
+transposeIndexedNote scale interval (IndexedNote pitch rhythm cntrls) = IndexedNote (transposeIndexedPitch scale interval pitch) rhythm cntrls
     
 -- | Parse rhythm common to all Notes.
 noteToRhythm :: Note -> Rhythm
@@ -228,23 +217,6 @@ addControlToNote :: Note -> VoiceControl -> Note
 addControlToNote (Note pitch rhythm controls)     control = Note pitch rhythm (Set.insert control controls)
 addControlToNote (Rest rhythm controls)           control = Rest rhythm (Set.insert control controls)
 addControlToNote (PercussionNote rhythm controls) control = PercussionNote rhythm (Set.insert control controls)
-
--- | Given a scale, an interval, and a Note,
---   answer the new Note with with transposed Pitch
-transposeNote :: Scale -> Interval -> Note -> Note
-transposeNote scale interval (Note pitch rhythm controls) =
-  Note (transposePitch scale interval pitch) rhythm controls
-transposeNote _ _ rest@(Rest _ _) = rest
-transposeNote _ _ note@(PercussionNote _ _) = note
-  
--- | Given a scale, an interval, and a list of Notes, answer
---   a new list of Notes with all the Pitches transposed 
-transposeNotes :: Scale -> Interval -> [Note] -> [Note]
-transposeNotes scale interval = map (transposeNote scale interval)
-
--- Problem is with pitch classes in fifths I can't rely on a sort of pitch class 
--- to answer a "C-normal" ordering--it'll answer a "Fifth-normal" ordering instead.
--- What I need is for the scale to be arranged with Bs, C, Dff, Cs, or Df first.
 
 -- Given the ascending part of a scale, an index for a pitch in that scale,
 -- and an octave relative to the tonic of that scale, answer the absolute 
