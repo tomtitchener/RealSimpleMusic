@@ -174,21 +174,6 @@ melodicMinorScale =
   where
     down = [-2,-2,-1,-2,-2,-1]
 
--- | Given a list of ascending PitchClass from a scale, find the lowest 
---   PitchClass in the chromatic scale starting at C (or it's enharmonic
---   equivalent).  Used to organize the ascending scale within the range
---   [C..C'] to know when to transition octave boundary, which is absolute
---   based on PitchClass C.
-findLowestChromaticIndex :: [PitchClass] -> Int
-findLowestChromaticIndex pitches =
-  head $ elemIndices lowestIndex chromaticIndices     -- head [2] -> 2 (safe)
-  where
-    chromaticIndices = map pitchClassToEnhIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
-    lowestIndex = head $ sort chromaticIndices        -- head [0,1,3,5,7,8,10] -> 0
-    
-octaveOrder :: [PitchClass] -> [PitchClass]
-octaveOrder pitches = rotate (findLowestChromaticIndex pitches) pitches
-
 -- | Given a scale, an interval, and an indexed pitch, 
 --   answer a new indexed pitch interval steps away from
 --   the old indexed pitch.
@@ -218,21 +203,44 @@ addControlToNote (Note pitch rhythm controls)     control = Note pitch rhythm (S
 addControlToNote (Rest rhythm controls)           control = Rest rhythm (Set.insert control controls)
 addControlToNote (PercussionNote rhythm controls) control = PercussionNote rhythm (Set.insert control controls)
 
--- Given the ascending part of a scale, an index for a pitch in that scale,
--- and an octave relative to the tonic of that scale, answer the absolute 
--- octave, e.g. for the major scale starting at G and index 3 and relative
--- octave 0, the answer should be Octave 1.
+-- | Given a list of ascending PitchClass from a scale, find the lowest 
+--   PitchClass in the chromatic scale starting at C (or it's enharmonic
+--   equivalent).  Used to organize the ascending scale within the range
+--   [C..C'] to know when to transition octave boundary, which is absolute
+--   based on PitchClass C.
+findLowestChromaticIndex :: [PitchClass] -> Int
+findLowestChromaticIndex pitches =
+  head $ elemIndices lowestIndex chromaticIndices     -- head [2] -> 2 (safe)
+  where
+    chromaticIndices = map pitchClassToEnhIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
+    lowestIndex = head $ sort chromaticIndices        -- head [0,1,3,5,7,8,10] -> 0
+
+-- | Put scale in "octave order", i.e. starting with pitch class closest to C,
+--   [Af,Bf,C,Df,Ef,F,G] -> [C,Df,Ef,F,G,Af,Bf] or
+--   [G,F,Ef,Df,C,Bf,Af] -> [C,Df,Ef,F,G,Af,Bf]
+octaveOrder :: [PitchClass] -> [PitchClass]
+octaveOrder pitches = rotate (findLowestChromaticIndex pitches) pitches
+
+-- | Given the ascending part or descending list of pitch classes for a scale,
+--   an index for a pitch in that scale, and an octave relative to the tonic of
+--   that scale, answer the absolute  octave, e.g. for the major scale starting
+--   at G and index 3 and relative octave 0, the answer should be Octave 1.
 adjustOctave :: [PitchClass] -> Int -> Octave -> Octave
-adjustOctave up ix (Octave octave) =
+adjustOctave pcs ix (Octave octave) =
   Octave $ ((ix + off) `div` len) + octave
   where
-    len   = length up
-    off   = fromJust $ elemIndex (head up) (octaveOrder up)
+    len   = length pcs
+    off   = fromJust $ elemIndex (head pcs) (octaveOrder pcs)
 
+-- | Given an indexed pitch and a scale, answer a Pitch.
+--   Map virtual octave in IndexedPitch to physical octave
+--   in Pitch.  Virtual octave in IndexedPitch starts in
+--   middle C and above.  Physical octave in Pitch is rooted
+--   on middle C.
 ixPitchToPitch :: IndexedPitch -> Scale -> Pitch
 ixPitchToPitch (IndexedPitch ix (Octave oct)) (Scale up down) 
-  | ix >= 0   = Pitch (up !! (ix `mod` length up)) (Octave (oct + (ix `div` length up)))
-  | otherwise = Pitch (down !! ((-ix) `mod` length down)) (Octave (oct - ((-ix) `div` length down)))
+  | ix >= 0   = let ix' = ix `mod` length up      in Pitch (up !! ix')   (adjustOctave up   ix'    (Octave (oct + (ix `div` length up))))
+  | otherwise = let ix' = (-ix) `mod` length down in Pitch (down !! ix') (adjustOctave down (-ix') (Octave (oct - ((-ix) `div` length down))))
 
 indexedNoteToNote :: Scale -> IndexedNote -> Note
 indexedNoteToNote scale (IndexedNote ixPitch rhythm controls)   = Note (ixPitchToPitch ixPitch scale) rhythm controls
