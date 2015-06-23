@@ -4,6 +4,7 @@
 
 module Music.Data where
 
+import           Data.Data
 import           Data.Ratio
 import qualified Data.Set      as Set
 
@@ -57,7 +58,7 @@ data Scale =
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
 --   exceeds all instrument ranges, unless guarded by minBound and maxBound.
-newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num, Enum, Ord)
+newtype Octave = Octave { getOctave :: Int } deriving (Eq, Show, Num, Enum, Ord, Data, Typeable)
 
 -- | Octave bounds roughly by piano range
 instance Bounded Octave where
@@ -72,7 +73,7 @@ instance Ord Pitch where
 -- | Indexed pitch requires index into a Scale and Octave
 --   Positive values index into ascending scale.
 --   Negative values index into descending scale.
-data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show)
+data IndexedPitch = IndexedPitch Int Octave deriving (Eq, Show, Data, Typeable)
 
 -- | Dynamic (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering makes
@@ -85,7 +86,7 @@ data DiscreteDynamicValue =
   | Forte
   | Fortissimo
   | Crescendo
-  | Decrescendo deriving (Bounded, Enum, Show, Ord, Eq)
+  | Decrescendo deriving (Bounded, Enum, Show, Ord, Eq, Data, Typeable)
 
 -- | Special rules for FractionalDynamic pairs:
 --   * Int in second half is proportion, relative to
@@ -103,10 +104,10 @@ data DiscreteDynamicValue =
 --   For now, the Lilypond conversion drops trailing dynamics.
 data Dynamic =
   DiscreteDynamic DiscreteDynamicValue
-  | FractionalDynamic [(DiscreteDynamicValue, Int)] deriving (Ord, Eq, Show)
+  | FractionalDynamic [(DiscreteDynamicValue, Int)] deriving (Ord, Eq, Show, Data, Typeable)
 
 -- | Balance (static)
-data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq)
+data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | RightBalance deriving (Bounded, Enum, Show, Ord, Eq, Data, Typeable)
 
 -- | Pan (may be continuous).  Note: enum for discrete control must
 --   be LT enum for continuous controls so that Lilypond rendering
@@ -114,9 +115,9 @@ data Balance = LeftBalance | MidLeftBalance | CenterBalance | MidRightBalance | 
 data Pan =
   Pan { getPan :: PanVal }
   | PanUp
-  | PanDown deriving (Read, Show, Ord, Eq)
+  | PanDown deriving (Read, Show, Ord, Eq, Data, Typeable)
 
-newtype PanVal = PanVal { getPanVal :: Int } deriving (Eq, Show, Num, Enum, Ord, Read)
+newtype PanVal = PanVal { getPanVal :: Int } deriving (Eq, Show, Num, Enum, Ord, Read, Data, Typeable)
 
 -- | Octave bounds roughly by piano range
 instance Bounded PanVal where
@@ -128,13 +129,13 @@ instance Bounded PanVal where
 data Tempo =
   Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
   | Ritardando 
-  | Accelerando deriving (Show, Eq, Ord)
+  | Accelerando deriving (Show, Eq, Ord, Data, Typeable)
 
 -- | Key Signature, negative for count flats, positive for count sharps
-newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, Eq)
+newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, Eq, Data, Typeable)
 
 -- | Time Signature, numerator and denominator
-data TimeSignature = TimeSignature { timeSigNum :: Integer , timeSigDenom :: Integer } deriving (Show)
+data TimeSignature = TimeSignature { timeSigNum :: Integer , timeSigDenom :: Integer } deriving (Show, Data, Typeable)
 
 timeSignatureToRatio :: TimeSignature -> Rational
 timeSignatureToRatio ts = timeSigNum ts % timeSigDenom ts
@@ -146,13 +147,13 @@ instance Eq TimeSignature where
   (==) x y = timeSignatureToRatio x == timeSignatureToRatio y
 
 -- | Articulation
-data Articulation = NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo deriving (Bounded, Enum, Show, Ord, Eq)
+data Articulation = NoArticulation | Tenuto | Portato | Marcato | Staccato | Staccatissimo deriving (Bounded, Enum, Show, Ord, Eq, Data, Typeable)
 
 -- | Instruments.
-newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord, Eq)
+newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord, Eq, Data, Typeable)
 
 -- | Accent
-data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq)
+data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq, Data, Typeable)
 
 -- | ScoreControls
 data ScoreControls =
@@ -175,11 +176,11 @@ data VoiceControl =
   | KeySignatureControl KeySignature
   | TimeSignatureControl TimeSignature
   | DynamicControl Dynamic
-  deriving (Ord, Eq, Show)
+  deriving (Ord, Eq, Show, Data, Typeable)
                                   
 -- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
 --   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
-newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional)
+newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional, Data, Typeable)
 
 -- | A note is either an ordinary note with pitch and rhythm,
 --   an accented note with pitch, rhythm, and accent,
@@ -206,7 +207,7 @@ data Note =
 data IndexedNote =
   IndexedNote IndexedPitch Rhythm (Set.Set VoiceControl)
   | IndexedRest Rhythm (Set.Set VoiceControl)
-  | IndexedPercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show)
+  | IndexedPercussionNote Rhythm (Set.Set VoiceControl) deriving (Eq, Show, Data, Typeable)
 
 -- | Intervals may be negative or positive and are computed as steps in a Scale
 type Interval = Int
