@@ -58,52 +58,89 @@ renderedCloseArrow    = stringEncoding ">>"
 renderedGlobalKey :: Builder
 renderedGlobalKey = stringEncoding "\\global"
 
--- | Unique PitchClass by pitch and accidental, aggregated by name for all accidentals
---   to map to separate encoding for Lilypond pitch and accidentals.
-equivPitchClassNames :: [[PitchClass]]
-equivPitchClassNames = [[Cff, Cf, C, Cs, Css], [Dff, Df, D, Ds, Dss], [Eff, Ef, E, Es, Ess], [Fff, Ff, F, Fs, Fss], [Gff, Gf, G, Gs, Gss], [Aff, Af, A, As, Ass], [Bff, Bf, B, Bs, Bss]]
+pitchClassToLilypondName :: PitchClass -> String
+pitchClassToLilypondName Cff = "c"
+pitchClassToLilypondName Cf  = "c"
+pitchClassToLilypondName C   = "c"
+pitchClassToLilypondName Cs  = "c"
+pitchClassToLilypondName Css = "c"
+pitchClassToLilypondName Dff = "d"
+pitchClassToLilypondName Df  = "d"
+pitchClassToLilypondName D   = "d"
+pitchClassToLilypondName Ds  = "d"
+pitchClassToLilypondName Dss = "d"
+pitchClassToLilypondName Eff = "e"
+pitchClassToLilypondName Ef  = "e"
+pitchClassToLilypondName E   = "e"
+pitchClassToLilypondName Es  = "e"
+pitchClassToLilypondName Ess = "e"
+pitchClassToLilypondName Fff = "f"
+pitchClassToLilypondName Ff  = "f"
+pitchClassToLilypondName F   = "f"
+pitchClassToLilypondName Fs  = "f"
+pitchClassToLilypondName Fss = "f"
+pitchClassToLilypondName Gff = "g"
+pitchClassToLilypondName Gf  = "g"
+pitchClassToLilypondName G   = "g"
+pitchClassToLilypondName Gs  = "g"
+pitchClassToLilypondName Gss = "g"
+pitchClassToLilypondName Aff = "a"
+pitchClassToLilypondName Af  = "a"
+pitchClassToLilypondName A   = "a"
+pitchClassToLilypondName As  = "a"
+pitchClassToLilypondName Ass = "a"
+pitchClassToLilypondName Bff = "b"
+pitchClassToLilypondName Bf  = "b"
+pitchClassToLilypondName B   = "b"
+pitchClassToLilypondName Bs  = "b"
+pitchClassToLilypondName Bss = "b"
 
--- | Lilypond pitch names are lower-case
-pitchNames :: [String]
-pitchNames = ["c", "d", "e", "f", "g", "a", "b"]
-
--- | Find index in equivPitchClassNames for PitchClass.
---   Should never fail so long as equivPitchClassNames
---   contains all instances of PitchClass (verified
---   by testEquivPitchClasses).
-findEquivPitchClassIndex :: PitchClass -> Int
-findEquivPitchClassIndex pc =
-  fromMaybe
-    (error $ "findEquivPitchClassIndex no match for pitch class " ++ show pc ++ " in " ++ show equivPitchClassNames)
-    (findIndex (elem pc) equivPitchClassNames)
+pitchClassToLilypondAccidental :: PitchClass -> String
+pitchClassToLilypondAccidental Cff = "eses"
+pitchClassToLilypondAccidental Cf  = "es"
+pitchClassToLilypondAccidental C   = ""
+pitchClassToLilypondAccidental Cs  = "is"
+pitchClassToLilypondAccidental Css = "isis"
+pitchClassToLilypondAccidental Dff = "eses"
+pitchClassToLilypondAccidental Df  = "es"
+pitchClassToLilypondAccidental D   = ""
+pitchClassToLilypondAccidental Ds  = "is"
+pitchClassToLilypondAccidental Dss = "isis"
+pitchClassToLilypondAccidental Eff = "eses"
+pitchClassToLilypondAccidental Ef  = "es"
+pitchClassToLilypondAccidental E   = ""
+pitchClassToLilypondAccidental Es  = "is"
+pitchClassToLilypondAccidental Ess = "isis"
+pitchClassToLilypondAccidental Fff = "eses"
+pitchClassToLilypondAccidental Ff  = "es"
+pitchClassToLilypondAccidental F   = ""
+pitchClassToLilypondAccidental Fs  = "is"
+pitchClassToLilypondAccidental Fss = "isis"
+pitchClassToLilypondAccidental Gff = "eses"
+pitchClassToLilypondAccidental Gf  = "es"
+pitchClassToLilypondAccidental G   = ""
+pitchClassToLilypondAccidental Gs  = "is"
+pitchClassToLilypondAccidental Gss = "isis"
+pitchClassToLilypondAccidental Aff = "eses"
+pitchClassToLilypondAccidental Af  = "es"
+pitchClassToLilypondAccidental A   = ""
+pitchClassToLilypondAccidental As  = "is"
+pitchClassToLilypondAccidental Ass = "isis"
+pitchClassToLilypondAccidental Bff = "eses"
+pitchClassToLilypondAccidental Bf  = "es"
+pitchClassToLilypondAccidental B   = ""
+pitchClassToLilypondAccidental Bs  = "b"
+pitchClassToLilypondAccidental Bss = "isis"
 
 -- | Map from e.g. Cff to "c".
 renderPitchName :: PitchClass -> Builder
-renderPitchName pc = stringEncoding $ pitchNames !! findEquivPitchClassIndex pc
-
--- | Accidental strings to match order of accidentals in equivPitchClassNames elements,
---   e.g. [Eff, Ef, E, Es, Ess] -> ["eses", "es", "", "is", "isis"].  
---   Lilypond accidental names are in Dutch
-accidentalNames :: [String]
-accidentalNames = ["eses", "es", "", "is", "isis"];
-
--- | Map from e.g. Cff to "eses".
---   The elemIndex should never fail so long as the count of
---   all lists in equivPitchClassNames is the same as the count
---   of elements in accidentalNames (verified by testAccidentalNames).
-findEquivPitchClassAccidentalIndex :: PitchClass -> Int
-findEquivPitchClassAccidentalIndex pc =
-  fromMaybe
-    (error $ "findEquivPitchClassAccidentalIndex no match for pitch class " ++ show pc ++ " in " ++ show pcs)
-    (elemIndex pc pcs)
-  where
-    pcs = equivPitchClassNames !! findEquivPitchClassIndex pc
+renderPitchName = stringEncoding . pitchClassToLilypondName
 
 -- | Map e.g. Es to "is".
 renderAccidental :: PitchClass -> Builder
-renderAccidental pc = stringEncoding $ accidentalNames !! findEquivPitchClassAccidentalIndex pc
+renderAccidental = stringEncoding . pitchClassToLilypondAccidental
 
--- | Map e.g. "Bff" to "b".
+-- | Map e.g. "Bff" to "beses".
 renderPitchClass :: PitchClass -> Builder
 renderPitchClass pc = renderPitchName pc <> renderAccidental pc
 
@@ -130,6 +167,20 @@ renderPitch (Pitch pitchClass octave) =
 --   for "no rest" for the first voice of a canon.
 --   Answser empty list so higher-level renderer drops
 --   value.
+--   TBD:  constrain rhythm constructor so you cannot
+--   create an instance that doesn't map to a Lilypond
+--   value?  Similar sort of problem in ScoreToMidi but
+--   divisor is smaller, ratio has to divide evenly to
+--   512.  Doesn't seem unreasonable to constrain here
+--   to something that can be printed, although could
+--   have customizable constructor by resolution of
+--   rendering target.  Real trick would be to have
+--   type system allow e.g. only limited range of 
+--   powers of two for denominator, e.g.
+--   [1,2,4,8,16,32,64,128].  But then you'd always
+--   be interpreting the type for this kind of
+--   behavior, e.g. rendering Peano cardinals as 
+--   integers.
 renderRhythm :: Rhythm -> [Builder]
 renderRhythm (Rhythm rhythm)
   | num == 0              = [] 

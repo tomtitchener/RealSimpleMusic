@@ -4,6 +4,7 @@
 
 module Music.Data where
 
+import           Data.Word
 import           Data.Data
 import           Data.Ratio
 import qualified Data.Set      as Set
@@ -177,9 +178,41 @@ data VoiceControl =
   | TimeSignatureControl TimeSignature
   | DynamicControl Dynamic
   deriving (Ord, Eq, Show, Data, Typeable)
-                                  
--- | Rhythm is a ratio, 1:1 for whole note, 2:1 for breve, 1:8 for eighth node, etc.
---   TBD:  limit denominator to meaningful values, 1, 2, 4, 8, 16, 32, 64, 128.
+
+-- TBD:  Have an internal, type-safe repesentation for Rhythm.
+-- Allow unrestricted type at API, for convenience of being able
+-- to say (Rhythm (3%8)) even though you can also say nonsensical
+-- things like (Rhythm (4%5)).  Have a pass at the start of the
+-- APIs that converts and validates Rhythm -> RhythmInternal.
+-- Ugh, what a pain!  Why not just have a constructor that gives
+-- the (restricted) type back.  
+data RhythmDenominator =
+  Whole 
+  | Half 
+  | Quarter 
+  | Eighth 
+  | Sixteenth 
+  | ThirtySecond 
+  | SixtyFourth 
+  | OneTwentyEighth
+  deriving (Enum, Ord, Eq, Show, Bounded, Data, Typeable)
+
+rhythmDenominatorToInt :: RhythmDenominator -> Int
+rhythmDenominatorToInt = (2 ^) . fromEnum
+
+data Rhythm' = Rhythm' { rhythmNum :: Word, rhythmDenom :: RhythmDenominator } deriving (Show, Ord, Eq, Data, Typeable)
+
+rhythm :: Rational -> Either String Rhythm'
+rhythm r
+  | num < (toInteger (minBound::Word)) || num > (toInteger (maxBound::Word)) = Left $ "rhythm numerator " ++ show num ++ " < " ++ show (minBound::Word) ++ " or > " ++ show (maxBound::Word)
+  | not (any (== den) [1,2,4,8,16,32,64,128]) = Left "rhythm deninator not equal to 1, 2, 4, 8, 16, 32, 64, 128"
+  | otherwise = Right $ Rhythm' (fromIntegral den::Word) ([(minBound::RhythmDenominator)..(maxBound::RhythmDenominator)] !! idx)
+  where
+    num   = numerator r
+    den   = denominator r
+    den' 
+    idx   = fromInteger $ ceiling (logBase (realToFrac 2) (realToFrac den))
+
 newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional, Data, Typeable)
 
 -- | A note is either an ordinary note with pitch and rhythm,
