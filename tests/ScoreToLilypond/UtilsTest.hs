@@ -1,28 +1,12 @@
 module ScoreToLilypond.UtilsTest where
 
 import           Data.ByteString.Builder
-import           Data.List (sort)
 import           Data.Ratio
 import           Data.Either.Combinators (fromRight')
 import qualified Data.Set as Set
 import           RealSimpleMusic
 import           ScoreToLilypond.Utils
 import           Test.HUnit
-
-allPitchClasses :: [PitchClass]
-allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]
-
-testEquivPitchClassValues :: Assertion
-testEquivPitchClassValues =
- allPitchClasses @=? (sort . concat) equivPitchClassNames
-
-testPitchNames :: Assertion
-testPitchNames =
-   length pitchNames @=? length equivPitchClassNames
-
-testAccidentalNames :: Assertion
-testAccidentalNames =
-  replicate (length equivPitchClassNames) (length accidentalNames) @=? map length equivPitchClassNames
 
 testAccentNames :: Assertion
 testAccentNames = 

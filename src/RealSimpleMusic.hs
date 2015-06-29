@@ -44,7 +44,6 @@ module RealSimpleMusic (
    ,  indexedNoteToNote
    ,  indexedNotesToNotes
    ,  transposeIndexedNote
-   ,  noteToRhythm
    ,  Interval
    ,  Intervals
    ,  Chord(..)

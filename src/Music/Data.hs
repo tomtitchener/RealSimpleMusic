@@ -4,10 +4,12 @@
 
 module Music.Data where
 
-import           Data.Word
 import           Data.Data
+import           Data.List
+import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set      as Set
+import           Data.Word
 
 -- | Pitch classes with two accidentals enharmonic equivalents, ordered in ascending fifths where order is significant.
 data PitchClass = Fff | Cff | Gff | Dff | Aff | Eff | Bff | Ff | Cf | Gf | Df | Af | Ef | Bf | F | C | G | D | A | E | B | Fs | Cs | Gs | Ds | As | Es | Bs | Fss | Css | Gss | Dss | Ass | Ess | Bss deriving (Bounded, Enum, Show, Eq, Ord)
@@ -179,14 +181,7 @@ data VoiceControl =
   | DynamicControl Dynamic
   deriving (Ord, Eq, Show, Data, Typeable)
 
--- TBD:  Have an internal, type-safe repesentation for Rhythm.
--- Allow unrestricted type at API, for convenience of being able
--- to say (Rhythm (3%8)) even though you can also say nonsensical
--- things like (Rhythm (4%5)).  Have a pass at the start of the
--- APIs that converts and validates Rhythm -> RhythmInternal.
--- Ugh, what a pain!  Why not just have a constructor that gives
--- the (restricted) type back.  
-data RhythmDenominator =
+data RhythmDenom =
   Whole 
   | Half 
   | Quarter 
@@ -197,21 +192,31 @@ data RhythmDenominator =
   | OneTwentyEighth
   deriving (Enum, Ord, Eq, Show, Bounded, Data, Typeable)
 
-rhythmDenominatorToInt :: RhythmDenominator -> Int
+rhythmDenominatorToInt :: RhythmDenom -> Int
 rhythmDenominatorToInt = (2 ^) . fromEnum
 
-data Rhythm' = Rhythm' { rhythmNum :: Word, rhythmDenom :: RhythmDenominator } deriving (Show, Ord, Eq, Data, Typeable)
+data Rhythm' = Rhythm' { rhythmNum :: Word, rhythmDenom :: RhythmDenom } deriving (Show, Ord, Eq, Data, Typeable)
 
-rhythm :: Rational -> Either String Rhythm'
-rhythm r
-  | num < (toInteger (minBound::Word)) || num > (toInteger (maxBound::Word)) = Left $ "rhythm numerator " ++ show num ++ " < " ++ show (minBound::Word) ++ " or > " ++ show (maxBound::Word)
-  | not (any (== den) [1,2,4,8,16,32,64,128]) = Left "rhythm deninator not equal to 1, 2, 4, 8, 16, 32, 64, 128"
-  | otherwise = Right $ Rhythm' (fromIntegral den::Word) ([(minBound::RhythmDenominator)..(maxBound::RhythmDenominator)] !! idx)
+mkRhythm :: Rational -> Either String Rhythm'
+mkRhythm r
+  | num < (toInteger (minBound::Word)) || num > (toInteger (maxBound::Word)) = Left rngerr
+  | not (any (== den) okdens)                                                = Left $ "rhythm denominator not one of " ++ show okdens
+  | otherwise                                                                = Right $ Rhythm' (fromIntegral num::Word) (alldens !! denidx)
   where
-    num   = numerator r
-    den   = denominator r
-    den' 
-    idx   = fromInteger $ ceiling (logBase (realToFrac 2) (realToFrac den))
+    rngerr  = "rhythm numerator " ++ show num ++ " < " ++ show (minBound::Word) ++ " or > " ++ show (maxBound::Word)
+    alldens = [(minBound::RhythmDenom)..(maxBound::RhythmDenom)]
+    denidx  = fromJust $ elemIndex den okdens
+    okdens  = [1,2,4,8,16,32,64,128]
+    den     = denominator r
+    num     = numerator r
+
+-- This approach can produce funny results!  Things you'd think woud fail, like "rhythm (20%5)" turn out to succeed,
+-- because Data.Ratio is going to automatically reduce e.g. (20%5) to (4%1)!  So in fact the filtering only catches
+-- ratios that don't reduce to a ratio with an invalid denominator, like (29%7).  Does this matter?  If I were to do
+-- arithmetic over rhythms then I'd say the answer would be yes, and it's a good thing.  And if you do something silly
+-- like specify a rhythm of (21%7), well, then it should be obvious what you're really saying is (3%1).  Note that
+-- (1%(-1)) reduces to ((-1)%1), with the result that the Word range check above catches all Data.Ratio constructed 
+-- with negative numbers.  And for ((-1)%(-1)) you get (1%1) also, so the arithmetic works out "right".
 
 newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional, Data, Typeable)
 
