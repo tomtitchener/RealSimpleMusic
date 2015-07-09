@@ -28,14 +28,18 @@ cycleOfFifths = [(minBound::PitchClass)..(maxBound::PitchClass)]
 --   and enum value in range.
 --                                                  <-- flat                      sharp -->
 --     0   1   2   3   4   5   6   7   8   9  10  11  12  13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34
---   [-2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]  
+--   [-2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]
+
+countNamedPitches :: Int
+countNamedPitches = 7
+
 isSharp :: PitchClass -> Bool
 isSharp pc =
-  fromEnum pc < 14
+  fromEnum pc < 2 * countNamedPitches
   
 isFlat :: PitchClass -> Bool
 isFlat pc =
-  fromEnum pc > 20
+  fromEnum pc > (3 * countNamedPitches) - 1
 
 fifthsDistance :: PitchClass -> PitchClass -> Int
 fifthsDistance pc1 pc2 =
@@ -44,44 +48,17 @@ fifthsDistance pc1 pc2 =
     idx1 = fromEnum pc1
     idx2 = fromEnum pc2
 
--- | Offset from start of cycle of fifths for pitch class
---   from which you can form a major scale while remaining
---   within the range of pitch classes in a uniform cycle of
---   fifths, i.e. one with the same count of flats and sharps
---   in either direction (2, above).  Try to form a major scale
---   from a pitch class at an index smaller than this and you
---   wind up with a scale with n+1 flats, or more exactly, with
---   an index out of the range of pitch classes in the cycle of
---   fifths.
-lowestMajorScaleOffset :: Int
-lowestMajorScaleOffset  = 1
-
--- | Offset from the end of cycle of fifths for pitch class
---   for which you can form a major scale (see above).  Try
---   to form a major scale from a pitch class index larger
---   than this and you wind up with a n+1 sharps, or more
---   exactly, with an index out of the range of pitch classes
---   in the cycle of fifths.
-highestMajorScaleOffset :: Int
-highestMajorScaleOffset = 5
-
-lowestMinorScaleOffset :: Int
-lowestMinorScaleOffset  = 4
-
-highestMinorScaleOffset :: Int
-highestMinorScaleOffset = 2
-
 lowestMajorScalePitchClass :: PitchClass
-lowestMajorScalePitchClass = cycleOfFifths !! lowestMajorScaleOffset
+lowestMajorScalePitchClass = Cff
 
 highestMajorScalePitchClass :: PitchClass
-highestMajorScalePitchClass = cycleOfFifths !! (length cycleOfFifths - highestMajorScaleOffset - 1)
+highestMajorScalePitchClass =  Css
 
 lowestMinorScalePitchClass :: PitchClass
-lowestMinorScalePitchClass = cycleOfFifths !! lowestMinorScaleOffset
-
+lowestMinorScalePitchClass = Aff
+ 
 highestMinorScalePitchClass :: PitchClass
-highestMinorScalePitchClass = cycleOfFifths !! (length cycleOfFifths - highestMinorScaleOffset - 1)
+highestMinorScalePitchClass = Ass
 
 pitchClass2MaybeCycleOfFifthsIndex :: PitchClass -> Int -> Int -> Maybe Int
 pitchClass2MaybeCycleOfFifthsIndex tonic low high =
@@ -89,28 +66,11 @@ pitchClass2MaybeCycleOfFifthsIndex tonic low high =
   where
     testIdx idx = if idx - low < 0 || idx + high >= length cycleOfFifths then Nothing else Just idx
     
-pitchClass2MaybeCycleOfFifthsMajorScaleIndex :: PitchClass -> Maybe Int
-pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic =
-  pitchClass2MaybeCycleOfFifthsIndex tonic lowestMajorScaleOffset highestMajorScaleOffset
-  
-pitchClass2MaybeCycleOfFifthsMinorScaleIndex :: PitchClass -> Maybe Int
-pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic =
-  pitchClass2MaybeCycleOfFifthsIndex tonic lowestMinorScaleOffset highestMinorScaleOffset
-
-testScaleTonicErr :: Int -> Int -> PitchClass -> String -> PitchClass -> PitchClass -> Either String Int
-testScaleTonicErr low high tonic name lowpc highpc =
-  let
-    elemerrmsg  = "pitchClass2CycleOfFifthsIndexErr no pitch class " ++ show tonic ++ " in " ++ show cycleOfFifths
-    rangerrmsg  = name ++ " scale tonic " ++ show tonic ++ " out of range " ++ show  lowpc ++ " to " ++ show highpc ++ " in " ++ show cycleOfFifths
-    testIdx idx = if idx - low < 0 || idx + high >= length cycleOfFifths then Left rangerrmsg else Right idx
-  in
-    justErr elemerrmsg (elemIndex tonic cycleOfFifths) >>= testIdx 
-
-testMajorScaleTonicErr :: PitchClass -> String -> PitchClass -> PitchClass -> Either String Int
-testMajorScaleTonicErr = testScaleTonicErr lowestMajorScaleOffset highestMajorScaleOffset
-
-testMinorScaleTonicErr :: PitchClass -> String -> PitchClass -> PitchClass -> Either String Int
-testMinorScaleTonicErr = testScaleTonicErr lowestMinorScaleOffset highestMinorScaleOffset
+testScaleTonicErr :: PitchClass -> String -> PitchClass -> PitchClass -> Either String PitchClass
+testScaleTonicErr tonic name lowpc highpc =
+  if tonic < lowpc || tonic >= highpc then Left rangerrmsg else Right tonic
+  where
+    rangerrmsg = name ++ " scale tonic " ++ show tonic ++ " out of range " ++ show  lowpc ++ " to " ++ show highpc ++ " in " ++ show cycleOfFifths
 
 findAdjByFifths :: PitchClass -> [PitchClass]  -> Either String PitchClass
 findAdjByFifths pc pcs =
@@ -158,7 +118,7 @@ scaleFromEnhChromaticScale tonic ups downs =
       downs' <- foldM accDown [tonic] downs
       return $ Scale ups' downs'
       
-genScale :: PitchClass -> String -> [Int] -> [Int] -> (PitchClass -> String -> PitchClass -> PitchClass -> Either String Int) -> PitchClass -> PitchClass -> Either String Scale
+genScale :: PitchClass -> String -> [Int] -> [Int] -> (PitchClass -> String -> PitchClass -> PitchClass -> Either String PitchClass) -> PitchClass -> PitchClass -> Either String Scale
 genScale tonic name up down testTonic low high =
   testTonic tonic name low high >> scaleFromEnhChromaticScale tonic up down >>= \scale -> return scale
                                                                                            
@@ -169,7 +129,7 @@ majorScale tonic =
   where
     ups   = [2,2,1,2,2,2]
     downs = [-1,-2,-2,-2,-1,-2]
-    test  = testMajorScaleTonicErr
+    test  = testScaleTonicErr
     low   = lowestMajorScalePitchClass 
     high  = highestMajorScalePitchClass
 
@@ -179,7 +139,7 @@ commonMinorScale name downs tonic =
   genScale tonic name ups downs test low high
   where
     ups  = [2,1,2,2,1,2]
-    test = testMinorScaleTonicErr
+    test = testScaleTonicErr
     low  = lowestMinorScalePitchClass
     high = highestMinorScalePitchClass
     
@@ -207,12 +167,6 @@ transposeIndexedNote _ _ rest@(IndexedRest _ _)                       = rest
 transposeIndexedNote _ _ perc@(IndexedPercussionNote _ _)             = perc
 transposeIndexedNote scale interval (IndexedNote pitch rhythm cntrls) = IndexedNote (transposeIndexedPitch scale interval pitch) rhythm cntrls
 
--- | Parse rhythm common to all Notes.
-noteToRhythm :: Note -> Rhythm
-noteToRhythm (Note _ rhythm _)         = rhythm
-noteToRhythm (Rest rhythm _)           = rhythm
-noteToRhythm (PercussionNote rhythm _) = rhythm
-
 -- | Insert control common to all Notes
 addControlToNote :: Note -> VoiceControl -> Note
 addControlToNote (Note pitch rhythm controls)     control = Note pitch rhythm (Set.insert control controls)
@@ -226,7 +180,7 @@ addControlToNote (PercussionNote rhythm controls) control = PercussionNote rhyth
 --   based on PitchClass C.
 findLowestChromaticIndex :: [PitchClass] -> Int
 findLowestChromaticIndex pitches =
-  head $ elemIndices lowestIndex chromaticIndices     -- head [2] -> 2 (safe) unsafe if pitches is empty
+  head $ elemIndices lowestIndex chromaticIndices     -- head [2] -> 2 (safe) unsafe only if pitches is empty
   where
     chromaticIndices = map pitchClassToEnhIdx pitches -- [Af,Bf,C,Df,Ef,F,G] -> [8,10,0,1,3,5,7]
     lowestIndex = minimum chromaticIndices            -- head [0,1,3,5,7,8,10] -> 0

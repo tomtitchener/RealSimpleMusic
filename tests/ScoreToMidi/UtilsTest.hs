@@ -4,9 +4,8 @@ module ScoreToMidi.UtilsTest where
 
 import           Control.Monad.State
 import           Data.List
-import           Data.Ratio
 import           Data.Traversable
-import           RealSimpleMusic
+import           Music.Data
 import           ScoreToMidi.Utils
 import qualified Sound.MIDI.Message.Channel as ChannelMsg
 import           Test.HUnit
@@ -110,40 +109,27 @@ testSynthesizeUpPanSpan = testSynthesizeSpan LT synthesizeUpPanSpan id
 testSynthesizeDownPanSpan :: Pan -> Pan -> Duration -> Property
 testSynthesizeDownPanSpan = testSynthesizeSpan GT synthesizeDownPanSpan id
 
-instance Arbitrary TempoValue where
+instance Arbitrary TempoVal where
   arbitrary =
     do
-      num <- elements [1, 2, 4, 8, 16, 32, 64, 128, 256]
+      den <- elements [(minBound::RhythmDenom)..(maxBound::RhythmDenom)]
       bpm <- elements [1..200]
-      return $ TempoValue (1%num) bpm
+      return $ TempoVal den bpm
 
 -- Construct pair pre-normalized
-data NormalizedTempoValues = NormalizedTempoValues TempoValue TempoValue deriving (Show)
-instance Arbitrary NormalizedTempoValues where
+data NormalizedTempoVals = NormalizedTempoVals TempoVal TempoVal deriving (Show)
+instance Arbitrary NormalizedTempoVals where
   arbitrary =
     do
       tempoOne <- arbitrary
       tempoTwo <- arbitrary
-      let (tempoOne', tempoTwo') = normalizeTempoValues tempoOne tempoTwo
-      return $ NormalizedTempoValues tempoOne' tempoTwo'
+      let (tempoOne', tempoTwo') = normalizeTempoVals tempoOne tempoTwo
+      return $ NormalizedTempoVals tempoOne' tempoTwo'
 
--- | Refactor
-bindTempos :: TempoValue -> TempoValue -> (Tempo, Tempo)
-bindTempos start stop =
-  (startTempo, stopTempo)
-  where
-    (start', stop') = normalizeTempoValues start stop
-    startTempo      = tempoValueToTempo start'
-    stopTempo       = tempoValueToTempo stop'
-
-testSynthesizeAccelerandoSpan :: NormalizedTempoValues -> Duration -> Property
-testSynthesizeAccelerandoSpan (NormalizedTempoValues start stop) =
-  testSynthesizeSpan LT synthesizeAccelerandoSpan id startTempo stopTempo
-  where
-    (startTempo, stopTempo) = bindTempos start stop
+testSynthesizeAccelerandoSpan :: NormalizedTempoVals -> Duration -> Property
+testSynthesizeAccelerandoSpan (NormalizedTempoVals start stop) =
+  testSynthesizeSpan LT synthesizeAccelerandoSpan id start stop
       
-testSynthesizeRitardandoSpan :: NormalizedTempoValues -> Duration -> Property
-testSynthesizeRitardandoSpan (NormalizedTempoValues start stop) =
-  testSynthesizeSpan GT synthesizeRitardandoSpan id startTempo stopTempo
-  where
-    (startTempo, stopTempo) = bindTempos start stop
+testSynthesizeRitardandoSpan :: NormalizedTempoVals -> Duration -> Property
+testSynthesizeRitardandoSpan (NormalizedTempoVals start stop) =
+  testSynthesizeSpan GT synthesizeRitardandoSpan id start stop

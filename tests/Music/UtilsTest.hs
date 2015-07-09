@@ -2,8 +2,8 @@ module Music.UtilsTest where
 
 import Control.Monad
 import Data.List (findIndex, elemIndex, sort, group)
-import Data.Maybe (fromJust, isJust)
-import Data.Either.Combinators (fromRight')
+import Data.Maybe (fromJust)
+import Data.Either.Combinators (isRight, fromRight')
 import Music.Data
 import Music.Utils
 import Test.HUnit
@@ -89,7 +89,7 @@ instance Arbitrary PitchClass where
 
 pitchClassInMajorScaleRange :: PitchClass -> Bool
 pitchClassInMajorScaleRange tonic =
-  isJust $ pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic
+  isRight $ testScaleTonicErr tonic "test" lowestMajorScalePitchClass highestMajorScalePitchClass
 
 propMajorScaleIntervals :: PitchClass -> Property
 propMajorScaleIntervals tonic = 
@@ -137,12 +137,12 @@ instance Arbitrary Scale where
 --     0     2     4     6       8    10    12
 majorScaleFromCycleOfFifths :: PitchClass -> Scale
 majorScaleFromCycleOfFifths tonic =
-  case pitchClass2MaybeCycleOfFifthsMajorScaleIndex tonic of
-    Nothing -> error $ "majorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMajorScalePitchClass ++ " to " ++ show highestMajorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
-    Just idx -> Scale ascending $ (rotate (-1) . reverse) ascending
+  case testScaleTonicErr tonic "test" lowestMajorScalePitchClass highestMajorScalePitchClass of
+    Left err -> error err
+    Right _ -> Scale ascending $ (rotate (-1) . reverse) ascending
       where
-        start     = idx - lowestMajorScaleOffset
-        stop      = idx + highestMajorScaleOffset
+        start     = fromEnum tonic - 1
+        stop      = fromEnum tonic + 5
         pcs       = slice start stop cycleOfFifths
         ascendingFifths = rotateTo tonic $ sort pcs
         ascending = map (\x -> (ascendingFifths ++ ascendingFifths) !! x) [0,2..12] 
@@ -155,17 +155,17 @@ propMajorScaleId tonic =
 -- | Given a pitch class answer the natural minor scale, up to two accidentals.
 naturalMinorScaleFromCycleOfFifths :: PitchClass -> Scale
 naturalMinorScaleFromCycleOfFifths tonic =
-  case pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic of
-    Nothing -> error $ "naturalMinorScale tonic " ++ show tonic ++ " is out of range " ++ show  lowestMinorScalePitchClass ++ " to " ++ show highestMinorScalePitchClass ++ " in cycle of fifths " ++ show cycleOfFifths
-    Just idx -> Scale ascending $ (rotate (-1) . reverse) ascending
+  case testScaleTonicErr tonic "test" lowestMinorScalePitchClass highestMinorScalePitchClass of
+    Left err -> error err
+    Right _ -> Scale ascending $ (rotate (-1) . reverse) ascending
       where
-        major = majorScaleFromCycleOfFifths $ cycleOfFifths !! (idx - 3)
+        major = majorScaleFromCycleOfFifths $ toEnum ((fromEnum tonic) - 3)
         ascending = rotate 5 $ ascendingScale major
   
 pitchClassInNaturalMinorScaleRange :: PitchClass -> Bool
 pitchClassInNaturalMinorScaleRange tonic =
-  isJust $ pitchClass2MaybeCycleOfFifthsMinorScaleIndex tonic
-  
+  isRight $ testScaleTonicErr tonic "test" lowestMinorScalePitchClass highestMinorScalePitchClass
+
 propNaturalMinorScaleId :: PitchClass -> Property
 propNaturalMinorScaleId tonic =
   pitchClassInNaturalMinorScaleRange tonic ==>

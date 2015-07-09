@@ -182,19 +182,19 @@ renderPitch (Pitch pitchClass octave) =
 --   behavior, e.g. rendering Peano cardinals as 
 --   integers.
 renderRhythm :: Rhythm -> [Builder]
-renderRhythm (Rhythm rhythm)
-  | num == 0              = [] 
-  | num > 1 && denom == 1 = [intDec denom <> renderedAsterisk <> intDec num]  -- replicate num $ intDec denom 
-  | num == 1              = [intDec denom]
-  | num == 3              = [intDec (denom `div` 2) <> renderedDot]
-  | otherwise             = intDec remdenom : renderRhythm (Rhythm (rhythm - remainder))
+renderRhythm (Rhythm start)
+  | startNum == 0                   = [] 
+  | startNum > 1 && startDenom == 1 = [(intDec . fromIntegral) startDenom <> renderedAsterisk <> (intDec . fromIntegral) startNum]  -- replicate num $ intDec denom 
+  | startNum == 1                   = [(intDec . fromIntegral) startDenom]
+  | startNum == 3                   = [intDec ((fromIntegral startDenom) `div` 2) <> renderedDot]
+  | otherwise                       = intDec (fromIntegral (denominator unit)) : renderRhythm (Rhythm remain)
   where
-    num       = fromIntegral $ numerator rhythm
-    denom     = fromIntegral $ denominator rhythm
-    remainder = fromMaybe
-                 (error $ "renderRhythm no remainder for rhythm " ++ show rhythm)
-                 (find (rhythm >) [1%1, 1%2, 1%4, 1%8, 1%16, 1%32, 1%64, 1%128, 1%256])
-    remdenom  = fromIntegral $ denominator remainder
+    startNum   = numerator start
+    startDenom = denominator start
+    unit       = fromMaybe
+                 (error $ "renderRhythm no remainder for rhythm " ++ show start)
+                 (find (start >) [1%1, 1%2, 1%4, 1%8, 1%16, 1%32, 1%64, 1%128])
+    remain = start - unit
 
 -- | Music accents range Softest, VerySoft, Soft, Normal, Hard, VeryHard, Hardest
 --   and are interepreted by scoreToMidi as modifications to the normalVelocity.
@@ -256,9 +256,9 @@ renderFractionalDynamic' unit oldRenderedDynamic (dynamic, fraction)
   | fraction == 0                                  = (newRenderedDynamic, renderedNothing)
   | otherwise                                      = (renderedNothing,    renderedFraction)
   where
+    errorText           = "renderFractionalDynamic sequential zero duration dynamics " ++ show (toLazyByteString oldRenderedDynamic) ++ " , " ++ show dynamic
     notNothing rendered = toLazyByteString rendered /= toLazyByteString renderedNothing
     newRenderedDynamic  = renderedDynamicValues !! fromEnum dynamic 
-    errorText           = "renderFractionalDynamic sequential zero duration dynamics " ++ show (toLazyByteString oldRenderedDynamic) ++ " , " ++ show dynamic
     renderedFraction    = renderSpace (Rhythm (unit * fromIntegral fraction)) <> oldRenderedDynamic <> newRenderedDynamic <> renderedSpace
 
 renderFractionalDynamic :: Rational -> (DiscreteDynamicValue, Int) -> State Builder Builder
@@ -323,11 +323,11 @@ renderTempo' (Rhythm rhythm) bpm =
 
 -- | Bool is flag saing if continous tempo control is engaged.
 renderTempo :: (Bool, Tempo) -> (Bool, Builder)
-renderTempo (False, Accelerando)  = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"")
-renderTempo (True,  Accelerando)  = error "renderTempo two continuous controls in a row without intervening discrete control"
-renderTempo (False, Ritardando)   = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"")
-renderTempo (True,  Ritardando)   = error "renderTempo two continuous controls in a row without intervening discrete control"
-renderTempo (_, Tempo rhythm bpm) = (False, renderTempo' rhythm bpm)
+renderTempo (False, Accelerando)                = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"accel.\"")
+renderTempo (True,  Accelerando)                = error "renderTempo two continuous controls in a row without intervening discrete control"
+renderTempo (False, Ritardando)                 = (True, stringEncoding "\\override TextSpanner.bound-details.left.text = \"rit.\"")
+renderTempo (True,  Ritardando)                 = error "renderTempo two continuous controls in a row without intervening discrete control"
+renderTempo (_,     Tempo (TempoVal denom bpm)) = (False, renderTempo' (Rhythm (1 % rhythmDenomToInteger denom)) bpm)
 
 -- | Lilypond wants e.g. \key g \minor, but all I have from KeySignature is the count of sharps and flats.
 --   From which I could deduce major or minor tonic pitches equally.  Curiously enough, though, from the

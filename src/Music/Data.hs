@@ -1,15 +1,10 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 -- | Data definitions for real simple music types.
 
 module Music.Data where
 
 import           Data.Data
-import           Data.List
-import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set      as Set
-import           Data.Word
 
 -- | Pitch classes with two accidentals enharmonic equivalents, ordered in ascending fifths where order is significant.
 data PitchClass = Fff | Cff | Gff | Dff | Aff | Eff | Bff | Ff | Cf | Gf | Df | Af | Ef | Bf | F | C | G | D | A | E | B | Fs | Cs | Gs | Ds | As | Es | Bs | Fss | Css | Gss | Dss | Ass | Ess | Bss deriving (Bounded, Enum, Show, Eq, Ord)
@@ -52,11 +47,18 @@ pitchClassToEnhIdx Ass = 11
 pitchClassToEnhIdx B   = 11
 pitchClassToEnhIdx Cf  = 11
 
--- | Scale is two lists of pitch classes
+-- | Scale is two lists of pitch classes, pitch class lists most not be empty!
+--   Ensure by hiding data type in API.
 data Scale =
   Scale { ascendingScale  :: [PitchClass]
         , descendingScale :: [PitchClass]
         } deriving (Eq, Show)
+
+scaleToAscendingPitchClasses :: Scale -> [PitchClass]
+scaleToAscendingPitchClasses = ascendingScale
+
+scaleToDescendingPitchClasses :: Scale -> [PitchClass]
+scaleToDescendingPitchClasses = descendingScale
 
 -- | Octave covers signed range where 0 corresponds to span above middle C.
 --   Octave is computed from count of items in scale.  Integer range vastly
@@ -127,12 +129,93 @@ instance Bounded PanVal where
     minBound = PanVal 0   --  Midi-ism
     maxBound = PanVal 127 --  Midi-ism
 
+-- Hide normal constructor to restrict numerators to positive values, denominators to reasonable powers of two.
+-- Maintain inner representation for ease of arithmetic.
+newtype Rhythm = Rhythm { rhythmVal :: Rational } deriving (Show, Ord, Eq, Data, Typeable)
+
+rhythmDenominators :: [Integer]
+rhythmDenominators = [1,2,4,8,16,32,64,128]
+
+-- | Create rhythm with restricted values:
+--   * numerator must be >= 0
+--   * denominator can only be one of [1,2,4,8,16,32,64,128]
+mkRhythm :: Rational -> Either String Rhythm
+mkRhythm r
+  | num <= 0                          = Left rngerr
+  | den `notElem` rhythmDenominators  = Left $ "rhythm denominator not one of " ++ show rhythmDenominators
+  | otherwise                         = Right $ Rhythm r
+  where
+    rngerr  = "rhythm numerator " ++ show num ++ " < 0"
+    den     = denominator r
+    num     = numerator r
+
+getRhythm :: Rhythm -> Rational
+getRhythm = rhythmVal
+
+-- This approach can produce funny results!  Things you'd think woud fail, like "rhythm (20%5)" turn out to succeed,
+-- because Data.Ratio is going to automatically reduce e.g. (20%5) to (4%1)!  So in fact the filtering only catches
+-- ratios that don't reduce to a ratio with an invalid denominator, like (29%7).  Does this matter?  If I were to do
+-- arithmetic over rhythms then I'd say the answer would be yes, and it's a good thing.  And if you do something silly
+-- like specify a rhythm of (21%7), well, then it should be obvious what you're really saying is (3%1).  Note that
+-- (1%(-1)) reduces to ((-1)%1), with the result that the Word range check above catches all Data.Ratio constructed 
+-- with negative numbers.  And for ((-1)%(-1)) you get (1%1) also, so the arithmetic works out "right".
+
+data RhythmDenom =
+  Whole 
+  | Half 
+  | Quarter 
+  | Eighth 
+  | Sixteenth 
+  | ThirtySecond 
+  | SixtyFourth 
+  | OneTwentyEighth
+  deriving (Enum, Ord, Eq, Show, Bounded, Data, Typeable)
+
+rhythmDenomToInteger :: RhythmDenom -> Integer
+rhythmDenomToInteger = ((2::Integer) ^) . fromEnum
+
+data TempoVal = TempoVal { tempoUnit :: RhythmDenom, beatsPerMinute :: Integer } deriving (Show, Eq, Data, Typeable)
+
 -- | Tempo data, unit is e.g. Rhythm (1%4), beats per minute.
 --   Ritardando and Accelerando are continuous.
 data Tempo =
-  Tempo { tempoUnit :: Rhythm, beatsPerMinute :: Integer }
+  Tempo { tempoValue :: TempoVal } 
   | Ritardando 
-  | Accelerando deriving (Show, Eq, Ord, Data, Typeable)
+  | Accelerando deriving (Show, Eq, Data, Typeable)
+
+-- | Answer normalized first relative to second.
+--   Purpose is to convert tempo values with different
+--   RhythmDenom values into tempo values with the same
+--   RhythmDenom values so their beats per minute are
+--   directly comparable.  If RhythmDenom for first is
+--   smaller than RhythmDenom for second, then answer
+--   is first.  Otherwise, scale RhythmDenom and BPM
+--   for first to match RhythmDenom of second.
+normalizeTempoVal :: TempoVal -> TempoVal -> TempoVal
+normalizeTempoVal valOne@(TempoVal denomOne bpmOne) (TempoVal denomTwo _)
+  | one >= two = valOne
+  | otherwise = TempoVal denomTwo (bpmOne * (two `div` one))
+  where
+    one  = rhythmDenomToInteger denomOne
+    two  = rhythmDenomToInteger denomTwo
+
+-- | Normalize first with second, second with first.
+normalizeTempoVals :: TempoVal -> TempoVal -> (TempoVal, TempoVal)
+normalizeTempoVals tempoOne tempoTwo = (normalizeTempoVal tempoOne tempoTwo, normalizeTempoVal tempoTwo tempoOne)
+
+-- | Normalize values before comparing.
+instance Ord TempoVal where
+  one `compare` two = bpmOne `compare` bpmTwo where (TempoVal _ bpmOne, TempoVal _ bpmTwo) = normalizeTempoVals one two
+                                                    
+-- | A little silly for everything but + and -, which are used to generate continuous control span.
+instance Num TempoVal where
+  t1 + t2               = TempoVal un (b1n + b2n) where (TempoVal un b1n,TempoVal _ b2n) = normalizeTempoVals t1 t2
+  t1 - t2               = TempoVal un (b1n - b2n) where (TempoVal un b1n,TempoVal _ b2n) = normalizeTempoVals t1 t2
+  t1 * t2               = TempoVal un (b1n * b2n) where (TempoVal un b1n,TempoVal _ b2n) = normalizeTempoVals t1 t2
+  abs (TempoVal u b)    = TempoVal u (abs b)
+  signum (TempoVal _ b) = TempoVal Whole sign where sign = if b > 0 then 1 else (-1)
+  fromInteger i         = TempoVal Quarter i
+  negate (TempoVal u b) = TempoVal u (-b)
 
 -- | Key Signature, negative for count flats, positive for count sharps
 newtype KeySignature = KeySignature { accidentals :: Int } deriving (Show, Ord, Eq, Data, Typeable)
@@ -180,45 +263,6 @@ data VoiceControl =
   | TimeSignatureControl TimeSignature
   | DynamicControl Dynamic
   deriving (Ord, Eq, Show, Data, Typeable)
-
-data RhythmDenom =
-  Whole 
-  | Half 
-  | Quarter 
-  | Eighth 
-  | Sixteenth 
-  | ThirtySecond 
-  | SixtyFourth 
-  | OneTwentyEighth
-  deriving (Enum, Ord, Eq, Show, Bounded, Data, Typeable)
-
-rhythmDenominatorToInt :: RhythmDenom -> Int
-rhythmDenominatorToInt = (2 ^) . fromEnum
-
-data Rhythm' = Rhythm' { rhythmNum :: Word, rhythmDenom :: RhythmDenom } deriving (Show, Ord, Eq, Data, Typeable)
-
-mkRhythm :: Rational -> Either String Rhythm'
-mkRhythm r
-  | num < (toInteger (minBound::Word)) || num > (toInteger (maxBound::Word)) = Left rngerr
-  | not (any (== den) okdens)                                                = Left $ "rhythm denominator not one of " ++ show okdens
-  | otherwise                                                                = Right $ Rhythm' (fromIntegral num::Word) (alldens !! denidx)
-  where
-    rngerr  = "rhythm numerator " ++ show num ++ " < " ++ show (minBound::Word) ++ " or > " ++ show (maxBound::Word)
-    alldens = [(minBound::RhythmDenom)..(maxBound::RhythmDenom)]
-    denidx  = fromJust $ elemIndex den okdens
-    okdens  = [1,2,4,8,16,32,64,128]
-    den     = denominator r
-    num     = numerator r
-
--- This approach can produce funny results!  Things you'd think woud fail, like "rhythm (20%5)" turn out to succeed,
--- because Data.Ratio is going to automatically reduce e.g. (20%5) to (4%1)!  So in fact the filtering only catches
--- ratios that don't reduce to a ratio with an invalid denominator, like (29%7).  Does this matter?  If I were to do
--- arithmetic over rhythms then I'd say the answer would be yes, and it's a good thing.  And if you do something silly
--- like specify a rhythm of (21%7), well, then it should be obvious what you're really saying is (3%1).  Note that
--- (1%(-1)) reduces to ((-1)%1), with the result that the Word range check above catches all Data.Ratio constructed 
--- with negative numbers.  And for ((-1)%(-1)) you get (1%1) also, so the arithmetic works out "right".
-
-newtype Rhythm = Rhythm { getRhythm :: Rational } deriving (Show, Ord, Eq, Num, Fractional, Data, Typeable)
 
 -- | A note is either an ordinary note with pitch and rhythm,
 --   an accented note with pitch, rhythm, and accent,

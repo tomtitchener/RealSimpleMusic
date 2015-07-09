@@ -36,12 +36,9 @@ instance Bounded Duration where
 -- | Midi-ism:  Duration is in 64th notes, at default of 128 ticks per quarter or 512 ticks per whole note translation is (* 8 * 64)
 --   e.g. 1:1 for whole note * 64 * 8 => 512 ticks.  NB: conversion to Midi doesn't accept ratios that don't divide evenly into 512.
 rhythmToDuration :: Rhythm -> Duration
-rhythmToDuration rhythm
-  | 1 /= toInteger (denominator (512%1 * rat)) = error $ "rhythm " ++ show rhythm ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * rat)
-  | otherwise = fromIntegral $ fromEnum $ 512%1 * rat
-  where
-    rat = getRhythm rhythm
-    
+rhythmToDuration  (Rhythm ratio)
+  | 1 /= toInteger (denominator (512%1 * ratio)) = error $ "rhythm " ++ show ratio ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * ratio)
+  | otherwise = fromIntegral $ fromEnum $ 512%1 * ratio
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => DiscreteDynamicValue -> a
@@ -153,15 +150,13 @@ genMidiPrefixMetaEvent = Event.MetaEvent . Meta.MIDIPrefix
 
 -- | Microseconds per quarter note, default 120 beats per minute is
 --   500,000 or defltTempo, so that'd be for a quarter that gets 120.
-genMidiTempoMetaEvent :: Tempo -> Event.T
-genMidiTempoMetaEvent (Tempo (Rhythm rhythm) beats) =
+genMidiTempoMetaEvent :: TempoVal -> Event.T
+genMidiTempoMetaEvent (TempoVal denom beats) =
   (Event.MetaEvent . Meta.SetTempo) $ Meta.toTempo microsPerRhythm
   where
     microsPerMinute   = 60000000
-    rhythmsPerQuarter = denominator rhythm % 4
+    rhythmsPerQuarter = (rhythmDenomToInteger denom) % 4
     microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
-genMidiTempoMetaEvent (Ritardando)  = error "genMIdiTempoEvent Ritardando"
-genMidiTempoMetaEvent (Accelerando) = error "genMidiTempoMetaEvent Accelerando"
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
 genMidiKeySignatureMetaEvent (KeySignature countAccidentals) =
@@ -384,7 +379,7 @@ data ControlBufferingState = ControlBufferingNone | ControlBufferingUp | Control
 data MidiControlContext control = MidiControlContext { ctrlCtxtState::ControlBufferingState, ctrlCtxtCtrl::control, ctrlCtxtRest::Duration, ctrlCtxtLen::Duration }
 type MidiDynamicControlContext  = MidiControlContext DiscreteDynamicValue
 type MidiPanControlContext      = MidiControlContext Pan
-type MidiTempoControlContext    = MidiControlContext Tempo
+type MidiTempoValControlContext = MidiControlContext TempoVal
 
 startDynamicControlContext :: MidiDynamicControlContext
 startDynamicControlContext = MidiControlContext ControlBufferingNone MezzoForte (Dur 0) (Dur 0)
@@ -605,97 +600,55 @@ midiNoteToContinuousPanEvents :: ChannelMsg.Channel -> MidiNote -> State MidiPan
 midiNoteToContinuousPanEvents chan midiNote =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updatePanControlContext chan midiNote ctrlCtxt in put ctrlCtxt' >> return events
 
--- | Simple type for Num and Ord instances on normalized values.
---   Rational is unit, e.g. (1%2), (1%4) ...
---   Integer is beats per minute.     
-data TempoValue = TempoValue Rational Integer deriving (Eq, Show)
-
--- | Answer normalized first relative to second.
-normalizeTempoValue :: TempoValue -> TempoValue -> TempoValue
-normalizeTempoValue valOne@(TempoValue rhythmOne bpmOne) (TempoValue rhythmTwo _)
-  | numerator rhythmOne == 0 = error $ "normalizeTempoValue div by zero, rhythmOne " ++ show rhythmOne ++ " rhythmTwo " ++ show rhythmTwo
-  | rhythmOne <= rhythmTwo = valOne
-  | otherwise = TempoValue (rhythmOne * rhythmFact) (bpmOne * numerator bpmFact)
-  where
-    rhythmFact = rhythmTwo / rhythmOne
-    bpmFact    = rhythmOne / rhythmTwo
-
--- | Normalize first with second, second with first.
-normalizeTempoValues :: TempoValue -> TempoValue -> (TempoValue, TempoValue)
-normalizeTempoValues tempoOne tempoTwo = (normalizeTempoValue tempoOne tempoTwo, normalizeTempoValue tempoTwo tempoOne)
-
--- | Normalize values before comparing.
-instance Ord TempoValue where
-  one `compare` two = bpmOne `compare` bpmTwo where (TempoValue _ bpmOne, TempoValue _ bpmTwo) = normalizeTempoValues one two
-                                                    
--- | A little silly for everything but + and -, which are used to generate continuous control span.
-instance Num TempoValue where
-  t1 + t2                 = TempoValue un (b1n + b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
-  t1 - t2                 = TempoValue un (b1n - b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
-  t1 * t2                 = TempoValue un (b1n * b2n) where (TempoValue un b1n,TempoValue _ b2n) = normalizeTempoValues t1 t2
-  abs (TempoValue u b)    = TempoValue u (abs b)
-  signum (TempoValue _ b) = TempoValue (1%1) sign where sign = if b > 0 then 1 else (-1)
-  fromInteger i           = error $ "fromInteger for TempoValue for integer value " ++ show i -- TempoValue (1%1) i
-  negate (TempoValue u b) = TempoValue u (-b)
-
 -- | Unadorned constraint for signature for unfoldControl is Integral t due to use of `div`.
 --   But Integral is constrained by (Real a, Enum a), which gets you into a realm of numeric
 --   processing too sophisticated for what's needed for a continuous span.
-divTempoValueByInt :: TempoValue -> Int -> TempoValue
-divTempoValueByInt (TempoValue un bpm) i = TempoValue un (bpm `div` fromIntegral i)
+divTempoValByInt :: TempoVal -> Int -> TempoVal
+divTempoValByInt (TempoVal unit bpm) i = TempoVal unit (bpm `div` fromIntegral i)
 
-tempoToTempoValue :: Tempo -> TempoValue
-tempoToTempoValue (Tempo (Rhythm unit) bpm) = TempoValue unit bpm
-tempoToTempoValue tempo = error $ "tempoToTempoValue called for Tempo " ++ show tempo
-
-tempoValueToTempo :: TempoValue -> Tempo
-tempoValueToTempo (TempoValue unit bpm) = Tempo (Rhythm unit) bpm
-
--- | Too much trouble to generalize bindIntSpanVars to work for TempoValue as well.
-bindTempoValSpanVars :: Integral a => TempoValue -> TempoValue -> a -> (Int, Integer, [TempoValue], [Duration])
+-- | Too much trouble to generalize bindIntSpanVars to work for Tempo as well.
+bindTempoValSpanVars :: Integral a => TempoVal -> TempoVal -> a -> (Int, Integer, [TempoVal], [Duration])
 bindTempoValSpanVars start stop dur =
   (dur', bpmSpan, ctls, durs)
   where
-    span'@(TempoValue _ bpmSpan) = stop - start
-    dur'                         = fromIntegral dur
-    increments                   = unfoldr (unfoldControl divTempoValueByInt) (span', dur')
-    ctls                         = tail $ scanl (+) start increments
-    durs                         = replicate (length ctls) (Dur 1)
+    span'@(TempoVal _ bpmSpan) = stop - start
+    dur'                       = fromIntegral dur
+    increments                 = unfoldr (unfoldControl divTempoValByInt) (span', dur')
+    ctls                       = tail $ scanl (+) start increments
+    durs                       = replicate (length ctls) (Dur 1)
 
 -- | Refactor
-genTempoRange :: TempoValue -> TempoValue -> [TempoValue]
-genTempoRange (TempoValue startRhythm startBpm) (TempoValue stopRhythm stopBpm)
-  | startRhythm /= stopRhythm = error $ "genTempoRange startRhythm " ++ show startRhythm ++ " /= stopRhythm " ++ show stopRhythm
-  | stopBpm < startBpm        = map (TempoValue startRhythm) [(startBpm-1),(startBpm-2)..stopBpm]
-  | otherwise                 = map (TempoValue startRhythm) [(startBpm+1)..stopBpm]
+genTempoRange :: TempoVal -> TempoVal -> [TempoVal]
+genTempoRange (TempoVal denom startBpm) (TempoVal _ stopBpm)
+  | stopBpm < startBpm = map (TempoVal denom) [(startBpm-1),(startBpm-2)..stopBpm]
+  | otherwise          = map (TempoVal denom) [(startBpm+1)..stopBpm]
   
--- | Convert Tempo to TempoValue for Num instance
-synthesizeAccelerandoSpan :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
+-- | Convert Tempo to Tempoue for Num instance
+synthesizeAccelerandoSpan :: TempoVal -> TempoVal -> Duration -> ([TempoVal],[Duration])
 synthesizeAccelerandoSpan start stop (Dur dur)
   | dur' == 0                     = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
   | startTempoVal >= stopTempoVal = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
-  | bpmSpan <= dur                = (map tempoValueToTempo (genTempoRange startTempoVal stopTempoVal), synthesizeDurationSpan (fromIntegral bpmSpan) dur)
-  | otherwise                     = (map tempoValueToTempo vals, durs)
+  | bpmSpan <= dur                = (genTempoRange startTempoVal stopTempoVal, synthesizeDurationSpan (fromIntegral bpmSpan) dur)
+  | otherwise                     = (vals, durs)
   where
-    (startTempoVal, stopTempoVal) = normalizeTempoValues (tempoToTempoValue start) (tempoToTempoValue stop)
+    (startTempoVal, stopTempoVal) = normalizeTempoVals start stop
     (dur', bpmSpan, vals, durs)   = bindTempoValSpanVars startTempoVal stopTempoVal dur 
 
--- | Convert Tempo to TempoValue for Num instance 
-synthesizeRitardandoSpan :: Tempo -> Tempo -> Duration -> ([Tempo],[Duration])
+synthesizeRitardandoSpan :: TempoVal -> TempoVal -> Duration -> ([TempoVal],[Duration])
 synthesizeRitardandoSpan start stop (Dur dur)
   | dur' == 0                     = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
   | stopTempoVal >= startTempoVal = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
-  | abs bpmSpan <= dur            = (map tempoValueToTempo (genTempoRange startTempoVal stopTempoVal), synthesizeDurationSpan (fromIntegral (abs bpmSpan)) dur)
-  | otherwise                     = (map tempoValueToTempo vals, durs)
+  | abs bpmSpan <= dur            = (genTempoRange startTempoVal stopTempoVal, synthesizeDurationSpan (fromIntegral (abs bpmSpan)) dur)
+  | otherwise                     = (vals, durs)
   where
-    (startTempoVal, stopTempoVal) = normalizeTempoValues (tempoToTempoValue start) (tempoToTempoValue stop)
+    (startTempoVal, stopTempoVal) = normalizeTempoVals start stop
     (dur', bpmSpan, vals, durs)   = bindTempoValSpanVars startTempoVal stopTempoVal dur
 
-startTempoControlContext :: MidiTempoControlContext
-startTempoControlContext = MidiControlContext ControlBufferingNone (Tempo (Rhythm (1%4)) 120) (Dur 0) (Dur 0)
+startTempoValControlContext :: MidiTempoValControlContext
+startTempoValControlContext = MidiControlContext ControlBufferingNone (TempoVal Quarter 120) (Dur 0) (Dur 0)
 
 -- | Refactor.
-updateContTempoControlContext :: (Tempo -> Tempo -> Duration -> ([Tempo],[Duration])) -> (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
+updateContTempoControlContext :: (TempoVal -> TempoVal -> Duration -> ([TempoVal],[Duration])) -> (TempoVal, Rhythm) -> MidiTempoValControlContext -> (MidiTempoValControlContext, EventList.T Event.ElapsedTime Event.T)
 updateContTempoControlContext synth (stop, rhythm) (MidiControlContext _ start rest len) =
   (MidiControlContext ControlBufferingNone stop (rhythmToDuration rhythm) (Dur 0), synthTempoEventList)
   where
@@ -703,25 +656,25 @@ updateContTempoControlContext synth (stop, rhythm) (MidiControlContext _ start r
     synthTempoEventPairs = zipWith (\dur' tempo' -> (dur', genMidiTempoMetaEvent tempo')) (rest:durSpan) tempoSpan
     synthTempoEventList  = EventList.fromPairList $ map durEventToNumEvent synthTempoEventPairs
 
-updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoControlContext -> (MidiTempoControlContext, EventList.T Event.ElapsedTime Event.T)
+updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoValControlContext -> (MidiTempoValControlContext, EventList.T Event.ElapsedTime Event.T)
 -- | New discrete tempo, not buffering => remember new tempo and  duration in context,
 --   answer list with single event at rest dur from previous event for target tempo.
-updateTempoControlContext (target@(Tempo (Rhythm _) _), rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
-  (MidiControlContext ControlBufferingNone target (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromInteger . getDur) rest) (genMidiTempoMetaEvent target))
+updateTempoControlContext ((Tempo tempoVal), rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
+  (MidiControlContext ControlBufferingNone tempoVal (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromInteger . getDur) rest) (genMidiTempoMetaEvent tempoVal))
 -- | New accelerando, not buffering anything, start new buffering up state with length for duration.
-updateTempoControlContext (Accelerando, rhythm) (MidiControlContext ControlBufferingNone tempo rest len) =
-  (MidiControlContext ControlBufferingUp tempo rest (rhythmToDuration rhythm + len), EventList.empty)
+updateTempoControlContext (Accelerando, rhythm) (MidiControlContext ControlBufferingNone tempoVal rest len) =
+  (MidiControlContext ControlBufferingUp tempoVal rest (rhythmToDuration rhythm + len), EventList.empty)
 -- | New ritardando, not buffering anything, start new buffering down state with length for duration.
-updateTempoControlContext (Ritardando, rhythm) (MidiControlContext ControlBufferingNone tempo rest len) =
-  (MidiControlContext ControlBufferingDown tempo rest (rhythmToDuration rhythm + len), EventList.empty)
+updateTempoControlContext (Ritardando, rhythm) (MidiControlContext ControlBufferingNone tempoVal rest len) =
+  (MidiControlContext ControlBufferingDown tempoVal rest (rhythmToDuration rhythm + len), EventList.empty)
 -- | New discrete tempo, buffering for accelerando => remember new tempo and length for rest in context,
 --   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
-updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlContext ControlBufferingUp _ _ _) =
-  updateContTempoControlContext synthesizeAccelerandoSpan (target, rhythm) context
+updateTempoControlContext ((Tempo tempoVal), rhythm) context@(MidiControlContext ControlBufferingUp _ _ _) =
+  updateContTempoControlContext synthesizeAccelerandoSpan (tempoVal, rhythm) context
 -- | New discrete tempo, buffering for ritardando => remember new tempo and length for rest in context,
 --   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
-updateTempoControlContext (target@(Tempo _ _), rhythm) context@(MidiControlContext ControlBufferingDown _ _ _) =
-  updateContTempoControlContext synthesizeRitardandoSpan (target, rhythm) context
+updateTempoControlContext ((Tempo tempoVal), rhythm) context@(MidiControlContext ControlBufferingDown _ _ _) =
+  updateContTempoControlContext synthesizeRitardandoSpan (tempoVal, rhythm) context
 -- | Error patterns indicate failed sequence of (Tempo, Rhythm), e.g. with successive Accelerando and/or
 --   Ritardando without intervening Tempo events or Accelerando or Ritardando without starting Tempo.
 updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
@@ -729,7 +682,7 @@ updateTempoControlContext (Ritardando, _) (MidiControlContext direction _ _ _) =
 updateTempoControlContext (Accelerando, _) (MidiControlContext direction _ _ _) =
   error $ "updateTempoControlContext Accelerando when already buffering " ++ show direction
   
-tempoToContinuousTempoEvents :: (Tempo, Rhythm) -> State MidiTempoControlContext (EventList.T Event.ElapsedTime Event.T)
+tempoToContinuousTempoEvents :: (Tempo, Rhythm) -> State MidiTempoValControlContext (EventList.T Event.ElapsedTime Event.T)
 tempoToContinuousTempoEvents pr =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateTempoControlContext pr ctrlCtxt in put ctrlCtxt' >> return events
 
@@ -797,21 +750,6 @@ midiVoiceToMidiFile metaEvents midiVoice =
   where
     voiceEventList = midiVoiceToEventList midiVoice
 
--- | Tempo must have 1 as numerator, power of 2 as denominator in range 1/1, 1/2, 1/8, 1/16, 1/32, 1/64
---   At tick == 1/512, that leaves 8 ticks for span of continuous controls for shortest note, still
---   much faster than a listener would detect unless the tempo is extremely slow.
-validateTempo :: Tempo -> Tempo
-validateTempo tempo@(Tempo (Rhythm rhythm) _)
-  | numerator rhythm /= 1                = error $ "validateTempo numerator of rhythm " ++ show rhythm ++ " is not 1"
-  | denominator rhythm `notElem` twoPows = error $ "validateTempo denominator of rhythm " ++ show rhythm ++ " not acceptable power of 2 " ++ show twoPows
-  | otherwise = tempo
-  where
-    twoPows = map (2^) [(0::Int)..6]
-validateTempo continuousTempo = continuousTempo
-    
-validateTempoPair :: (Tempo, Rhythm) -> (Tempo, Rhythm)
-validateTempoPair (tempo, rhythm) = (validateTempo tempo, rhythm)
-    
 -- | Generate meta events for start of file.
 --   The first track of a Format 1 file is special, and is also known as the 'Tempo Map'.
 --   It should contain all meta-events of the types Time Signature, and Set Tempo.
@@ -821,11 +759,10 @@ controlsToMetaEvents :: ScoreControls -> EventList.T Event.ElapsedTime Event.T
 controlsToMetaEvents (ScoreControls keySignature timeSignature tempos) = 
   EventList.merge controlEventList tempoEventList
   where
-    tempos'            = map validateTempoPair tempos
     prefixEvent        = (Dur 0, genMidiPrefixMetaEvent (ChannelMsg.toChannel 0))
     keySignatureEvent  = (Dur 0, genMidiKeySignatureMetaEvent keySignature)
     timeSignatureEvent = (Dur 0, genMidiTimeSignatureMetaEvent timeSignature)
-    tempoEventList     = EventList.concat $ evalState (traverse tempoToContinuousTempoEvents tempos') startTempoControlContext
+    tempoEventList     = EventList.concat $ evalState (traverse tempoToContinuousTempoEvents tempos) startTempoValControlContext
     controlEvents      = prefixEvent : keySignatureEvent : [timeSignatureEvent]
     controlEventList   = EventList.fromPairList $ map durEventToNumEvent controlEvents
 

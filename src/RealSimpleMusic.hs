@@ -16,11 +16,13 @@
 module RealSimpleMusic (
    PitchClass(..)
    ,  pitchClassToEnhIdx
-   ,  Scale(..)
+   ,  Scale
    ,  majorScale
    ,  naturalMinorScale
    ,  melodicMinorScale
    ,  scaleFromEnhChromaticScale
+   ,  scaleToAscendingPitchClasses
+   ,  scaleToDescendingPitchClasses
    ,  Octave(..)
    ,  Pitch(..)
    ,  IndexedPitch(..)
@@ -30,11 +32,16 @@ module RealSimpleMusic (
    ,  Pan(..)
    ,  PanVal(..)
    ,  Tempo(..)
+   ,  TempoVal(..)
+   ,  normalizeTempoVals   
    ,  KeySignature(..)
    ,  TimeSignature(..)
    ,  Articulation(..)
    ,  Accent(..)
-   ,  Rhythm(..)
+   ,  Rhythm
+   ,  mkRhythm
+   ,  getRhythm   
+   ,  RhythmDenom(..)   
    ,  Instrument(..)
    ,  ScoreControls(..)
    ,  VoiceControl(..)
