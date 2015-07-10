@@ -36,9 +36,10 @@ instance Bounded Duration where
 -- | Midi-ism:  Duration is in 64th notes, at default of 128 ticks per quarter or 512 ticks per whole note translation is (* 8 * 64)
 --   e.g. 1:1 for whole note * 64 * 8 => 512 ticks.  NB: conversion to Midi doesn't accept ratios that don't divide evenly into 512.
 rhythmToDuration :: Rhythm -> Duration
-rhythmToDuration  (Rhythm ratio)
-  | 1 /= toInteger (denominator (512%1 * ratio)) = error $ "rhythm " ++ show ratio ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * ratio)
-  | otherwise = fromIntegral $ fromEnum $ 512%1 * ratio
+rhythmToDuration  (Rhythm ratio) = fromIntegral . fromEnum $ 512%1 * ratio
+
+-- Used to test, but with rhythm denominators limited to [1,2,4,8,16,32,64,128], can denominator evenly divdes into 512.
+-- | 1 /= toInteger (denominator (512%1 * ratio)) = error $ "rhythm " ++ show ratio ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * ratio)
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => DiscreteDynamicValue -> a
@@ -135,9 +136,9 @@ genMidiBalanceControlEvent chan balance =
   genEvent chan (VoiceMsg.Control VoiceMsg.panorama $ balanceToBalance balance)
 
 genDiscreteMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
-genDiscreteMidiPanControlEvent chan (Pan (PanVal pan))
-  | 0 > pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum 0"
-  | 127 < pan = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum 127"
+genDiscreteMidiPanControlEvent chan (Pan panVal@(PanVal pan))
+  | (minBound::PanVal) > panVal = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum " ++ show (minBound::PanVal)
+  | (maxBound::PanVal) < panVal = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum " ++ show (maxBound::PanVal)
   | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
 genDiscreteMidiPanControlEvent _ PanUp   = error "genMidiPanControl PanUp"
 genDiscreteMidiPanControlEvent _ PanDown = error "genMidiPanControl PanDown"
@@ -155,7 +156,7 @@ genMidiTempoMetaEvent (TempoVal denom beats) =
   (Event.MetaEvent . Meta.SetTempo) $ Meta.toTempo microsPerRhythm
   where
     microsPerMinute   = 60000000
-    rhythmsPerQuarter = (rhythmDenomToInteger denom) % 4
+    rhythmsPerQuarter = rhythmDenomToInteger denom % 4
     microsPerRhythm   = floor $ (rhythmsPerQuarter * microsPerMinute) / (beats % 1)
   
 genMidiKeySignatureMetaEvent :: KeySignature -> Event.T
@@ -203,21 +204,23 @@ lookupArticulation controls =
     NoArticulation
     (find (\ articulation -> Set.member (ArticulationControl articulation) controls) [(minBound::Articulation)..(maxBound::Articulation)])
 
+articulationToDouble :: Articulation -> Double
+articulationToDouble NoArticulation = 1.0
+articulationToDouble Tenuto         = 1.0
+articulationToDouble Portato        = 0.9
+articulationToDouble Marcato        = 0.6
+articulationToDouble Staccato       = 0.5
+articulationToDouble Staccatissimo  = 0.25
+
 -- | Shorten duration to simulate articulation.
 --   Answer pair with new duration and remaining
 --   duration to insert as delay before next note.
 articulate :: Articulation -> Duration -> (Duration,Duration)
 articulate articulation duration =
-  case elemIndex articulation articulations of
-    Just idx -> (durNote, durRest)
-                  where
-                    durNote = Dur (floor $ (articulated !! idx) * fromInteger (getDur duration))
-                    durRest = duration - durNote
-    Nothing -> error $ "articulate unrecognized articulation " ++ show articulation
+  (durNote, durRest)
   where
-    articulated  :: [Double]
-    articulated   = [1.0,            1.0,    0.9,     0.6,     0.5,      0.25]
-    articulations = [NoArticulation, Tenuto, Portato, Marcato, Staccato, Staccatissimo]
+    durNote = Dur (floor $ articulationToDouble articulation * fromInteger (getDur duration))
+    durRest = duration - durNote
 
 -- | A discrete control can be converted to a single unique Midi control event.
 discreteControl :: VoiceControl -> Bool
@@ -659,7 +662,7 @@ updateContTempoControlContext synth (stop, rhythm) (MidiControlContext _ start r
 updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoValControlContext -> (MidiTempoValControlContext, EventList.T Event.ElapsedTime Event.T)
 -- | New discrete tempo, not buffering => remember new tempo and  duration in context,
 --   answer list with single event at rest dur from previous event for target tempo.
-updateTempoControlContext ((Tempo tempoVal), rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
+updateTempoControlContext (Tempo tempoVal, rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
   (MidiControlContext ControlBufferingNone tempoVal (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromInteger . getDur) rest) (genMidiTempoMetaEvent tempoVal))
 -- | New accelerando, not buffering anything, start new buffering up state with length for duration.
 updateTempoControlContext (Accelerando, rhythm) (MidiControlContext ControlBufferingNone tempoVal rest len) =
@@ -669,11 +672,11 @@ updateTempoControlContext (Ritardando, rhythm) (MidiControlContext ControlBuffer
   (MidiControlContext ControlBufferingDown tempoVal rest (rhythmToDuration rhythm + len), EventList.empty)
 -- | New discrete tempo, buffering for accelerando => remember new tempo and length for rest in context,
 --   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
-updateTempoControlContext ((Tempo tempoVal), rhythm) context@(MidiControlContext ControlBufferingUp _ _ _) =
+updateTempoControlContext (Tempo tempoVal, rhythm) context@(MidiControlContext ControlBufferingUp _ _ _) =
   updateContTempoControlContext synthesizeAccelerandoSpan (tempoVal, rhythm) context
 -- | New discrete tempo, buffering for ritardando => remember new tempo and length for rest in context,
 --   answer list with incremental tempos for accelerando starting at tempo from context ending with target.
-updateTempoControlContext ((Tempo tempoVal), rhythm) context@(MidiControlContext ControlBufferingDown _ _ _) =
+updateTempoControlContext (Tempo tempoVal, rhythm) context@(MidiControlContext ControlBufferingDown _ _ _) =
   updateContTempoControlContext synthesizeRitardandoSpan (tempoVal, rhythm) context
 -- | Error patterns indicate failed sequence of (Tempo, Rhythm), e.g. with successive Accelerando and/or
 --   Ritardando without intervening Tempo events or Accelerando or Ritardando without starting Tempo.

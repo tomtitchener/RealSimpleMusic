@@ -214,7 +214,7 @@ instance Num TempoVal where
   t1 * t2               = TempoVal un (b1n * b2n) where (TempoVal un b1n,TempoVal _ b2n) = normalizeTempoVals t1 t2
   abs (TempoVal u b)    = TempoVal u (abs b)
   signum (TempoVal _ b) = TempoVal Whole sign where sign = if b > 0 then 1 else (-1)
-  fromInteger i         = TempoVal Quarter i
+  fromInteger           = TempoVal Quarter 
   negate (TempoVal u b) = TempoVal u (-b)
 
 -- | Key Signature, negative for count flats, positive for count sharps

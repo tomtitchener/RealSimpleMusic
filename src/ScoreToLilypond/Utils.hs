@@ -186,7 +186,7 @@ renderRhythm (Rhythm start)
   | startNum == 0                   = [] 
   | startNum > 1 && startDenom == 1 = [(intDec . fromIntegral) startDenom <> renderedAsterisk <> (intDec . fromIntegral) startNum]  -- replicate num $ intDec denom 
   | startNum == 1                   = [(intDec . fromIntegral) startDenom]
-  | startNum == 3                   = [intDec ((fromIntegral startDenom) `div` 2) <> renderedDot]
+  | startNum == 3                   = [intDec (fromIntegral startDenom `div` 2) <> renderedDot]
   | otherwise                       = intDec (fromIntegral (denominator unit)) : renderRhythm (Rhythm remain)
   where
     startNum   = numerator start

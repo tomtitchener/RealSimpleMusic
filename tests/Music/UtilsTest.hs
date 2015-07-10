@@ -159,7 +159,7 @@ naturalMinorScaleFromCycleOfFifths tonic =
     Left err -> error err
     Right _ -> Scale ascending $ (rotate (-1) . reverse) ascending
       where
-        major = majorScaleFromCycleOfFifths $ toEnum ((fromEnum tonic) - 3)
+        major = majorScaleFromCycleOfFifths $ toEnum (fromEnum tonic - 3)
         ascending = rotate 5 $ ascendingScale major
   
 pitchClassInNaturalMinorScaleRange :: PitchClass -> Bool
