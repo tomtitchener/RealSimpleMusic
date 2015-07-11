@@ -1,4 +1,5 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+-- bash-3.2$ grep " error " ./RealSimpleMusic/src/ScoreToMidi/Utils.hs | wc -l
+--      46
 
 module ScoreToMidi.Utils where
 
@@ -9,9 +10,9 @@ import qualified Data.EventList.Relative.TimeBody as EventList
 import           Data.List
 import           Data.Maybe
 import           Data.Ratio
---import           Data.Functor
 import qualified Data.Set as Set
 import           Data.Traversable
+import           Data.Word
 import           Music.Data
 import           Music.Utils ()
 import qualified Sound.MIDI.File as MidiFile
@@ -26,7 +27,9 @@ import qualified Sound.MIDI.Message.Channel.Voice as VoiceMsg
 maxMidiTrack :: Int
 maxMidiTrack = 16
 
-newtype Duration = Dur { getDur :: Integer } deriving (Read, Show, Ord, Eq, Num, Enum)
+-- If this were a Word then we wouldn't have to test against < 0.
+-- Do durations ever get subtracted?
+newtype Duration = Dur { getDur :: Word } deriving (Read, Show, Ord, Eq, Num, Enum)
 
 -- | Midi-ism:  bounds for Duration are from Midi
 instance Bounded Duration where
@@ -37,9 +40,6 @@ instance Bounded Duration where
 --   e.g. 1:1 for whole note * 64 * 8 => 512 ticks.  NB: conversion to Midi doesn't accept ratios that don't divide evenly into 512.
 rhythmToDuration :: Rhythm -> Duration
 rhythmToDuration  (Rhythm ratio) = fromIntegral . fromEnum $ 512%1 * ratio
-
--- Used to test, but with rhythm denominators limited to [1,2,4,8,16,32,64,128], can denominator evenly divdes into 512.
--- | 1 /= toInteger (denominator (512%1 * ratio)) = error $ "rhythm " ++ show ratio ++ " does not evenly multiply by 512%1, result " ++ show ((512%1) * ratio)
 
 -- | Translates to Midi dynamic control, e.g. swells on a sustained pitch, or just overall loudness.
 dynamicToVolume :: Num a => DiscreteDynamicValue -> a
@@ -136,12 +136,9 @@ genMidiBalanceControlEvent chan balance =
   genEvent chan (VoiceMsg.Control VoiceMsg.panorama $ balanceToBalance balance)
 
 genDiscreteMidiPanControlEvent :: ChannelMsg.Channel -> Pan -> Event.T
-genDiscreteMidiPanControlEvent chan (Pan panVal@(PanVal pan))
-  | (minBound::PanVal) > panVal = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is less than minimum " ++ show (minBound::PanVal)
-  | (maxBound::PanVal) < panVal = error $ "genMidiPanControlEvent Pan value " ++ show pan ++ " is greater than than maximum " ++ show (maxBound::PanVal)
-  | otherwise      = genEvent chan (VoiceMsg.Control VoiceMsg.panorama pan)
-genDiscreteMidiPanControlEvent _ PanUp   = error "genMidiPanControl PanUp"
-genDiscreteMidiPanControlEvent _ PanDown = error "genMidiPanControl PanDown"
+genDiscreteMidiPanControlEvent chan (Pan (PanVal pan)) = genEvent chan (VoiceMsg.Control VoiceMsg.panorama (pan `mod` fromEnum (maxBound::PanVal)))
+genDiscreteMidiPanControlEvent _ PanUp                 = error "genMidiPanControl PanUp"
+genDiscreteMidiPanControlEvent _ PanDown               = error "genMidiPanControl PanDown"
 
 -- | Midi Channel Prefix tells system what channel to associate with
 --   meta events before an event with a channel appears.  Customary
@@ -219,7 +216,7 @@ articulate :: Articulation -> Duration -> (Duration,Duration)
 articulate articulation duration =
   (durNote, durRest)
   where
-    durNote = Dur (floor $ articulationToDouble articulation * fromInteger (getDur duration))
+    durNote = Dur (floor $ articulationToDouble articulation * fromIntegral (getDur duration))
     durRest = duration - durNote
 
 -- | A discrete control can be converted to a single unique Midi control event.
@@ -240,10 +237,8 @@ discreteControl _                                              = True
 --   note.
 genMidiDiscreteEvents :: Duration -> ChannelMsg.Channel -> VoiceMsg.Pitch -> Duration -> Set.Set VoiceControl -> ([(Duration, Event.T)], Duration)
 genMidiDiscreteEvents delay channel pitch duration controls
-  | minBound > delay    = error $ "genMidiDiscreteEvents delay " ++ show delay ++ " is less than minimum value " ++ show (minBound::Duration)
-  | maxBound < delay    = error $ "genMidiDiscreteEvents delay " ++ show delay ++ " is greater than minimum value " ++ show (maxBound::Duration)
-  | minBound > duration = error $ "genMidiDiscreteEvents duration " ++ show duration ++ " is less than minimum value " ++ show (minBound::Duration)
-  | maxBound < duration = error $ "genMidiDiscreteEvents duration " ++ show duration ++ " is greater than minimum value " ++ show (maxBound::Duration)
+  | maxBound < delay    = error $ "genMidiDiscreteEvents delay " ++ show delay ++ " is greater than maximum value " ++ show (maxBound::Duration)
+  | maxBound < duration = error $ "genMidiDiscreteEvents duration " ++ show duration ++ " is greater than maximum value " ++ show (maxBound::Duration)
   | otherwise           = (zip durations events, restDur)
   where
     accent                = lookupAccent controls
@@ -265,7 +260,7 @@ genMidiDiscreteControlEvents channel controls =
     discreteControlEvents = mapMaybe (discreteVoiceControlToMaybeEvent channel) $ Set.toAscList discreteControls
 
 durEventToNumEvent :: Num a => (Duration, Event.T) -> (a, Event.T)
-durEventToNumEvent (Dur dur, event) = (fromInteger dur, event)
+durEventToNumEvent (Dur dur, event) = (fromIntegral dur, event)
 --durEventToNumEvent (dur, event) = (fmap (,) fromInteger) dur event
 
 midiNoteToDiscreteEvents :: ChannelMsg.Channel -> MidiNote -> State Duration (EventList.T Event.ElapsedTime Event.T)
@@ -321,6 +316,9 @@ unfoldControl divT (d,c)
 divIntegers :: Integer -> Integer -> Integer
 divIntegers x y = x `div` y
 
+divWords :: Word -> Word -> Word
+divWords x y = x `div` y
+
 -- | Answer a list of Duration to cover span of synthesized control events
 --   given the duration for the continuous control and the count of synthesized
 --   control events.  Reverse so larger values, which mean slower perceived 
@@ -328,10 +326,10 @@ divIntegers x y = x `div` y
 --   Sum of Duration in answer must exactly equal total Duration as second argument.
 --   Assumption is durations are for list of controls, one-by-one, so count of
 --   controls should never be larger than total duration.
-synthesizeDurationSpan :: Int -> Integer -> [Duration]
+synthesizeDurationSpan :: Int -> Word -> [Duration]
 synthesizeDurationSpan cntCntrls dur
   | cntCntrls > fromIntegral dur = error $ "synthesizeDurationSpan cntCntrls " ++ show cntCntrls ++ " > " ++ show dur
-  | otherwise = map Dur $ reverse $ unfoldr (unfoldControl divIntegers) (dur, fromIntegral cntCntrls)
+  | otherwise = map Dur $ reverse $ unfoldr (unfoldControl divWords) (dur, fromIntegral cntCntrls)
 
 -- | Work-around for raw `div` to fit more relaxed constraint for unfoldControl
 divInts :: Int -> Int -> Int
@@ -395,11 +393,11 @@ genMidiContinuousDynamicEvents synth ch rest dur start stop  =
     synthDynamicEventPairs = zipWith (\dur' vol -> (dur', genMidiVolumeEvent ch vol)) (rest:durSpan) (dynamicToVolume start:volSpan)
 
 -- Assume:  alternate discrete, crescendo/decrescendo, discrete (enforced before and at tail), sequential cresc/decresc are not allowed.
-updateFractionalControlContext :: ChannelMsg.Channel -> Integer -> (DiscreteDynamicValue, Int) -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
+updateFractionalControlContext :: ChannelMsg.Channel -> Word -> (DiscreteDynamicValue, Word) -> MidiDynamicControlContext -> (MidiDynamicControlContext, EventList.T Event.ElapsedTime Event.T)
 updateFractionalControlContext _ unit (Crescendo, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
-  (MidiControlContext ControlBufferingUp dynamic rest (Dur (unit * toInteger fraction)), EventList.empty)
+  (MidiControlContext ControlBufferingUp dynamic rest (Dur (unit * fraction)), EventList.empty)
 updateFractionalControlContext _ unit (Decrescendo, fraction) (MidiControlContext ControlBufferingNone dynamic rest _) =
-  (MidiControlContext ControlBufferingDown dynamic rest (Dur (unit * toInteger fraction)), EventList.empty)
+  (MidiControlContext ControlBufferingDown dynamic rest (Dur (unit * fraction)), EventList.empty)
 updateFractionalControlContext _ _ (Crescendo, _) (MidiControlContext ControlBufferingUp _ _ _) =
   error "updateFractionalControlContext sequential crescendos"
 updateFractionalControlContext _ _ (Decrescendo, _) (MidiControlContext ControlBufferingUp _ _ _) =
@@ -411,30 +409,30 @@ updateFractionalControlContext _ _ (Crescendo, _) (MidiControlContext ControlBuf
 updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingNone _ rest _) =
   (controlContext, discreteEvents)
   where
-    controlContext = MidiControlContext ControlBufferingNone target (Dur (unit * toInteger fraction)) (Dur 0) 
-    discreteEvents = EventList.singleton ((fromInteger . getDur) rest) (genMidiVolumeEvent chan (dynamicToVolume target))
+    controlContext = MidiControlContext ControlBufferingNone target (Dur (unit * fraction)) (Dur 0) 
+    discreteEvents = EventList.singleton ((fromIntegral . getDur) rest) (genMidiVolumeEvent chan (dynamicToVolume target))
 updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingUp dynamic rest len) =
   (controlContext, EventList.append crescendoEvents targetDynamicEvents)
   where
     controlContext      = MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0)
     crescendoEvents     = genMidiContinuousDynamicEvents synthesizeCrescendoSpan chan rest len dynamic target
-    targetDynamicEvents = EventList.singleton (fromInteger (unit * toInteger fraction)) (genMidiVolumeEvent chan (dynamicToVolume target))
+    targetDynamicEvents = EventList.singleton (fromIntegral (unit * fraction)) (genMidiVolumeEvent chan (dynamicToVolume target))
 updateFractionalControlContext chan unit (target, fraction) (MidiControlContext ControlBufferingDown dynamic rest len) =
   (controlContext, EventList.append decrescendoEvents targetDynamicEvents)
   where
     controlContext      = MidiControlContext ControlBufferingNone target (Dur 0) (Dur 0)
     decrescendoEvents   = genMidiContinuousDynamicEvents synthesizeDecrescendoSpan chan rest len dynamic target
-    targetDynamicEvents = EventList.singleton (fromInteger (unit * toInteger fraction)) (genMidiVolumeEvent chan (dynamicToVolume target))
+    targetDynamicEvents = EventList.singleton (fromIntegral (unit * fraction)) (genMidiVolumeEvent chan (dynamicToVolume target))
 
-fractionalDynamicToContinuousDynamicEvents :: ChannelMsg.Channel -> Integer -> (DiscreteDynamicValue, Int) -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
+fractionalDynamicToContinuousDynamicEvents :: ChannelMsg.Channel -> Word -> (DiscreteDynamicValue, Word) -> State MidiDynamicControlContext (EventList.T Event.ElapsedTime Event.T)
 fractionalDynamicToContinuousDynamicEvents chan unit fraction =
   get >>= \ctrlCtxt -> let (ctrlCtxt', events) = updateFractionalControlContext chan unit fraction ctrlCtxt in put ctrlCtxt' >> return events
 
-bindFractionalDynamicVars :: [(DiscreteDynamicValue, Int)] -> Rhythm -> Duration -> (Integer, Duration)
+bindFractionalDynamicVars :: [(DiscreteDynamicValue, Word)] -> Rhythm -> Duration -> (Word, Duration)
 bindFractionalDynamicVars fractions rhythm rest =
   (unit, rest')
   where
-    total   = toInteger $ sum $ map snd fractions
+    total   = sum $ map snd fractions
     unit    = getDur (rhythmToDuration rhythm) `div` total
     remain  = getDur (rhythmToDuration rhythm) `rem` total
     rest'   = rest + Dur remain
@@ -447,7 +445,7 @@ genMidiContinuousFractionalDynamicEvents chan rest rhythm (DynamicControl (Fract
   where
     (unit, rest')              = bindFractionalDynamicVars fractions rhythm rest
     startEvent                 = genMidiVolumeEvent chan (dynamicToVolume dynamic)
-    startEvents                = if rest' == Dur 0 then EventList.empty else EventList.singleton (fromInteger (getDur rest)) startEvent
+    startEvents                = if rest' == Dur 0 then EventList.empty else EventList.singleton (fromIntegral (getDur rest)) startEvent
     startContext               = MidiControlContext ControlBufferingNone dynamic (Dur 0) (Dur 0)
     (endEvents, targetContext) = runState (traverse (fractionalDynamicToContinuousDynamicEvents chan unit) fractions) startContext
     target                     = ctrlCtxtCtrl targetContext
@@ -631,7 +629,7 @@ synthesizeAccelerandoSpan :: TempoVal -> TempoVal -> Duration -> ([TempoVal],[Du
 synthesizeAccelerandoSpan start stop (Dur dur)
   | dur' == 0                     = error $ "synthesizeAccelerandoSpan zero dur for accelerando start " ++ show start ++ " and stop " ++ show stop
   | startTempoVal >= stopTempoVal = error $ "synthesizeAccelerandoSpan target tempo " ++ show stop ++ " is not greater than source tempo " ++ show start
-  | bpmSpan <= dur                = (genTempoRange startTempoVal stopTempoVal, synthesizeDurationSpan (fromIntegral bpmSpan) dur)
+  | bpmSpan <= toInteger dur      = (genTempoRange startTempoVal stopTempoVal, synthesizeDurationSpan (fromIntegral bpmSpan) dur)
   | otherwise                     = (vals, durs)
   where
     (startTempoVal, stopTempoVal) = normalizeTempoVals start stop
@@ -641,7 +639,7 @@ synthesizeRitardandoSpan :: TempoVal -> TempoVal -> Duration -> ([TempoVal],[Dur
 synthesizeRitardandoSpan start stop (Dur dur)
   | dur' == 0                     = error $ "synthesizeRitardandoSpan zero dur for ritardando start " ++ show start ++ " and stop " ++ show stop
   | stopTempoVal >= startTempoVal = error $ "synthesizeRitardandoSpan target tempo " ++ show stop ++ " is not less  than source tempo " ++ show start
-  | abs bpmSpan <= dur            = (genTempoRange startTempoVal stopTempoVal, synthesizeDurationSpan (fromIntegral (abs bpmSpan)) dur)
+  | abs bpmSpan <= toInteger dur  = (genTempoRange startTempoVal stopTempoVal, synthesizeDurationSpan (fromIntegral (abs bpmSpan)) dur)
   | otherwise                     = (vals, durs)
   where
     (startTempoVal, stopTempoVal) = normalizeTempoVals start stop
@@ -663,7 +661,7 @@ updateTempoControlContext :: (Tempo, Rhythm) -> MidiTempoValControlContext -> (M
 -- | New discrete tempo, not buffering => remember new tempo and  duration in context,
 --   answer list with single event at rest dur from previous event for target tempo.
 updateTempoControlContext (Tempo tempoVal, rhythm) (MidiControlContext ControlBufferingNone _ rest _) =
-  (MidiControlContext ControlBufferingNone tempoVal (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromInteger . getDur) rest) (genMidiTempoMetaEvent tempoVal))
+  (MidiControlContext ControlBufferingNone tempoVal (rhythmToDuration rhythm) (Dur 0), EventList.singleton ((fromIntegral . getDur) rest) (genMidiTempoMetaEvent tempoVal))
 -- | New accelerando, not buffering anything, start new buffering up state with length for duration.
 updateTempoControlContext (Accelerando, rhythm) (MidiControlContext ControlBufferingNone tempoVal rest len) =
   (MidiControlContext ControlBufferingUp tempoVal rest (rhythmToDuration rhythm + len), EventList.empty)

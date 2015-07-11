@@ -1,3 +1,5 @@
+--bash-3.2$ grep " error " ./RealSimpleMusic/src/ScoreToLilypond/Utils.hs | wc -l
+--       7
 
 module ScoreToLilypond.Utils where
 
@@ -11,6 +13,7 @@ import           Data.Monoid
 import           Data.Ratio
 import qualified Data.Set as Set
 import           Data.Traversable
+import           Data.Word
 import           Music.Data
 import           Music.Utils
 
@@ -250,7 +253,7 @@ renderedDynamicValues = map stringEncoding ["\\pp", "\\p", "\\mp", "\\mf", "\\f"
 -- to terminate a continuous, discrete dynamic that concludes a fractional dynamic
 -- with a new non-continuous discrete dynamic, or, I suppose, with a new fractional
 -- dynamic that begins with a non-continuous discrete dynamic.  Ugh.
-renderFractionalDynamic' :: Rational -> Builder -> (DiscreteDynamicValue, Int) -> (Builder,Builder)
+renderFractionalDynamic' :: Rational -> Builder -> (DiscreteDynamicValue, Word) -> (Builder,Builder)
 renderFractionalDynamic' unit oldRenderedDynamic (dynamic, fraction) 
   | fraction == 0 && notNothing oldRenderedDynamic = error errorText
   | fraction == 0                                  = (newRenderedDynamic, renderedNothing)
@@ -261,7 +264,7 @@ renderFractionalDynamic' unit oldRenderedDynamic (dynamic, fraction)
     newRenderedDynamic  = renderedDynamicValues !! fromEnum dynamic 
     renderedFraction    = renderSpace (Rhythm (unit * fromIntegral fraction)) <> oldRenderedDynamic <> newRenderedDynamic <> renderedSpace
 
-renderFractionalDynamic :: Rational -> (DiscreteDynamicValue, Int) -> State Builder Builder
+renderFractionalDynamic :: Rational -> (DiscreteDynamicValue, Word) -> State Builder Builder
 renderFractionalDynamic unit fraction =
   get >>= \old -> let (old', new) = renderFractionalDynamic' unit old fraction in put old' >> return new
 
@@ -276,7 +279,7 @@ renderFractionalDynamic unit fraction =
 --   it's much easier to handle this.  But when it comes to Lilypond, that total value had
 --   better be a power of 2 or there's just no hope.  So when we see a unit that's not a
 --   power of 2, don't even try to render a fractional dynamic.
-renderFractionalDynamics :: Rhythm -> [(DiscreteDynamicValue, Int)] -> Builder
+renderFractionalDynamics :: Rhythm -> [(DiscreteDynamicValue, Word)] -> Builder
 renderFractionalDynamics (Rhythm rhythm) fractions
   | unit `elem` [2,4,8,16,32] = renderedNothing
   | otherwise                 = renderedOpen <> mconcat renderedFractions <> renderedClose

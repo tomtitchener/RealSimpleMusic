@@ -158,7 +158,7 @@ transposeIndexedPitch :: Scale -> Interval -> IndexedPitch -> IndexedPitch
 transposeIndexedPitch scale interval (IndexedPitch ix (Octave oct)) =
   IndexedPitch ix' (Octave (oct' + oct))
   where
-    len  = if ix > 0 then length (ascendingScale scale) else length (descendingScale scale)
+    len  = length (if ix > 0 then ascendingScale scale else descendingScale scale)
     ix'  = (interval + ix) `mod` len
     oct' = (interval + ix) `div` len
 
