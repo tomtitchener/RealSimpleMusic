@@ -5,7 +5,6 @@ module Music.Data where
 import           Data.Data
 import           Data.Ratio
 import qualified Data.Set      as Set
-import           Data.Word
 
 -- | Pitch classes with two accidentals enharmonic equivalents, ordered in ascending fifths where order is significant.
 data PitchClass = Fff | Cff | Gff | Dff | Aff | Eff | Bff | Ff | Cf | Gf | Df | Af | Ef | Bf | F | C | G | D | A | E | B | Fs | Cs | Gs | Ds | As | Es | Bs | Fss | Css | Gss | Dss | Ass | Ess | Bss deriving (Bounded, Enum, Show, Eq, Ord)

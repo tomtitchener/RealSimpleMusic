@@ -55,9 +55,9 @@ testEnhChromPitchClassValues =
 
 getChromaticScaleIndex :: PitchClass -> Int
 getChromaticScaleIndex pc  =
-  fromJust $ findIndex (\pcs -> pc `elem` pcs) scale
+  fromJust $ findIndex (\pcs -> pc `elem` pcs) scale'
   where
-    scale = [[Bs,C,Dff],[Bss,Cs,Df],[Css,D,Eff],[Ds,Ef,Fff],[Dss,E,Ff],[Es,F,Gff],[Ess,Fs,Gf],[Fss,G,Aff],[Gs,Af],[Gss,A,Bff],[As,Bf,Cff],[Ass,B,Cf]]
+    scale' = [[Bs,C,Dff],[Bss,Cs,Df],[Css,D,Eff],[Ds,Ef,Fff],[Dss,E,Ff],[Es,F,Gff],[Ess,Fs,Gf],[Fss,G,Aff],[Gs,Af],[Gss,A,Bff],[As,Bf,Cff],[Ass,B,Cf]]
 
 testGetChromaticScaleIndex :: Assertion
 testGetChromaticScaleIndex =
@@ -73,11 +73,11 @@ pitchClassPairsToChromaticInterval (pc1, pc2)
     octIdx = 12
 
 testMajorScaleIntervals :: Scale -> Bool
-testMajorScaleIntervals scale =
+testMajorScaleIntervals scale' =
   map pitchClassPairsToChromaticInterval pitchClassPairs == majorScaleIntervals
   where
-    scale' = ascendingScale scale
-    pitchClassPairs = zip scale' $ tail scale'
+    scale'' = ascendingScale scale'
+    pitchClassPairs = zip scale'' $ tail scale''
     majorScaleIntervals = [2,2,1,2,2,2]
     
 testMajorScaleInterval :: Assertion
@@ -97,17 +97,17 @@ propMajorScaleIntervals tonic =
     testMajorScaleIntervals (fromRight' (majorScale tonic))
 
 getIntervalForScale :: Scale -> Pitch -> Pitch -> Interval
-getIntervalForScale scale (Pitch pc1 _) (Pitch pc2 _) =
+getIntervalForScale scale' (Pitch pc1 _) (Pitch pc2 _) =
   if p2Idx > p1Idx
   then
     p2Idx - p1Idx
   else
     scaleLen + p1Idx - p2Idx
   where
-    scale'   = ascendingScale scale
-    p1Idx    = fromJust $ elemIndex pc1 scale'
-    p2Idx    = fromJust $ elemIndex pc2 scale'
-    scaleLen = length scale'
+    scale''  = ascendingScale scale'
+    p1Idx    = fromJust $ elemIndex pc1 scale''
+    p2Idx    = fromJust $ elemIndex pc2 scale''
+    scaleLen = length scale''
 
 instance Arbitrary Octave where
   arbitrary = elements [(minBound::Octave)..(maxBound::Octave)]

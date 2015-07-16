@@ -12,8 +12,6 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Ratio
 import qualified Data.Set as Set
-import           Data.Traversable
-import           Data.Word
 import           Music.Data
 import           Music.Utils
 

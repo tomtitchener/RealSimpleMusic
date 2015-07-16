@@ -11,8 +11,6 @@ import           Data.List
 import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set as Set
-import           Data.Traversable
-import           Data.Word
 import           Music.Data
 import           Music.Utils ()
 import qualified Sound.MIDI.File as MidiFile

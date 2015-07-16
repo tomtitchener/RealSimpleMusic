@@ -4,7 +4,6 @@ module ScoreToMidi.UtilsTest where
 
 import           Control.Monad.State
 import           Data.List
-import           Data.Traversable
 import           Music.Data
 import           ScoreToMidi.Utils
 import qualified Sound.MIDI.Message.Channel as ChannelMsg
