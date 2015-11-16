@@ -124,7 +124,8 @@ data Pan =
 
 newtype PanVal = PanVal { getPanVal :: Int } deriving (Eq, Show, Num, Enum, Ord, Read, Data, Typeable)
 
--- | Octave bounds roughly by piano range
+-- | Pan bounds to Midi vals seeing as there's no simple score equivalent.
+--   You could use values to mirror place of instruments in an ensemble.
 instance Bounded PanVal where
     minBound = PanVal 0   --  Midi-ism
     maxBound = PanVal 127 --  Midi-ism
@@ -133,6 +134,14 @@ instance Bounded PanVal where
 -- Maintain inner representation for ease of arithmetic.
 newtype Rhythm = Rhythm { rhythmVal :: Rational } deriving (Show, Ord, Eq, Data, Typeable)
 
+-- | Rhythms are easier to manipulate as ratios.
+--   But in traditional notation, the unit is a
+--   the first handful of powers of 2.  Hide the
+--   Rhythm data type and export a constructor 
+--   that accepts a ratio but checks for reasonable
+--   denominator values.  Note automatic factoring
+--   means values that appear illegal (21%14) may 
+--   reduce to legal inputs (3%2).
 rhythmDenominators :: [Integer]
 rhythmDenominators = [1,2,4,8,16,32,64,128]
 
@@ -141,24 +150,15 @@ rhythmDenominators = [1,2,4,8,16,32,64,128]
 --   * denominator can only be one of [1,2,4,8,16,32,64,128]
 mkRhythm :: Rational -> Either String Rhythm
 mkRhythm r
-  | num <= 0                          = Left rngerr
+  | num <= 0                          = Left $ "rhythm numerator " ++ show num ++ " < 0"
   | den `notElem` rhythmDenominators  = Left $ "rhythm denominator not one of " ++ show rhythmDenominators
   | otherwise                         = Right $ Rhythm r
   where
-    rngerr  = "rhythm numerator " ++ show num ++ " < 0"
     den     = denominator r
     num     = numerator r
 
 getRhythm :: Rhythm -> Rational
 getRhythm = rhythmVal
-
--- This approach can produce funny results!  Things you'd think woud fail, like "rhythm (20%5)" turn out to succeed,
--- because Data.Ratio is going to automatically reduce e.g. (20%5) to (4%1)!  So in fact the filtering only catches
--- ratios that don't reduce to a ratio with an invalid denominator, like (29%7).  Does this matter?  If I were to do
--- arithmetic over rhythms then I'd say the answer would be yes, and it's a good thing.  And if you do something silly
--- like specify a rhythm of (21%7), well, then it should be obvious what you're really saying is (3%1).  Note that
--- (1%(-1)) reduces to ((-1)%1), with the result that the Word range check above catches all Data.Ratio constructed 
--- with negative numbers.  And for ((-1)%(-1)) you get (1%1) also, so the arithmetic works out "right".
 
 data RhythmDenom =
   Whole 
@@ -241,12 +241,20 @@ newtype Instrument = Instrument { getInstrument :: String } deriving (Show, Ord,
 -- | Accent
 data Accent = Softest | VerySoft | Soft | Normal | Hard | VeryHard | Hardest deriving (Bounded, Enum, Read, Show, Ord, Eq, Data, Typeable)
 
--- | ScoreControls
+-- | ScoreControls.  KeySignature and TimeSignature are self-explanatory.
+--   Tempos is a list of Tempo, Rhythm pairs where Tempo is self-explanatory
+--   and Rhythm is duration.  So if you want to start off at one tempo and
+--   switch after 30 measures, you have two elements in the array and the
+--   rhythm for the first is 30 measures long and the rhythm for the second
+--   doesn't matter.  Note Tempo includes discrete and continuous controls,
+--   e.g. Ritardando and Accelrando, where the continuous values have to
+--   terminate in a discrete destination else you'll get one of the errors
+--   from synthesize[Crescendo|Decrescendo]Span.
 data ScoreControls =
   ScoreControls {
     scoreKeySignature    :: KeySignature
     , scoreTimeSignature :: TimeSignature
-    , scoreTempos        :: [(Tempo, Rhythm)]
+    , scoreTempos        :: [(Tempo, Rhythm)] 
     } deriving (Show)
            
 -- | VoiceControls:  order dependent!  DynamicControl

@@ -27,7 +27,7 @@ testSliceHigh =
 propSliceAllIsOriginalList :: [Int] -> Property
 propSliceAllIsOriginalList xs =
     not (null xs) ==>
-        slice 0 (length xs) xs == xs
+        slice 0 ((length xs) - 1) xs == xs
         
 propSliceFirstIsHead :: [Int] -> Property
 propSliceFirstIsHead xs =

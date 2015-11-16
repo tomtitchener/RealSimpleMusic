@@ -45,7 +45,7 @@ library
                       syb
   default-language:   Haskell2010
   ghc-options:        -Wall -Werror -fwarn-incomplete-patterns -fwarn-incomplete-uni-patterns -fno-warn-orphans
-
+  
 test-suite music-tests
   type:               exitcode-stdio-1.0
   hs-source-dirs:     tests, src
