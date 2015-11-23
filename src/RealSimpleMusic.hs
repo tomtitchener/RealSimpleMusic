@@ -18,6 +18,7 @@ module RealSimpleMusic (
    ,  pitchClassToEnhIdx
    ,  Scale
    ,  majorScale
+   ,  chromaticScale
    ,  naturalMinorScale
    ,  melodicMinorScale
    ,  scaleFromEnhChromaticScale

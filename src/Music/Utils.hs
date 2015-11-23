@@ -5,20 +5,16 @@ import           Control.Monad
 import           Data.List
 import           Data.Maybe
 import qualified Data.Set as Set
-import qualified Data.Vector as DV
 import           Music.Data
-
--- | Answer a subrange, or slice, from an array
---   expressed as range [from-to], inclusive
-slice :: Int -> Int -> [a] -> [a]
-slice from to =
-  DV.toList . DV.slice from (to - from + 1) . DV.fromList
 
 rotate :: Int -> [a] -> [a]
 rotate x xs =
   drop x' xs ++ take x' xs
   where
     x' = x `mod` length xs
+
+chromaticScale :: Scale
+chromaticScale = Scale [C, Cs, D, Ds, E, F, Fs, G, Gs, A, As, B] [C, B, Bf, A, Af, G, Gf, F, E, Ef, D, Df]
 
 -- | Cycle extending through a count of two flats and sharps.
 cycleOfFifths :: [PitchClass]

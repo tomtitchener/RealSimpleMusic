@@ -1,13 +1,20 @@
 module Music.UtilsTest where
 
 import Control.Monad
+import Data.Either.Combinators (isRight, fromRight')
 import Data.List (findIndex, elemIndex, sort, group)
 import Data.Maybe (fromJust)
-import Data.Either.Combinators (isRight, fromRight')
+import qualified Data.Vector as DV
 import Music.Data
 import Music.Utils
 import Test.HUnit
 import Test.QuickCheck
+
+-- | Answer a subrange, or slice, from an array
+--   expressed as range [from-to], inclusive
+slice :: Int -> Int -> [a] -> [a]
+slice from to =
+  DV.toList . DV.slice from (to - from + 1) . DV.fromList
 
 allPitchClasses :: [PitchClass]
 allPitchClasses = [(minBound::PitchClass)..(maxBound::PitchClass)]
