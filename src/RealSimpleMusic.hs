@@ -49,8 +49,10 @@ module RealSimpleMusic (
    ,  Note(..)
    ,  addControlToNote
    ,  IndexedNote(..)
+   ,  ixPitchToPitch
    ,  indexedNoteToNote
    ,  indexedNotesToNotes
+   ,  transposeIndexedPitch
    ,  transposeIndexedNote
    ,  Interval
    ,  Intervals
