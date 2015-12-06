@@ -150,7 +150,7 @@ rhythmDenominators = [1,2,4,8,16,32,64,128]
 --   * denominator can only be one of [1,2,4,8,16,32,64,128]
 mkRhythm :: Rational -> Either String Rhythm
 mkRhythm r
-  | num <= 0                          = Left $ "rhythm numerator " ++ show num ++ " < 0"
+  | num < 0                           = Left $ "rhythm numerator " ++ show num ++ " < 0"
   | den `notElem` rhythmDenominators  = Left $ "rhythm denominator not one of " ++ show rhythmDenominators
   | otherwise                         = Right $ Rhythm r
   where
