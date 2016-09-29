@@ -302,7 +302,7 @@ fractionalDynamicToDiscreteDynamics _                                           
 --   the reverse direction, when progressing from high to
 --   low intensity, start with faster rate of change.
 --   TBD:  accelerate rate of change?
-unfoldControl :: (Eq t, Num t, Eq b, Num b) => (t -> b -> t) -> (t,b) -> Maybe (t, (t,b))
+unfoldControl :: (Num t, Eq b, Num b) => (t -> b -> t) -> (t,b) -> Maybe (t, (t,b))
 unfoldControl divT (d,c)
   | c == 0 = Nothing
   | c == 1 = Just (d, (d, 0))
