@@ -1,0 +1,27 @@
+dist
+dist-*
+cabal-dev
+*.o
+*.db
+*.db-shm
+*.db-wal
+*.hi
+*.js_hi
+*.js_o
+*.jsexe
+*.chi
+*.chs.h
+*.dyn_o
+*.dyn_hi
+.hpc
+.hsenv
+.cabal-sandbox/
+cabal.sandbox.config
+*.prof
+*.aux
+*.hp
+*.eventlog
+.stack-work/
+cabal.project.local
+Contact GitHub API Training Shop Blog About
+*~
