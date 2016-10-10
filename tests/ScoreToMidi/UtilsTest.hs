@@ -4,8 +4,8 @@ module ScoreToMidi.UtilsTest where
 
 import           Control.Monad.State
 import           Data.List
-import           Music.Data
-import           ScoreToMidi.Utils
+import           Music.RealSimpleMusic.Music.Data
+import           Music.RealSimpleMusic.ScoreToMidi.Utils
 import qualified Sound.MIDI.Message.Channel as ChannelMsg
 import           Test.HUnit
 import           Test.QuickCheck

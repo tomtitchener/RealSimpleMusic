@@ -4,9 +4,9 @@ import           Data.ByteString.Builder
 import           Data.Either.Combinators (fromRight')
 import           Data.Ratio
 import qualified Data.Set as Set
-import           Music.Data
-import           Music.Utils
-import           ScoreToLilypond.Utils
+import           Music.RealSimpleMusic.Music.Data
+import           Music.RealSimpleMusic.Music.Utils
+import           Music.RealSimpleMusic.ScoreToLilypond.Utils
 import           Test.HUnit
 
 testAccentNames :: Assertion

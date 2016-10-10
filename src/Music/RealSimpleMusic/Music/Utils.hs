@@ -1,11 +1,11 @@
-module Music.Utils where
+module Music.RealSimpleMusic.Music.Utils where
 
 import           Control.Error.Safe
 import           Control.Monad
 import           Data.List
 import           Data.Maybe
 import qualified Data.Set as Set
-import           Music.Data
+import           Music.RealSimpleMusic.Music.Data
 
 rotate :: Int -> [a] -> [a]
 rotate x xs =

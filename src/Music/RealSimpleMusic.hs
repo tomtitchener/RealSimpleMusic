@@ -13,7 +13,7 @@
 --   Workhorse functions to convert Score to Midi file or
 --   files:  scoreToMidiFile, scoreToMidiFiles, and to
 --   convert Score to Lilypond file:  scoreToLilypondFile
-module RealSimpleMusic (
+module Music.RealSimpleMusic (
    PitchClass(..)
    ,  pitchClassToEnhIdx
    ,  Scale
@@ -66,7 +66,7 @@ module RealSimpleMusic (
    , scoreToByteString
   ) where
 
-import Music.Data
-import Music.Utils
-import ScoreToMidi.Utils
-import ScoreToLilypond.Utils
+import Music.RealSimpleMusic.Music.Data
+import Music.RealSimpleMusic.Music.Utils
+import Music.RealSimpleMusic.ScoreToMidi.Utils
+import Music.RealSimpleMusic.ScoreToLilypond.Utils

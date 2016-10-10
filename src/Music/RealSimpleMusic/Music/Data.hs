@@ -1,6 +1,6 @@
 -- | Data definitions for real simple music types.
 
-module Music.Data where
+module Music.RealSimpleMusic.Music.Data where
 
 import           Data.Data
 import           Data.Ratio

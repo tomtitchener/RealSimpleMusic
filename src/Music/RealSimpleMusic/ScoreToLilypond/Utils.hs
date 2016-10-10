@@ -1,7 +1,7 @@
 --bash-3.2$ grep " error " ./RealSimpleMusic/src/ScoreToLilypond/Utils.hs | wc -l
 --       7
 
-module ScoreToLilypond.Utils where
+module Music.RealSimpleMusic.ScoreToLilypond.Utils where
 
 import           Control.Monad()
 import           Control.Monad.State
@@ -12,8 +12,8 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Ratio
 import qualified Data.Set as Set
-import           Music.Data
-import           Music.Utils
+import           Music.RealSimpleMusic.Music.Data
+import           Music.RealSimpleMusic.Music.Utils
 
 -- | Data.ByteString.Builder provides alternative encodings: string7, string8, stringUtf8
 --   Does Lilypond care?  Seems like string7 (ASCII) should suffice.

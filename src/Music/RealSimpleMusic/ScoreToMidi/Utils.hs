@@ -1,7 +1,7 @@
 -- bash-3.2$ grep " error " ./RealSimpleMusic/src/ScoreToMidi/Utils.hs | wc -l
 --      46
 
-module ScoreToMidi.Utils where
+module Music.RealSimpleMusic.ScoreToMidi.Utils where
 
 import           Control.Monad
 import           Control.Monad.State
@@ -11,8 +11,8 @@ import           Data.List
 import           Data.Maybe
 import           Data.Ratio
 import qualified Data.Set as Set
-import           Music.Data
-import           Music.Utils ()
+import           Music.RealSimpleMusic.Music.Data
+import           Music.RealSimpleMusic.Music.Utils ()
 import qualified Sound.MIDI.File as MidiFile
 import qualified Sound.MIDI.File.Event as Event
 import qualified Sound.MIDI.File.Event.Meta as Meta

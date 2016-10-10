@@ -25,8 +25,8 @@ source-repository head
 
 library
   hs-source-dirs:     src, tests
-  exposed-modules:    RealSimpleMusic
-  other-modules:      Music.Data Music.Utils ScoreToMidi.Utils ScoreToLilypond.Utils
+  exposed-modules:    Music.RealSimpleMusic
+  other-modules:      Music.RealSimpleMusic.Music.Data Music.RealSimpleMusic.Music.Utils Music.RealSimpleMusic.ScoreToMidi.Utils Music.RealSimpleMusic.ScoreToLilypond.Utils
   default-extensions: GeneralizedNewtypeDeriving, DeriveDataTypeable
   build-depends:      base,
                       bytestring,

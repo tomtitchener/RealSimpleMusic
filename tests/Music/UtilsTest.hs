@@ -5,8 +5,8 @@ import Data.Either.Combinators (isRight, fromRight')
 import Data.List (findIndex, elemIndex, sort, group)
 import Data.Maybe (fromJust)
 import qualified Data.Vector as DV
-import Music.Data
-import Music.Utils
+import Music.RealSimpleMusic.Music.Data
+import Music.RealSimpleMusic.Music.Utils
 import Test.HUnit
 import Test.QuickCheck
 
