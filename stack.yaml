@@ -7,4 +7,4 @@ extra-deps:
 - monoid-transformer-0.0.3
 - non-negative-0.1.1
 - text-1.2.2.1
-resolver: lts-7.1
+resolver: lts-7.14
